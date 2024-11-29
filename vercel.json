@@ -3,7 +3,13 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/node@latest"
+      "use": "@vitejs/plugin-react"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/"
     }
   ]
 } 
