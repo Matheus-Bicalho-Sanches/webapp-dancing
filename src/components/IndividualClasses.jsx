@@ -19,7 +19,7 @@ function TabPanel({ children, value, index, ...other }) {
       {...other}
     >
       {value === index && (
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: 1 }}>
           {children}
         </Box>
       )}
@@ -36,7 +36,7 @@ export default function IndividualClasses() {
 
   return (
     <MainLayout title="Aulas Individuais">
-      <Paper sx={{ width: '100%', mb: 2 }}>
+      <Paper sx={{ width: '100%', mb: 1 }}>
         <Tabs
           value={currentTab}
           onChange={handleTabChange}
