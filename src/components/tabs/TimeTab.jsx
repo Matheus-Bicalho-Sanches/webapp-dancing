@@ -34,6 +34,8 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
+import Checkbox from '@mui/material/Checkbox';
+import ListItemText from '@mui/material/ListItemText';
 
 export default function TimeTab() {
   const [open, setOpen] = useState(false);
@@ -48,11 +50,12 @@ export default function TimeTab() {
   const [formData, setFormData] = useState({
     horario: '',
     diaSemana: '',
-    duracao: ''
+    professores: []
   });
   const [editingTime, setEditingTime] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [timeToDelete, setTimeToDelete] = useState(null);
+  const [availableTeachers, setAvailableTeachers] = useState([]);
 
   const diasSemana = [
     { value: 'segunda', label: 'Segunda-feira' },
@@ -88,8 +91,24 @@ export default function TimeTab() {
     }
   };
 
+  // Carregar professores disponíveis
+  const loadAvailableTeachers = async () => {
+    try {
+      const teachersQuery = query(collection(db, 'professores'), orderBy('nome'));
+      const querySnapshot = await getDocs(teachersQuery);
+      const teachersData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAvailableTeachers(teachersData);
+    } catch (error) {
+      console.error('Erro ao carregar professores:', error);
+    }
+  };
+
   useEffect(() => {
     loadTimes();
+    loadAvailableTeachers();
   }, []);
 
   const showNotification = (message, severity = 'success') => {
@@ -105,7 +124,7 @@ export default function TimeTab() {
   const handleClose = () => {
     setOpen(false);
     setEditingTime(null);
-    setFormData({ horario: '', diaSemana: '', duracao: '' });
+    setFormData({ horario: '', diaSemana: '', professores: [] });
   };
 
   const handleChange = (event) => {
@@ -121,7 +140,7 @@ export default function TimeTab() {
     setFormData({
       horario: time.horario,
       diaSemana: time.diaSemana,
-      duracao: time.duracao
+      professores: time.professores
     });
     setOpen(true);
   };
@@ -209,7 +228,7 @@ export default function TimeTab() {
               <TableRow>
                 <TableCell>Dia da Semana</TableCell>
                 <TableCell>Horário</TableCell>
-                <TableCell>Duração</TableCell>
+                <TableCell>Professores Disponíveis</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
@@ -218,7 +237,12 @@ export default function TimeTab() {
                 <TableRow key={time.id}>
                   <TableCell>{time.diaSemana}</TableCell>
                   <TableCell>{time.horario}</TableCell>
-                  <TableCell>{time.duracao}</TableCell>
+                  <TableCell>
+                    {time.professores?.map(profId => {
+                      const professor = availableTeachers.find(t => t.id === profId);
+                      return professor ? professor.nome : '';
+                    }).join(', ')}
+                  </TableCell>
                   <TableCell align="right">
                     <IconButton 
                       color="primary"
@@ -289,15 +313,33 @@ export default function TimeTab() {
                 }}
               />
 
-              <TextField
-                fullWidth
-                label="Duração"
-                name="duracao"
-                value={formData.duracao}
-                onChange={handleChange}
-                required
-                placeholder="Ex: 50 minutos"
-              />
+              <FormControl fullWidth required>
+                <InputLabel>Professores Disponíveis</InputLabel>
+                <Select
+                  multiple
+                  name="professores"
+                  value={formData.professores || []}
+                  onChange={handleChange}
+                  label="Professores Disponíveis"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map(profId => {
+                        const professor = availableTeachers.find(t => t.id === profId);
+                        return professor ? professor.nome : '';
+                      }).join(', ')}
+                    </Box>
+                  )}
+                >
+                  {availableTeachers.map((professor) => (
+                    <MenuItem key={professor.id} value={professor.id}>
+                      <Checkbox 
+                        checked={formData.professores?.indexOf(professor.id) > -1}
+                      />
+                      <ListItemText primary={professor.nome} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Stack>
           </DialogContent>
           <DialogActions>

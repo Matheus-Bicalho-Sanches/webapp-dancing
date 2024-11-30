@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import TeachersTab from './tabs/TeachersTab';
 import TimeTab from './tabs/TimeTab';
+import ScheduleTab from './tabs/ScheduleTab';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -51,8 +52,7 @@ export default function IndividualClasses() {
       </Paper>
 
       <TabPanel value={currentTab} index={0}>
-        <Typography variant="h6">Agenda</Typography>
-        <Typography variant="body1">Conteúdo da agenda virá aqui</Typography>
+        <ScheduleTab />
       </TabPanel>
 
       <TabPanel value={currentTab} index={1}>
