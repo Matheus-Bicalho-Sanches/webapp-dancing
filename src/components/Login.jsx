@@ -22,54 +22,91 @@ export default function Login() {
     try {
       setError('');
       await login(email, password);
-      navigate('/dashboard'); // Redireciona para o dashboard após login
+      navigate('/dashboard');
     } catch (error) {
       setError('Falha ao fazer login. Verifique suas credenciais.');
     }
   }
 
   return (
-    <Container component="main" maxWidth="xs">
-      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
-        <Typography component="h1" variant="h5" align="center">
-          Login
-        </Typography>
-        {error && (
-          <Typography color="error" align="center" sx={{ mt: 2 }}>
-            {error}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+        margin: 0,
+        padding: 0,
+        width: '100%',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0
+      }}
+    >
+      <Container 
+        component="main" 
+        maxWidth="xs" 
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%'
+        }}
+      >
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            p: 4,
+            width: '100%',
+            maxWidth: 400,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}
+        >
+          <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
+            Login
           </Typography>
-        )}
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="Email"
-            autoComplete="email"
-            autoFocus
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="Senha"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-          >
-            Entrar
-          </Button>
-        </Box>
-      </Paper>
-    </Container>
+          {error && (
+            <Typography color="error" align="center" sx={{ mt: 2, mb: 2 }}>
+              {error}
+            </Typography>
+          )}
+          <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Email"
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Senha"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 3, mb: 2 }}
+            >
+              Entrar
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 } 
