@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import IndividualClasses from './components/IndividualClasses';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -15,6 +16,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/individual-classes" 
+            element={
+              <PrivateRoute>
+                <IndividualClasses />
               </PrivateRoute>
             } 
           />

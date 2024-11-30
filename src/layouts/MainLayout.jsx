@@ -117,7 +117,7 @@ export default function MainLayout({ children, title }) {
           </ListItem>
 
           <ListItem disablePadding>
-            <ListItemButton>
+            <ListItemButton onClick={() => navigate('/individual-classes')}>
               <ListItemIcon>
                 <PersonIcon color="primary" />
               </ListItemIcon>
