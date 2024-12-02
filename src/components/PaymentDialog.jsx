@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -8,12 +8,14 @@ import {
   Box,
   Typography,
   CircularProgress,
-  TextField,
   RadioGroup,
   FormControlLabel,
   Radio,
-  Grid
+  Grid,
+  TextField,
+  Alert
 } from '@mui/material';
+import ReCAPTCHA from 'react-google-recaptcha';
 import PaymentStatus from './PaymentStatus';
 
 const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
@@ -28,6 +30,7 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     securityCode: '',
     holderName: ''
   });
+  const recaptchaRef = useRef();
 
   const handleCardDataChange = (field) => (event) => {
     setCardData({
@@ -44,6 +47,13 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
 
   const handlePayment = async () => {
     try {
+      // Verificar reCAPTCHA
+      const recaptchaValue = await recaptchaRef.current.executeAsync();
+      if (!recaptchaValue) {
+        setError('Por favor, complete a verificação de segurança');
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -55,12 +65,12 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
         body: JSON.stringify({ 
           agendamento,
           paymentMethod,
-          cardData: paymentMethod === 'credit_card' ? cardData : undefined
+          cardData: paymentMethod === 'credit_card' ? cardData : undefined,
+          recaptchaToken: recaptchaValue
         })
       });
 
       const data = await response.json();
-      console.log('Resposta do pagamento:', data);
       
       if (data.success) {
         setPaymentData(data);
@@ -72,6 +82,7 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
+      recaptchaRef.current.reset();
     }
   };
 
@@ -143,6 +154,15 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
             />
           </Grid>
           <Grid item xs={12}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                size="normal"
+              />
+            </Box>
+          </Grid>
+          <Grid item xs={12}>
             <Button
               fullWidth
               variant="contained"
@@ -175,14 +195,16 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
           <FormControlLabel value="credit_card" control={<Radio />} label="Cartão de Crédito" />
         </RadioGroup>
 
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
         {loading && paymentMethod === 'pix' ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
-        ) : error ? (
-          <Typography color="error" sx={{ p: 2 }}>
-            {error}
-          </Typography>
         ) : paymentData && paymentMethod === 'pix' ? (
           <Box>
             <Box sx={{ textAlign: 'center', p: 2 }}>

@@ -22,12 +22,29 @@ export default async function handler(req, res) {
 
   try {
     console.log('Recebendo requisição de checkout:', req.body);
-    const { agendamento, paymentMethod, cardData } = req.body;
+    const { agendamento, paymentMethod, cardData, recaptchaToken } = req.body;
     
-    if (!agendamento || !paymentMethod) {
+    if (!agendamento || !paymentMethod || !recaptchaToken) {
       return res.status(400).json({ 
         error: 'Dados incompletos',
-        details: 'agendamento e paymentMethod são obrigatórios'
+        details: 'agendamento, paymentMethod e recaptchaToken são obrigatórios'
+      });
+    }
+
+    // Validar reCAPTCHA
+    const recaptchaResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
+    });
+
+    const recaptchaData = await recaptchaResponse.json();
+    if (!recaptchaData.success) {
+      return res.status(400).json({
+        error: 'Verificação de segurança falhou',
+        details: recaptchaData['error-codes']
       });
     }
     
