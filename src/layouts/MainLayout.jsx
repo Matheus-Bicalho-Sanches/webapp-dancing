@@ -18,6 +18,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PersonIcon from '@mui/icons-material/Person';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 const drawerWidth = 240;
 
@@ -25,14 +26,37 @@ export default function MainLayout({ children, title }) {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  async function handleLogout() {
+  const menuItems = [
+    {
+      text: 'Dashboard',
+      icon: <DashboardIcon />,
+      path: '/admin/dashboard'
+    },
+    {
+      text: 'Alunos',
+      icon: <PeopleIcon />,
+      path: '/admin/alunos'
+    },
+    {
+      text: 'Frequência',
+      icon: <CalendarMonthIcon />,
+      path: '/admin/frequencia'
+    },
+    {
+      text: 'Aulas Individuais',
+      icon: <PersonIcon />,
+      path: '/admin/aulas'
+    }
+  ];
+
+  const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigate('/agendar');
     } catch (error) {
-      console.error('Falha ao fazer logout', error);
+      console.error('Erro ao fazer logout:', error);
     }
-  }
+  };
 
   return (
     <Box sx={{ 
@@ -89,41 +113,16 @@ export default function MainLayout({ children, title }) {
         </Toolbar>
         <Divider />
         <List>
-          <ListItem disablePadding>
-            <ListItemButton onClick={() => navigate('/dashboard')}>
-              <ListItemIcon>
-                <DashboardIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText primary="Dashboard" />
-            </ListItemButton>
-          </ListItem>
-          
-          <ListItem disablePadding>
-            <ListItemButton>
-              <ListItemIcon>
-                <PeopleIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText primary="Alunos" />
-            </ListItemButton>
-          </ListItem>
-
-          <ListItem disablePadding>
-            <ListItemButton>
-              <ListItemIcon>
-                <CalendarTodayIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText primary="Frequência" />
-            </ListItemButton>
-          </ListItem>
-
-          <ListItem disablePadding>
-            <ListItemButton onClick={() => navigate('/individual-classes')}>
-              <ListItemIcon>
-                <PersonIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText primary="Aulas Individuais" />
-            </ListItemButton>
-          </ListItem>
+          {menuItems.map((item) => (
+            <ListItem disablePadding key={item.path}>
+              <ListItemButton onClick={() => navigate(item.path)}>
+                <ListItemIcon>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          ))}
         </List>
       </Drawer>
 

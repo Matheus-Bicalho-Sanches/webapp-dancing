@@ -1,4 +1,4 @@
-import MainLayout from '../layouts/MainLayout';
+import MainLayout from '../../layouts/MainLayout';
 import { Typography } from '@mui/material';
 
 export default function Dashboard() {
@@ -12,4 +12,4 @@ export default function Dashboard() {
       </Typography>
     </MainLayout>
   );
-} 
+}

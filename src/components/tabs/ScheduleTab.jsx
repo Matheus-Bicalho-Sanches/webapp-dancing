@@ -24,16 +24,17 @@ import {
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { db } from '../../config/firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, writeBatch, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { alpha } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 dayjs.locale('pt-br');
 
-export default function ScheduleTab() {
+export default function ScheduleTab({ isPublic = false }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [schedules, setSchedules] = useState({});
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,8 @@ export default function ScheduleTab() {
   const [existingBookings, setExistingBookings] = useState({});
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [bookingToDelete, setBookingToDelete] = useState(null);
+  const [viewBooking, setViewBooking] = useState(null);
+  const [viewBookingOpen, setViewBookingOpen] = useState(false);
 
   // Inicializar as três datas (hoje, amanhã, depois)
   useEffect(() => {
@@ -337,11 +340,19 @@ export default function ScheduleTab() {
           right: 20,
           zIndex: 1000
         }}
-        onClick={handleOpenAgendamento}
+        onClick={isPublic ? handlePublicAgendamento : handleOpenAgendamento}
       >
         Agendar {selectedSlots.length} horário(s)
       </Button>
     );
+  };
+
+  const handlePublicAgendamento = () => {
+    setAgendamentoForm(prev => ({
+      ...prev,
+      isPublic: true
+    }));
+    setOpenAgendamentoModal(true);
   };
 
   const handleDeleteClick = (booking) => {
@@ -375,6 +386,25 @@ export default function ScheduleTab() {
       showNotification('Erro ao cancelar agendamento.', 'error');
     } finally {
       handleDeleteClose();
+    }
+  };
+
+  const handleViewClick = async (booking) => {
+    try {
+      // Buscar dados completos do agendamento
+      const agendamentoRef = doc(db, 'agendamentos', booking.agendamentoId);
+      const agendamentoDoc = await getDoc(agendamentoRef);
+      
+      if (agendamentoDoc.exists()) {
+        setViewBooking({
+          ...booking,
+          ...agendamentoDoc.data()
+        });
+        setViewBookingOpen(true);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar detalhes do agendamento:', error);
+      showNotification('Erro ao carregar detalhes do agendamento.', 'error');
     }
   };
 
@@ -519,23 +549,41 @@ export default function ScheduleTab() {
                                 • {teachers[profId]?.nome || 'Carregando...'}
                                 {isBooked && ` - ${existingBookings[bookingKey].nomeAluno.split(' ')[0]}`}
                               </Typography>
-                              {isBooked && (
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(existingBookings[bookingKey]);
-                                  }}
-                                  sx={{
-                                    opacity: 0.7,
-                                    '&:hover': {
-                                      opacity: 1
-                                    }
-                                  }}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
-                                </IconButton>
+                              {isBooked && !isPublic && (
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewClick(existingBookings[bookingKey]);
+                                    }}
+                                    sx={{
+                                      opacity: 0.7,
+                                      '&:hover': {
+                                        opacity: 1
+                                      }
+                                    }}
+                                  >
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(existingBookings[bookingKey]);
+                                    }}
+                                    sx={{
+                                      opacity: 0.7,
+                                      '&:hover': {
+                                        opacity: 1
+                                      }
+                                    }}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
                               )}
                             </Box>
                           );
@@ -573,9 +621,34 @@ export default function ScheduleTab() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Novo Agendamento</DialogTitle>
+        <DialogTitle>
+          {isPublic ? 'Solicitar Agendamento' : 'Novo Agendamento'}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
+            {isPublic && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={agendamentoForm.email || ''}
+                  onChange={handleAgendamentoChange}
+                  required
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label="Telefone/WhatsApp"
+                  name="telefone"
+                  value={agendamentoForm.telefone || ''}
+                  onChange={handleAgendamentoChange}
+                  required
+                  sx={{ mb: 2 }}
+                />
+              </>
+            )}
             <TextField
               fullWidth
               label="Nome do Aluno"
@@ -685,6 +758,62 @@ export default function ScheduleTab() {
             variant="contained"
           >
             Sim, Cancelar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={viewBookingOpen}
+        onClose={() => setViewBookingOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Detalhes do Agendamento</DialogTitle>
+        <DialogContent>
+          {viewBooking && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Aluno:</strong> {viewBooking.nomeAluno}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Email:</strong> {viewBooking.email || 'Não informado'}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>WhatsApp:</strong> {viewBooking.telefone || 'Não informado'}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Data:</strong> {dayjs(viewBooking.data).format('DD/MM/YYYY')}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Horário:</strong> {viewBooking.horario}
+              </Typography>
+              
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Professor:</strong> {viewBooking.professorNome}
+              </Typography>
+
+              <Typography variant="subtitle1" gutterBottom>
+                <strong>Observações:</strong>
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 2, mt: 1, backgroundColor: '#f5f5f5' }}>
+                <Typography>
+                  {viewBooking.observacoes || 'Nenhuma observação'}
+                </Typography>
+              </Paper>
+
+              <Typography variant="caption" display="block" sx={{ mt: 2, color: 'text.secondary' }}>
+                Agendamento realizado em: {dayjs(viewBooking.createdAt?.toDate()).format('DD/MM/YYYY HH:mm')}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewBookingOpen(false)}>
+            Fechar
           </Button>
         </DialogActions>
       </Dialog>

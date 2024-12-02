@@ -22,7 +22,7 @@ export default function Login() {
     try {
       setError('');
       await login(email, password);
-      navigate('/dashboard');
+      navigate('/admin/dashboard');
     } catch (error) {
       setError('Falha ao fazer login. Verifique suas credenciais.');
     }

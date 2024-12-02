@@ -1,8 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import IndividualClasses from './components/IndividualClasses';
+import Dashboard from './pages/admin/Dashboard';
+import IndividualClasses from './pages/admin/IndividualClasses';
+import Schedule from './pages/public/Schedule';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -10,9 +11,13 @@ function App() {
     <Router>
       <AuthProvider>
         <Routes>
+          {/* Rotas Públicas */}
           <Route path="/login" element={<Login />} />
+          <Route path="/agendar" element={<Schedule />} />
+          
+          {/* Rotas Administrativas */}
           <Route 
-            path="/dashboard" 
+            path="/admin/dashboard" 
             element={
               <PrivateRoute>
                 <Dashboard />
@@ -20,14 +25,17 @@ function App() {
             } 
           />
           <Route 
-            path="/individual-classes" 
+            path="/admin/aulas" 
             element={
               <PrivateRoute>
                 <IndividualClasses />
               </PrivateRoute>
             } 
           />
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          
+          {/* Redirecionamentos */}
+          <Route path="/" element={<Navigate to="/agendar" />} />
+          <Route path="/admin" element={<Navigate to="/admin/dashboard" />} />
         </Routes>
       </AuthProvider>
     </Router>
