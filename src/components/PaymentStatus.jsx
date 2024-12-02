@@ -1,66 +1,64 @@
-import React, { useState, useEffect } from 'react';
-import './PaymentStatus.css';
+import React, { useEffect, useState } from 'react';
+import { Box, Typography, CircularProgress } from '@mui/material';
 
 const PaymentStatus = ({ orderId, onPaymentCompleted, onPaymentRetry }) => {
-  const [status, setStatus] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-
-  const checkPaymentStatus = async () => {
-    try {
-      const response = await fetch(`/api/pagbank/payment-status/${orderId}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setStatus(data.status);
-        
-        if (data.status === 'PAID' || data.status === 'DECLINED' || data.status === 'CANCELLED') {
-          setIsLoading(false);
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao verificar status:', error);
-    }
-  };
+  const [status, setStatus] = useState('PENDING');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const interval = setInterval(checkPaymentStatus, 3000);
-    
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
-  }, [orderId]);
+    let isMounted = true;
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/payment-status?orderId=${orderId}`);
+        const data = await response.json();
+        
+        if (!isMounted) return;
+
+        if (data.success) {
+          setStatus(data.status);
+          if (data.status === 'PAID' || data.status === 'COMPLETED') {
+            clearInterval(checkInterval);
+            onPaymentCompleted(data.status);
+          } else if (data.status === 'DECLINED' || data.status === 'CANCELLED') {
+            clearInterval(checkInterval);
+            onPaymentRetry(data.status);
+          }
+        } else {
+          setError(data.error);
+          clearInterval(checkInterval);
+          onPaymentRetry(data.error);
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        setError(error.message);
+        clearInterval(checkInterval);
+        onPaymentRetry(error);
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(checkInterval);
+    };
+  }, [orderId, onPaymentCompleted, onPaymentRetry]);
+
+  if (error) {
+    return (
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <Typography color="error">
+          Erro ao verificar status do pagamento: {error}
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
-    <div className="payment-status">
-      {isLoading && (
-        <div className="status-container">
-          <div className="spinner"></div>
-          <h3>Aguardando pagamento...</h3>
-          <p>Por favor, complete o pagamento usando o QR Code</p>
-        </div>
-      )}
-
-      {status === 'PAID' && (
-        <div className="status-container success">
-          <i className="fas fa-check-circle"></i>
-          <h3>Pagamento Confirmado!</h3>
-          <p>Sua aula foi agendada com sucesso</p>
-          <button onClick={onPaymentCompleted} className="continue-btn">
-            Continuar
-          </button>
-        </div>
-      )}
-
-      {(status === 'DECLINED' || status === 'CANCELLED') && (
-        <div className="status-container error">
-          <i className="fas fa-times-circle"></i>
-          <h3>Pagamento não realizado</h3>
-          <p>Houve um problema com seu pagamento</p>
-          <button onClick={onPaymentRetry} className="retry-btn">
-            Tentar Novamente
-          </button>
-        </div>
-      )}
-    </div>
+    <Box sx={{ p: 2, textAlign: 'center' }}>
+      <CircularProgress size={20} sx={{ mr: 1 }} />
+      <Typography component="span">
+        Verificando status do pagamento...
+      </Typography>
+    </Box>
   );
 };
 

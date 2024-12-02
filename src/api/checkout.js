@@ -1,12 +1,12 @@
-import express from 'express';
 import fetch from 'node-fetch';
 
-const router = express.Router();
+// Handler para a função serverless
+export default async function handler(req, res) {
+  // Verificar se é um POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-// Armazenamento temporário de status para teste
-const paymentStatus = new Map();
-
-router.post('/checkout', async (req, res) => {
   try {
     const { agendamento, paymentMethod, cardData } = req.body;
     
@@ -105,100 +105,4 @@ router.post('/checkout', async (req, res) => {
       details: error.toString()
     });
   }
-});
-
-// Função para verificar status do pagamento
-export async function checkPaymentStatus(orderId) {
-  try {
-    const baseUrl = process.env.PAGBANK_ENV === 'production'
-      ? 'https://api.pagseguro.com/orders'
-      : 'https://sandbox.api.pagseguro.com/orders';
-
-    const response = await fetch(`${baseUrl}/${orderId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': process.env.PAGBANK_TOKEN,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const data = await response.json();
-    console.log('Status do pagamento:', data.status);
-    return data.status;
-  } catch (error) {
-    console.error('Erro ao verificar status do pagamento:', error);
-    throw error;
-  }
-}
-
-// Função para implementar o polling
-export function startPaymentStatusCheck(orderId, onSuccess, onError) {
-  const checkInterval = setInterval(async () => {
-    try {
-      const status = await checkPaymentStatus(orderId);
-      
-      if (status === 'PAID' || status === 'COMPLETED') {
-        clearInterval(checkInterval);
-        onSuccess(status);
-      } else if (status === 'DECLINED' || status === 'CANCELLED') {
-        clearInterval(checkInterval);
-        onError(status);
-      }
-      // Continua verificando se o status for 'PENDING' ou similar
-    } catch (error) {
-      clearInterval(checkInterval);
-      onError(error);
-    }
-  }, 3000); // Verifica a cada 3 segundos
-
-  // Retorna uma função para cancelar o polling se necessário
-  return () => clearInterval(checkInterval);
-}
-
-// Endpoint de teste para simular mudança de status do pagamento
-router.post('/test-payment/:orderId', async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { status } = req.body;
-    
-    console.log(`Simulando mudança de status para pedido ${orderId}: ${status}`);
-    
-    // Armazena o status do pagamento
-    paymentStatus.set(orderId, status);
-    
-    return res.status(200).json({
-      success: true,
-      orderId,
-      status
-    });
-  } catch (error) {
-    console.error('Erro ao simular pagamento:', error);
-    return res.status(400).json({ 
-      success: false,
-      error: error.message 
-    });
-  }
-});
-
-// Endpoint para verificar status do pagamento
-router.get('/payment-status/:orderId', async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    
-    // Verifica se existe um status de teste para este pedido
-    const status = paymentStatus.get(orderId) || 'PENDING';
-    
-    return res.status(200).json({
-      success: true,
-      status
-    });
-  } catch (error) {
-    console.error('Erro ao verificar status:', error);
-    return res.status(400).json({ 
-      success: false,
-      error: error.message 
-    });
-  }
-});
-
-export default router; 
+} 
