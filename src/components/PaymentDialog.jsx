@@ -30,19 +30,30 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     securityCode: '',
     holderName: ''
   });
-  const [sdkLoaded, setSdkLoaded] = useState(false);
+  const [scriptsLoaded, setScriptsLoaded] = useState({
+    recaptcha: false,
+    pagbank: false
+  });
   const recaptchaRef = useRef();
+  const initializationAttempted = useRef(false);
 
-  // Verificar se o SDK do PagBank está carregado
+  // Verificar se os scripts estão carregados
   useEffect(() => {
-    const checkSdk = () => {
-      if (window.PagSeguro) {
-        setSdkLoaded(true);
-      } else {
-        setTimeout(checkSdk, 1000); // Tentar novamente em 1 segundo
+    const checkScripts = () => {
+      const recaptchaLoaded = typeof window.grecaptcha !== 'undefined';
+      const pagbankLoaded = typeof window.PagSeguro !== 'undefined';
+
+      setScriptsLoaded({
+        recaptcha: recaptchaLoaded,
+        pagbank: pagbankLoaded
+      });
+
+      if (!recaptchaLoaded || !pagbankLoaded) {
+        setTimeout(checkScripts, 1000);
       }
     };
-    checkSdk();
+
+    checkScripts();
   }, []);
 
   // Resetar estados quando o diálogo é aberto
@@ -50,11 +61,31 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     if (open) {
       setError(null);
       setPaymentData(null);
+      initializationAttempted.current = false;
+      
       if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
+        try {
+          recaptchaRef.current.reset();
+        } catch (error) {
+          console.error('Erro ao resetar reCAPTCHA:', error);
+        }
       }
     }
   }, [open]);
+
+  // Iniciar pagamento PIX quando tudo estiver carregado
+  useEffect(() => {
+    if (open && 
+        !paymentData && 
+        !loading && 
+        paymentMethod === 'pix' && 
+        scriptsLoaded.recaptcha && 
+        scriptsLoaded.pagbank && 
+        !initializationAttempted.current) {
+      initializationAttempted.current = true;
+      handlePayment();
+    }
+  }, [open, paymentMethod, scriptsLoaded]);
 
   const handleCardDataChange = (field) => (event) => {
     setCardData({
@@ -74,6 +105,13 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setLoading(true);
       setError(null);
 
+      // Verificar se os scripts estão carregados
+      if (!scriptsLoaded.recaptcha || !scriptsLoaded.pagbank) {
+        setError('Aguarde o carregamento dos componentes de pagamento...');
+        setLoading(false);
+        return;
+      }
+
       // Verificar se o reCAPTCHA está disponível
       if (!recaptchaRef.current) {
         setError('Erro ao carregar o reCAPTCHA. Por favor, recarregue a página.');
@@ -89,15 +127,9 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
         return;
       }
 
-      // Verificar SDK do PagBank para pagamento com cartão
+      // Processar pagamento com cartão
       let encryptedCard;
       if (paymentMethod === 'credit_card') {
-        if (!sdkLoaded) {
-          setError('Erro ao carregar o SDK do PagBank. Por favor, recarregue a página.');
-          setLoading(false);
-          return;
-        }
-
         try {
           const card = window.PagSeguro.encryptCard({
             publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
@@ -149,13 +181,6 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
-      if (recaptchaRef.current) {
-        try {
-          recaptchaRef.current.reset();
-        } catch (error) {
-          console.error('Erro ao resetar reCAPTCHA:', error);
-        }
-      }
     }
   };
 
@@ -169,13 +194,6 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     setError(null);
     handlePayment();
   };
-
-  // Iniciar o pagamento quando o diálogo for aberto e for PIX
-  useEffect(() => {
-    if (open && !paymentData && !loading && paymentMethod === 'pix' && recaptchaRef.current) {
-      handlePayment();
-    }
-  }, [open, paymentMethod, recaptchaRef.current]);
 
   const renderPaymentForm = () => {
     if (paymentMethod === 'credit_card') {
@@ -270,6 +288,11 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         Pagamento
+        {!scriptsLoaded.recaptcha || !scriptsLoaded.pagbank ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Carregando componentes de pagamento...
+          </Typography>
+        ) : null}
       </DialogTitle>
       <DialogContent>
         <RadioGroup
