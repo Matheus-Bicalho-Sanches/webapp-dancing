@@ -31,6 +31,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import PaymentDialog from '../PaymentDialog';
 
 dayjs.locale('pt-br');
 
@@ -45,6 +46,8 @@ export default function ScheduleTab({ isPublic = false }) {
   const [openAgendamentoModal, setOpenAgendamentoModal] = useState(false);
   const [agendamentoForm, setAgendamentoForm] = useState({
     nomeAluno: '',
+    email: '',
+    telefone: '',
     observacoes: ''
   });
   const [saving, setSaving] = useState(false);
@@ -58,6 +61,9 @@ export default function ScheduleTab({ isPublic = false }) {
   const [bookingToDelete, setBookingToDelete] = useState(null);
   const [viewBooking, setViewBooking] = useState(null);
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
+  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(null);
+  const [priceRanges, setPriceRanges] = useState([]);
 
   // Inicializar as três datas (hoje, amanhã, depois)
   useEffect(() => {
@@ -251,6 +257,8 @@ export default function ScheduleTab({ isPublic = false }) {
     setOpenAgendamentoModal(false);
     setAgendamentoForm({
       nomeAluno: '',
+      email: '',
+      telefone: '',
       observacoes: ''
     });
   };
@@ -263,62 +271,116 @@ export default function ScheduleTab({ isPublic = false }) {
     }));
   };
 
-  const handleSubmitAgendamento = async () => {
-    setSaving(true);
-    try {
-      // Verificar novamente todos os slots selecionados
-      for (const slot of Object.values(selectedTeachers)) {
-        const bookingKey = `${slot.date}-${slot.horario}-${slot.professorId}`;
-        if (existingBookings[bookingKey]) {
-          throw new Error('Um ou mais horários selecionados já foram agendados.');
-        }
+  // Carregar valores das aulas
+  useEffect(() => {
+    const loadPriceRanges = async () => {
+      try {
+        const valuesSnapshot = await getDocs(collection(db, 'valores_aulas'));
+        const valuesData = valuesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        // Ordenar por quantidade mínima de aulas
+        const sortedValues = valuesData.sort((a, b) => a.minClasses - b.minClasses);
+        setPriceRanges(sortedValues);
+      } catch (error) {
+        console.error('Erro ao carregar valores das aulas:', error);
       }
+    };
 
-      const batch = writeBatch(db);
-      const agendamentosRef = collection(db, 'agendamentos');
+    loadPriceRanges();
+  }, []);
 
-      // Criar documento principal do agendamento
-      const mainAgendamento = {
+  // Função para calcular o valor total baseado na quantidade de aulas
+  const calculateTotalValue = (numberOfClasses) => {
+    // Encontrar a faixa de preço adequada
+    const priceRange = priceRanges.find(range => 
+      numberOfClasses >= range.minClasses && 
+      numberOfClasses <= range.maxClasses
+    ) || priceRanges.find(range => range.maxClasses === 999);
+
+    if (!priceRange) {
+      console.error('Faixa de preço não encontrada');
+      return 0;
+    }
+
+    return numberOfClasses * priceRange.valuePerClass;
+  };
+
+  // Atualizar a função handleSaveAgendamento
+  const handleSaveAgendamento = async () => {
+    if (isPublic) {
+      // Calcular o valor total baseado na quantidade de aulas selecionadas
+      const numberOfClasses = selectedSlots.length;
+      const totalValue = calculateTotalValue(numberOfClasses);
+
+      // Preparar dados do agendamento para pagamento
+      const agendamentoData = {
         nomeAluno: agendamentoForm.nomeAluno,
-        observacoes: agendamentoForm.observacoes,
-        createdAt: Timestamp.now(),
-        status: 'confirmado'
-      };
-
-      const mainDocRef = await addDoc(agendamentosRef, mainAgendamento);
-
-      // Criar documentos para cada horário agendado
-      Object.values(selectedTeachers).forEach((slot) => {
-        const horarioRef = doc(agendamentosRef, mainDocRef.id, 'horarios', `${slot.date}-${slot.horario}`);
-        batch.set(horarioRef, {
+        email: agendamentoForm.email,
+        telefone: agendamentoForm.telefone,
+        valor: totalValue, // Usar o valor calculado
+        horarios: Object.values(selectedTeachers).map(slot => ({
           data: slot.date,
           horario: slot.horario,
           professorId: slot.professorId,
-          professorNome: slot.professorNome,
-          status: 'agendado'
+          professorNome: slot.professorNome
+        }))
+      };
+
+      // Salvar dados temporariamente e abrir diálogo de pagamento
+      setPendingBooking(agendamentoData);
+      setOpenPaymentDialog(true);
+      setOpenAgendamentoModal(false);
+    } else {
+      // Lógica existente para admin
+      await saveAgendamento();
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    if (pendingBooking) {
+      try {
+        setSaving(true);
+        
+        // Criar novo agendamento
+        const agendamentoRef = await addDoc(collection(db, 'agendamentos'), {
+          nomeAluno: pendingBooking.nomeAluno,
+          email: pendingBooking.email,
+          telefone: pendingBooking.telefone,
+          observacoes: agendamentoForm.observacoes,
+          dataCriacao: Timestamp.now(),
+          status: 'confirmado',
+          pagamento: 'aprovado'
         });
-      });
 
-      await batch.commit();
+        // Adicionar horários ao agendamento
+        const batch = writeBatch(db);
+        pendingBooking.horarios.forEach(horario => {
+          const horarioRef = doc(collection(agendamentoRef, 'horarios'));
+          batch.set(horarioRef, {
+            data: horario.data,
+            horario: horario.horario,
+            professorId: horario.professorId
+          });
+        });
 
-      // Feedback e limpeza
-      handleCloseAgendamento();
-      setSelectedSlots([]);
-      setSelectedTeachers({});
-      
-      // Mostrar notificação de sucesso
-      showNotification('Agendamento realizado com sucesso!', 'success');
-      
-      // Recarregar horários para atualizar disponibilidade
-      loadSchedules();
+        await batch.commit();
 
-      // Recarregar agendamentos após salvar
-      await loadExistingBookings();
-    } catch (error) {
-      console.error('Erro ao salvar agendamento:', error);
-      showNotification(error.message || 'Erro ao realizar agendamento. Tente novamente.', 'error');
-    } finally {
-      setSaving(false);
+        // Limpar seleções e mostrar sucesso
+        setSelectedSlots([]);
+        setSelectedTeachers({});
+        setPendingBooking(null);
+        showNotification('Agendamento realizado com sucesso!', 'success');
+        
+        // Recarregar agendamentos
+        await loadExistingBookings();
+      } catch (error) {
+        console.error('Erro ao salvar agendamento:', error);
+        showNotification('Erro ao salvar agendamento. Por favor, tente novamente.', 'error');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -368,16 +430,20 @@ export default function ScheduleTab({ isPublic = false }) {
   const handleDeleteConfirm = async () => {
     try {
       const agendamentoRef = doc(db, 'agendamentos', bookingToDelete.agendamentoId);
-      const horarioRef = doc(agendamentoRef, 'horarios', `${bookingToDelete.data}-${bookingToDelete.horario}`);
       
-      await deleteDoc(horarioRef);
-      
-      // Verificar se ainda existem horários para este agendamento
+      // Primeiro, excluir todos os horários do agendamento
       const horariosSnapshot = await getDocs(collection(agendamentoRef, 'horarios'));
-      if (horariosSnapshot.empty) {
-        // Se não houver mais horários, deletar o agendamento principal
-        await deleteDoc(agendamentoRef);
-      }
+      const batch = writeBatch(db);
+      
+      horariosSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // Depois, excluir o documento principal do agendamento
+      batch.delete(agendamentoRef);
+      
+      // Executar todas as operações
+      await batch.commit();
 
       showNotification('Agendamento cancelado com sucesso!', 'success');
       await loadExistingBookings(); // Recarregar agendamentos
@@ -626,29 +692,6 @@ export default function ScheduleTab({ isPublic = false }) {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            {isPublic && (
-              <>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={agendamentoForm.email || ''}
-                  onChange={handleAgendamentoChange}
-                  required
-                  sx={{ mb: 2 }}
-                />
-                <TextField
-                  fullWidth
-                  label="Telefone/WhatsApp"
-                  name="telefone"
-                  value={agendamentoForm.telefone || ''}
-                  onChange={handleAgendamentoChange}
-                  required
-                  sx={{ mb: 2 }}
-                />
-              </>
-            )}
             <TextField
               fullWidth
               label="Nome do Aluno"
@@ -656,8 +699,38 @@ export default function ScheduleTab({ isPublic = false }) {
               value={agendamentoForm.nomeAluno}
               onChange={handleAgendamentoChange}
               required
-              sx={{ mb: 3 }}
+              error={isPublic && !agendamentoForm.nomeAluno}
+              helperText={isPublic && !agendamentoForm.nomeAluno ? "Nome é obrigatório" : ""}
+              sx={{ mb: 2 }}
             />
+
+            {isPublic && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={agendamentoForm.email}
+                  onChange={handleAgendamentoChange}
+                  required
+                  error={!agendamentoForm.email}
+                  helperText={!agendamentoForm.email ? "Email é obrigatório" : ""}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label="Telefone/WhatsApp"
+                  name="telefone"
+                  value={agendamentoForm.telefone}
+                  onChange={handleAgendamentoChange}
+                  required
+                  error={!agendamentoForm.telefone}
+                  helperText={!agendamentoForm.telefone ? "Telefone é obrigatório" : ""}
+                  sx={{ mb: 2 }}
+                />
+              </>
+            )}
 
             <TextField
               fullWidth
@@ -666,8 +739,8 @@ export default function ScheduleTab({ isPublic = false }) {
               value={agendamentoForm.observacoes}
               onChange={handleAgendamentoChange}
               multiline
-              rows={2}
-              sx={{ mb: 3 }}
+              rows={4}
+              sx={{ mb: 2 }}
             />
 
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
@@ -696,21 +769,58 @@ export default function ScheduleTab({ isPublic = false }) {
                 </ListItem>
               ))}
             </List>
+
+            {isPublic && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Resumo do Valor:
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Quantidade de aulas:</Typography>
+                  <Typography>{selectedSlots.length}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Valor por aula:</Typography>
+                  <Typography>
+                    {priceRanges.find(range => 
+                      selectedSlots.length >= range.minClasses && 
+                      selectedSlots.length <= range.maxClasses
+                    )?.valuePerClass.toLocaleString('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    }) || 'Calculando...'}
+                  </Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    Valor Total:
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    {calculateTotalValue(selectedSlots.length).toLocaleString('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    })}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={handleCloseAgendamento}
-            disabled={saving}
-          >
+          <Button onClick={handleCloseAgendamento}>
             Cancelar
           </Button>
           <Button 
             variant="contained"
-            onClick={handleSubmitAgendamento}
-            disabled={!agendamentoForm.nomeAluno || saving}
+            onClick={handleSaveAgendamento}
+            disabled={
+              !agendamentoForm.nomeAluno || 
+              (isPublic && (!agendamentoForm.email || !agendamentoForm.telefone)) ||
+              saving
+            }
           >
-            {saving ? 'Salvando...' : 'Confirmar Agendamento'}
+            {saving ? 'Salvando...' : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -817,6 +927,13 @@ export default function ScheduleTab({ isPublic = false }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PaymentDialog
+        open={openPaymentDialog}
+        onClose={() => setOpenPaymentDialog(false)}
+        agendamento={pendingBooking}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
     </>
   );
 } 

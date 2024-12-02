@@ -10,6 +10,7 @@ import {
 import TeachersTab from '../../components/tabs/TeachersTab';
 import TimeTab from '../../components/tabs/TimeTab';
 import ScheduleTab from '../../components/tabs/ScheduleTab';
+import ValuesTab from '../../components/tabs/ValuesTab';
 import { useAuth } from '../../contexts/AuthContext';
 
 function TabPanel({ children, value, index, ...other }) {
@@ -51,6 +52,7 @@ export default function IndividualClasses() {
               <Tab label="Agenda" />
               <Tab label="Horários" />
               <Tab label="Professores" />
+              <Tab label="Valores" />
               <Tab label="Pesquisa" />
             </Tabs>
           </Paper>
@@ -68,6 +70,10 @@ export default function IndividualClasses() {
           </TabPanel>
 
           <TabPanel value={currentTab} index={3}>
+            <ValuesTab />
+          </TabPanel>
+
+          <TabPanel value={currentTab} index={4}>
             <Typography variant="h6">Pesquisa</Typography>
             <Typography variant="body1">Conteúdo da pesquisa virá aqui</Typography>
           </TabPanel>
