@@ -17,7 +17,6 @@ import {
 } from '@mui/material';
 import ReCAPTCHA from 'react-google-recaptcha';
 import PaymentStatus from './PaymentStatus';
-import PagSeguro from 'pagseguro-sdk';
 
 const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -79,7 +78,14 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       let encryptedCard;
       if (paymentMethod === 'credit_card') {
         try {
-          const card = PagSeguro.encryptCard({
+          // Verificar se o SDK está carregado
+          if (typeof window.PagSeguro === 'undefined') {
+            setError('Erro ao carregar o SDK do PagBank. Por favor, recarregue a página.');
+            setLoading(false);
+            return;
+          }
+
+          const card = window.PagSeguro.encryptCard({
             publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
             holder: cardData.holderName,
             number: cardData.number,
