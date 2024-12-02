@@ -12,7 +12,7 @@ const TestRecaptcha = () => {
       setError(null);
       setResult(null);
 
-      const recaptchaValue = await recaptchaRef.current.executeAsync();
+      const recaptchaValue = recaptchaRef.current.getValue();
       if (!recaptchaValue) {
         setError('Por favor, complete a verificação de segurança');
         return;
@@ -47,22 +47,25 @@ const TestRecaptcha = () => {
         Teste do reCAPTCHA
       </Typography>
 
-      <Box sx={{ my: 3 }}>
+      <Box sx={{ my: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <ReCAPTCHA
           ref={recaptchaRef}
           sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
           size="normal"
+          theme="light"
         />
       </Box>
 
-      <Button 
-        variant="contained" 
-        color="primary"
-        onClick={handleTest}
-        sx={{ mb: 2 }}
-      >
-        Testar reCAPTCHA
-      </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={handleTest}
+          sx={{ mb: 2 }}
+        >
+          Testar reCAPTCHA
+        </Button>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

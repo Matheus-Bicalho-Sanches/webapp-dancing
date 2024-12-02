@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
@@ -5,6 +6,7 @@ import Dashboard from './pages/admin/Dashboard';
 import IndividualClasses from './pages/admin/IndividualClasses';
 import Schedule from './pages/public/Schedule';
 import PrivateRoute from './components/PrivateRoute';
+import TestRecaptcha from './components/TestRecaptcha';
 
 function App() {
   return (
@@ -36,6 +38,7 @@ function App() {
           {/* Redirecionamentos */}
           <Route path="/" element={<Navigate to="/agendar" />} />
           <Route path="/admin" element={<Navigate to="/admin/dashboard" />} />
+          <Route path="/test-recaptcha" element={<TestRecaptcha />} />
         </Routes>
       </AuthProvider>
     </Router>
