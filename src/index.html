@@ -5,13 +5,41 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebApp Dancing</title>
-    <!-- Script do reCAPTCHA -->
-    <script src="https://www.google.com/recaptcha/api.js"></script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Script do PagBank antes do script principal -->
-    <script src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js"></script>
-    <script type="module" src="/src/main.jsx"></script>
+    <!-- Scripts externos -->
+    <script>
+      // Função para carregar script
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.body.appendChild(script);
+        });
+      }
+
+      // Carregar scripts em sequência
+      async function loadScripts() {
+        try {
+          // Carregar reCAPTCHA primeiro
+          await loadScript('https://www.google.com/recaptcha/api.js');
+          // Depois carregar PagBank
+          await loadScript('https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js');
+          // Por fim, carregar a aplicação
+          const moduleScript = document.createElement('script');
+          moduleScript.type = 'module';
+          moduleScript.src = '/src/main.jsx';
+          document.body.appendChild(moduleScript);
+        } catch (error) {
+          console.error('Erro ao carregar scripts:', error);
+        }
+      }
+
+      // Iniciar carregamento
+      loadScripts();
+    </script>
   </body>
 </html> 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,7 +30,31 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     securityCode: '',
     holderName: ''
   });
+  const [sdkLoaded, setSdkLoaded] = useState(false);
   const recaptchaRef = useRef();
+
+  // Verificar se o SDK do PagBank está carregado
+  useEffect(() => {
+    const checkSdk = () => {
+      if (window.PagSeguro) {
+        setSdkLoaded(true);
+      } else {
+        setTimeout(checkSdk, 1000); // Tentar novamente em 1 segundo
+      }
+    };
+    checkSdk();
+  }, []);
+
+  // Resetar estados quando o diálogo é aberto
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setPaymentData(null);
+      if (recaptchaRef.current) {
+        recaptchaRef.current.reset();
+      }
+    }
+  }, [open]);
 
   const handleCardDataChange = (field) => (event) => {
     setCardData({
@@ -65,17 +89,16 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
         return;
       }
 
-      // Resto do código do cartão e pagamento...
+      // Verificar SDK do PagBank para pagamento com cartão
       let encryptedCard;
       if (paymentMethod === 'credit_card') {
-        try {
-          // Verificar se o SDK está carregado
-          if (typeof window.PagSeguro === 'undefined') {
-            setError('Erro ao carregar o SDK do PagBank. Por favor, recarregue a página.');
-            setLoading(false);
-            return;
-          }
+        if (!sdkLoaded) {
+          setError('Erro ao carregar o SDK do PagBank. Por favor, recarregue a página.');
+          setLoading(false);
+          return;
+        }
 
+        try {
           const card = window.PagSeguro.encryptCard({
             publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
             holder: cardData.holderName,
@@ -115,7 +138,7 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       });
 
       const data = await response.json();
-      
+        
       if (data.success) {
         setPaymentData(data);
       } else {
@@ -126,7 +149,6 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
-      // Resetar o reCAPTCHA se ele existir
       if (recaptchaRef.current) {
         try {
           recaptchaRef.current.reset();
@@ -149,11 +171,11 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   };
 
   // Iniciar o pagamento quando o diálogo for aberto e for PIX
-  React.useEffect(() => {
-    if (open && !paymentData && !loading && paymentMethod === 'pix') {
+  useEffect(() => {
+    if (open && !paymentData && !loading && paymentMethod === 'pix' && recaptchaRef.current) {
       handlePayment();
     }
-  }, [open, paymentMethod]);
+  }, [open, paymentMethod, recaptchaRef.current]);
 
   const renderPaymentForm = () => {
     if (paymentMethod === 'credit_card') {
