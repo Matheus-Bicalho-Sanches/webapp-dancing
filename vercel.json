@@ -15,5 +15,17 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ],
+  "functions": {
+    "api/pagbank/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
 } 

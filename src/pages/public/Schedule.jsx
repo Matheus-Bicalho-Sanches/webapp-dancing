@@ -1,7 +1,30 @@
-import { Box, Paper, Typography, Container, AppBar, Toolbar } from '@mui/material';
+import { Box, Paper, Typography, Container, AppBar, Toolbar, Button } from '@mui/material';
 import ScheduleTab from '../../components/tabs/ScheduleTab';
 
 export default function Schedule() {
+  // Função para testar a API
+  const testCheckoutAPI = async () => {
+    try {
+      const response = await fetch('/api/pagbank/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          agendamento: {
+            nomeAluno: 'Teste',
+            email: 'teste@teste.com'
+          }
+        })
+      });
+
+      const data = await response.json();
+      console.log('Resposta da API:', data);
+    } catch (error) {
+      console.error('Erro ao testar API:', error);
+    }
+  };
+
   return (
     <Box sx={{ 
       display: 'flex',
@@ -14,6 +37,12 @@ export default function Schedule() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Dancing Patinação
           </Typography>
+          <Button 
+            color="inherit" 
+            onClick={testCheckoutAPI}
+          >
+            Testar API PagBank
+          </Button>
         </Toolbar>
       </AppBar>
 
