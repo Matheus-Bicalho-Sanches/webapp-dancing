@@ -40,21 +40,32 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   // Verificar se os scripts estão carregados
   useEffect(() => {
     const checkScripts = () => {
-      const recaptchaLoaded = typeof window.grecaptcha !== 'undefined';
-      const pagbankLoaded = typeof window.PagSeguro !== 'undefined';
+      // Debug logs
+      console.log('Checking scripts...');
+      console.log('reCAPTCHA:', !!window.grecaptcha);
+      console.log('PagBank:', !!window.PagSeguro);
+
+      // Considerar carregado se o objeto existe
+      const recaptchaLoaded = !!window.grecaptcha;
+      const pagbankLoaded = !!window.PagSeguro;
+
+      console.log('Scripts loaded:', { recaptchaLoaded, pagbankLoaded });
 
       setScriptsLoaded({
         recaptcha: recaptchaLoaded,
         pagbank: pagbankLoaded
       });
 
+      // Continuar verificando se algum não estiver carregado
       if (!recaptchaLoaded || !pagbankLoaded) {
         setTimeout(checkScripts, 1000);
       }
     };
 
-    checkScripts();
-  }, []);
+    if (open) {
+      checkScripts();
+    }
+  }, [open]);
 
   // Resetar estados quando o diálogo é aberto
   useEffect(() => {
