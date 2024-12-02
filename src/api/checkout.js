@@ -8,7 +8,7 @@ const paymentStatus = new Map();
 
 router.post('/checkout', async (req, res) => {
   try {
-    const { agendamento } = req.body;
+    const { agendamento, paymentMethod, cardData } = req.body;
     
     // URL base baseada no ambiente
     const baseUrl = process.env.PAGBANK_ENV === 'production'
@@ -17,7 +17,6 @@ router.post('/checkout', async (req, res) => {
 
     console.log('Ambiente PagBank:', process.env.PAGBANK_ENV);
     console.log('URL Base:', baseUrl);
-    console.log('Token:', process.env.PAGBANK_TOKEN);
     
     // Configurar o pedido para o PagBank
     const order = {
@@ -33,19 +32,44 @@ router.post('/checkout', async (req, res) => {
           quantity: 1,
           unit_amount: agendamento.valor * 100
         }
-      ],
-      qr_codes: [
+      ]
+    };
+
+    // Adicionar método de pagamento específico baseado na escolha
+    if (paymentMethod === 'credit_card' && cardData) {
+      order.charges = [{
+        amount: {
+          value: agendamento.valor * 100,
+          currency: "BRL"
+        },
+        payment_method: {
+          type: "CREDIT_CARD",
+          installments: 1,
+          card: {
+            number: cardData.number,
+            exp_month: cardData.expMonth,
+            exp_year: cardData.expYear,
+            security_code: cardData.securityCode,
+            holder: {
+              name: cardData.holderName
+            }
+          }
+        }
+      }];
+    } else {
+      // Pagamento PIX
+      order.qr_codes = [
         {
           amount: {
             value: agendamento.valor * 100
           }
         }
-      ]
-    };
+      ];
+    }
 
     console.log('Dados do pedido:', JSON.stringify(order, null, 2));
 
-    // Gerar chave de idempotência no formato correto (apenas letras, números e hífen)
+    // Gerar chave de idempotência
     const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     // Fazer a requisição para o PagBank
@@ -70,6 +94,7 @@ router.post('/checkout', async (req, res) => {
       success: true,
       order_id: data.id,
       qr_code: data.qr_codes?.[0],
+      payment_response: data,
       links: data.links
     });
 
