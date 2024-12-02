@@ -48,32 +48,57 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
 
   const handlePayment = async () => {
     try {
-      // Verificar reCAPTCHA
-      const recaptchaValue = await recaptchaRef.current.executeAsync();
-      if (!recaptchaValue) {
-        setError('Por favor, complete a verificação de segurança');
+      setLoading(true);
+      setError(null);
+
+      // Verificar se o reCAPTCHA está disponível
+      if (!recaptchaRef.current) {
+        setError('Erro ao carregar o reCAPTCHA. Por favor, recarregue a página.');
+        setLoading(false);
         return;
       }
 
-      setLoading(true);
-      setError(null);
+      // Verificar reCAPTCHA
+      let recaptchaValue;
+      try {
+        recaptchaValue = await recaptchaRef.current.executeAsync();
+      } catch (error) {
+        console.error('Erro no reCAPTCHA:', error);
+        setError('Erro na verificação de segurança. Por favor, tente novamente.');
+        setLoading(false);
+        return;
+      }
+
+      if (!recaptchaValue) {
+        setError('Por favor, complete a verificação de segurança');
+        setLoading(false);
+        return;
+      }
 
       // Criptografar dados do cartão se for pagamento com cartão
       let encryptedCard;
       if (paymentMethod === 'credit_card') {
-        const card = PagSeguro.encryptCard({
-          publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
-          holder: cardData.holderName,
-          number: cardData.number,
-          expMonth: cardData.expMonth,
-          expYear: cardData.expYear,
-          securityCode: cardData.securityCode
-        });
-        
-        if (!encryptedCard.hasErrors) {
-          encryptedCard = encryptedCard.encryptedCard;
-        } else {
-          setError('Erro ao processar dados do cartão. Verifique os dados informados.');
+        try {
+          const card = PagSeguro.encryptCard({
+            publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
+            holder: cardData.holderName,
+            number: cardData.number,
+            expMonth: cardData.expMonth,
+            expYear: cardData.expYear,
+            securityCode: cardData.securityCode
+          });
+          
+          if (!card.hasErrors) {
+            encryptedCard = card.encryptedCard;
+          } else {
+            console.error('Erro na criptografia do cartão:', card.errors);
+            setError('Erro ao processar dados do cartão. Verifique os dados informados.');
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Erro ao criptografar cartão:', error);
+          setError('Erro ao processar dados do cartão. Por favor, tente novamente.');
           setLoading(false);
           return;
         }
@@ -180,7 +205,9 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                size="normal"
+                size="invisible"
+                badge="bottomright"
+                onErrored={() => setError('Erro ao carregar verificação de segurança')}
               />
             </Box>
           </Grid>
