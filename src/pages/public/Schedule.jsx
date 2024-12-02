@@ -25,6 +25,8 @@ export default function Schedule() {
     }
   };
 
+  const isDevelopment = import.meta.env.DEV;
+
   return (
     <Box sx={{ 
       display: 'flex',
@@ -37,12 +39,14 @@ export default function Schedule() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Dancing Patinação
           </Typography>
-          <Button 
-            color="inherit" 
-            onClick={testCheckoutAPI}
-          >
-            Testar API PagBank
-          </Button>
+          {isDevelopment && (
+            <Button 
+              color="inherit" 
+              onClick={testCheckoutAPI}
+            >
+              Testar API PagBank
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
 
