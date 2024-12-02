@@ -9,7 +9,7 @@ const PaymentStatus = ({ orderId, onPaymentCompleted, onPaymentRetry }) => {
     let isMounted = true;
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/payment-status?orderId=${orderId}`);
+        const response = await fetch(`/api/pagbank/payment-status?orderId=${orderId}`);
         const data = await response.json();
         
         if (!isMounted) return;
