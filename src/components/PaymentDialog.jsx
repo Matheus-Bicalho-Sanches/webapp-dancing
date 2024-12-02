@@ -135,7 +135,13 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
-      recaptchaRef.current.reset();
+      if (recaptchaRef.current) {
+        try {
+          await recaptchaRef.current.reset();
+        } catch (error) {
+          console.error('Erro ao resetar reCAPTCHA:', error);
+        }
+      }
     }
   };
 
@@ -213,7 +219,13 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
                 size="invisible"
                 badge="bottomright"
-                onErrored={() => setError('Erro ao carregar verificação de segurança')}
+                onErrored={() => {
+                  setError('Erro ao carregar verificação de segurança');
+                  setLoading(false);
+                }}
+                onLoad={() => {
+                  console.log('reCAPTCHA carregado com sucesso');
+                }}
               />
             </Box>
           </Grid>
