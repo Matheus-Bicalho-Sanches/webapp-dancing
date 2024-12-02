@@ -8,7 +8,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Recebendo requisição de checkout:', req.body);
     const { agendamento, paymentMethod, cardData } = req.body;
+    
+    if (!agendamento || !paymentMethod) {
+      return res.status(400).json({ 
+        error: 'Dados incompletos',
+        details: 'agendamento e paymentMethod são obrigatórios'
+      });
+    }
     
     // URL base baseada no ambiente
     const baseUrl = process.env.PAGBANK_ENV === 'production'
@@ -17,6 +25,7 @@ export default async function handler(req, res) {
 
     console.log('Ambiente PagBank:', process.env.PAGBANK_ENV);
     console.log('URL Base:', baseUrl);
+    console.log('Token presente:', !!process.env.PAGBANK_TOKEN);
     
     // Configurar o pedido para o PagBank
     const order = {
@@ -76,15 +85,29 @@ export default async function handler(req, res) {
     const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
-        'Authorization': process.env.PAGBANK_TOKEN,
+        'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
         'Content-Type': 'application/json',
         'x-idempotency-key': idempotencyKey
       },
       body: JSON.stringify(order)
     });
 
-    const data = await response.json();
-    console.log('Resposta do PagBank:', JSON.stringify(data, null, 2));
+    // Log da resposta bruta para debug
+    const responseText = await response.text();
+    console.log('Resposta bruta do PagBank:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao fazer parse da resposta:', e);
+      return res.status(500).json({
+        error: 'Erro ao processar resposta do PagBank',
+        details: responseText
+      });
+    }
+
+    console.log('Resposta do PagBank (parsed):', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data.error_messages || data));
@@ -100,7 +123,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Checkout error detalhado:', error);
-    return res.status(400).json({ 
+    return res.status(500).json({ 
       error: error.message,
       details: error.toString()
     });

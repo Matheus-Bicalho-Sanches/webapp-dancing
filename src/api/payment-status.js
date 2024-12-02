@@ -8,20 +8,45 @@ export default async function handler(req, res) {
   try {
     const { orderId } = req.query;
     
+    if (!orderId) {
+      return res.status(400).json({
+        error: 'orderId é obrigatório'
+      });
+    }
+
+    console.log('Verificando status do pedido:', orderId);
+    
     const baseUrl = process.env.PAGBANK_ENV === 'production'
       ? 'https://api.pagseguro.com/orders'
       : 'https://sandbox.api.pagseguro.com/orders';
 
+    console.log('URL:', `${baseUrl}/${orderId}`);
+    console.log('Token presente:', !!process.env.PAGBANK_TOKEN);
+
     const response = await fetch(`${baseUrl}/${orderId}`, {
       method: 'GET',
       headers: {
-        'Authorization': process.env.PAGBANK_TOKEN,
+        'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
         'Content-Type': 'application/json'
       }
     });
 
-    const data = await response.json();
-    console.log('Status do pagamento:', data.status);
+    // Log da resposta bruta para debug
+    const responseText = await response.text();
+    console.log('Resposta bruta do PagBank:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao fazer parse da resposta:', e);
+      return res.status(500).json({
+        error: 'Erro ao processar resposta do PagBank',
+        details: responseText
+      });
+    }
+
+    console.log('Resposta do PagBank (parsed):', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data.error_messages || data));
@@ -33,9 +58,9 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('Erro ao verificar status:', error);
-    return res.status(400).json({ 
-      success: false,
-      error: error.message 
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.toString()
     });
   }
 } 
