@@ -57,24 +57,15 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
         return;
       }
 
-      // Verificar reCAPTCHA
-      let recaptchaValue;
-      try {
-        recaptchaValue = await recaptchaRef.current.executeAsync();
-      } catch (error) {
-        console.error('Erro no reCAPTCHA:', error);
-        setError('Erro na verificação de segurança. Por favor, tente novamente.');
-        setLoading(false);
-        return;
-      }
-
+      // Obter o valor do reCAPTCHA
+      const recaptchaValue = recaptchaRef.current.getValue();
       if (!recaptchaValue) {
-        setError('Por favor, complete a verificação de segurança');
+        setError('Por favor, marque a caixa de verificação do reCAPTCHA');
         setLoading(false);
         return;
       }
 
-      // Criptografar dados do cartão se for pagamento com cartão
+      // Resto do código do cartão e pagamento...
       let encryptedCard;
       if (paymentMethod === 'credit_card') {
         try {
@@ -135,9 +126,10 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
+      // Resetar o reCAPTCHA se ele existir
       if (recaptchaRef.current) {
         try {
-          await recaptchaRef.current.reset();
+          recaptchaRef.current.reset();
         } catch (error) {
           console.error('Erro ao resetar reCAPTCHA:', error);
         }
@@ -217,14 +209,19 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
               <ReCAPTCHA
                 ref={recaptchaRef}
                 sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                size="invisible"
-                badge="bottomright"
-                onErrored={() => {
+                size="normal"
+                onChange={(value) => {
+                  if (value) {
+                    setError(null);
+                  }
+                }}
+                onExpired={() => {
+                  setError('Verificação expirada. Por favor, marque a caixa novamente.');
+                }}
+                onErrored={(err) => {
+                  console.error('Erro no reCAPTCHA:', err);
                   setError('Erro ao carregar verificação de segurança');
                   setLoading(false);
-                }}
-                onLoad={() => {
-                  console.log('reCAPTCHA carregado com sucesso');
                 }}
               />
             </Box>
