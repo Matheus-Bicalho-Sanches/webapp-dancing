@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import ReCAPTCHA from 'react-google-recaptcha';
 import PaymentStatus from './PaymentStatus';
+import PagSeguro from 'pagseguro-sdk';
 
 const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,27 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setLoading(true);
       setError(null);
 
+      // Criptografar dados do cartão se for pagamento com cartão
+      let encryptedCard;
+      if (paymentMethod === 'credit_card') {
+        const card = PagSeguro.encryptCard({
+          publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+ZqgD892U9/HXsa7XqBZUayPquAfh9xx4iwUbTSUAvTlmiXFQNTp0Bvt/5vK2FhMj39qrsORk4Q9zXfMpArTTzR9R0Tgc3gn6h+s2VJaKXsJ1fkbYvZj0S3Oi6U3lOnr2/aK4LRrx9a4Kh3GOvNqf8YrNtM7nztFWp7xQFjH5u/B6iJqB7QUGZsF5t7mWrwwOmMLQBJV3Kk4mSqKVxGZotPsWX2dT9XtKuAX4WZgPHROizXybQrHcgxqwy8oi5AVS5lc7pxgWBh4OQXF8t+N/GdTPqQXedUzRYUZyxGwGAqm7LCpYtXjHV3XGPL0l2vDpzCgPp5p5wXwBXgEwIDAQAB",
+          holder: cardData.holderName,
+          number: cardData.number,
+          expMonth: cardData.expMonth,
+          expYear: cardData.expYear,
+          securityCode: cardData.securityCode
+        });
+        
+        if (!encryptedCard.hasErrors) {
+          encryptedCard = encryptedCard.encryptedCard;
+        } else {
+          setError('Erro ao processar dados do cartão. Verifique os dados informados.');
+          setLoading(false);
+          return;
+        }
+      }
+
       const response = await fetch('/api/pagbank/checkout', {
         method: 'POST',
         headers: {
@@ -65,7 +87,7 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
         body: JSON.stringify({ 
           agendamento,
           paymentMethod,
-          cardData: paymentMethod === 'credit_card' ? cardData : undefined,
+          cardData: paymentMethod === 'credit_card' ? { encryptedCard } : undefined,
           recaptchaToken: recaptchaValue
         })
       });
