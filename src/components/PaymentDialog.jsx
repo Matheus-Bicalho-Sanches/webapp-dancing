@@ -34,6 +34,12 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
         setLoading(true);
         setError(null);
 
+        console.log('Enviando dados para checkout:', {
+          nomeAluno,
+          email,
+          valor
+        });
+
         const response = await fetch('/api/pagbank/checkout', {
           method: 'POST',
           headers: {
@@ -49,12 +55,13 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
         });
 
         const data = await response.json();
+        console.log('Resposta do checkout:', data);
         
         if (data.success && data.payment_url) {
           window.location.href = data.payment_url;
         } else {
           setError(data.error || 'Erro ao gerar link de pagamento. Por favor, tente novamente.');
-          console.error('Resposta do servidor:', data);
+          console.error('Erro no checkout:', data);
         }
       } catch (error) {
         console.error('Erro ao processar pagamento:', error);
@@ -81,7 +88,7 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
                 Detalhes: 
                 Nome: {agendamento.nomeAluno || 'não informado'}, 
                 Email: {agendamento.email || 'não informado'}, 
-                Valor: {agendamento.valor || 'não informado'}
+                Valor: R$ {agendamento.valor?.toFixed(2) || '0,00'}
               </Typography>
             )}
           </Alert>

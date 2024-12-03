@@ -9,10 +9,11 @@ export default async function handler(req, res) {
     console.log('Recebendo requisição de checkout:', req.body);
     const { agendamento } = req.body;
     
-    if (!agendamento) {
+    if (!agendamento || !agendamento.nomeAluno || !agendamento.email || !agendamento.valor) {
       return res.status(400).json({ 
         error: 'Dados incompletos',
-        details: 'agendamento é obrigatório'
+        details: 'Nome do aluno, email e valor são obrigatórios',
+        received: agendamento
       });
     }
     
@@ -22,6 +23,7 @@ export default async function handler(req, res) {
       : 'https://sandbox.api.pagseguro.com';
 
     console.log('Ambiente PagBank:', process.env.PAGBANK_ENV);
+    console.log('Dados do agendamento:', agendamento);
     
     // Configurar o pedido para o PagBank
     const order = {
@@ -35,13 +37,13 @@ export default async function handler(req, res) {
         {
           name: "Aula Individual de Patinação",
           quantity: 1,
-          unit_amount: agendamento.valor * 100
+          unit_amount: Math.round(agendamento.valor * 100) // Converter para centavos e garantir número inteiro
         }
       ],
       notification_urls: ["https://dancing-webapp.com.br/api/pagbank/webhook"],
       charges: [{
         amount: {
-          value: agendamento.valor * 100,
+          value: Math.round(agendamento.valor * 100), // Converter para centavos e garantir número inteiro
           currency: "BRL"
         },
         payment_methods: {
@@ -50,6 +52,8 @@ export default async function handler(req, res) {
         }
       }]
     };
+
+    console.log('Pedido a ser enviado:', order);
 
     // Gerar chave de idempotência
     const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -66,13 +70,14 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    console.log('Resposta do PagBank:', data);
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data.error_messages || data));
     }
 
     // Encontrar a URL de pagamento
-    const paymentUrl = data.charges[0]?.payment_method?.redirect_url;
+    const paymentUrl = data.links?.find(link => link.rel === "payment")?.href;
     
     if (!paymentUrl) {
       throw new Error('URL de pagamento não encontrada na resposta');
