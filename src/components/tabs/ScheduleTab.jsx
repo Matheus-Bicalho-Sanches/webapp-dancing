@@ -31,7 +31,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import PaymentDialog from '../PaymentDialog';
 import Payment from '../Payment';
 
 dayjs.locale('pt-br');
