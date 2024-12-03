@@ -474,6 +474,40 @@ export default function ScheduleTab({ isPublic = false }) {
     }
   };
 
+  const handleConfirmAgendamento = async () => {
+    try {
+      setSaving(true);
+
+      // Calcular valor total
+      const valorPorAula = 3.00; // ou pegue de alguma configuração
+      const valorTotal = selectedSlots.length * valorPorAula;
+
+      // Criar objeto de agendamento
+      const agendamentoData = {
+        nomeAluno: agendamentoForm.nomeAluno,
+        email: agendamentoForm.email,
+        telefone: agendamentoForm.telefone,
+        observacoes: agendamentoForm.observacoes,
+        dataAgendamento: Timestamp.now(),
+        status: 'pendente',
+        valorTotal: valorTotal,
+        valorPorAula: valorPorAula,
+        quantidadeAulas: selectedSlots.length
+      };
+
+      // Definir o agendamento pendente e abrir diálogo de pagamento
+      setPendingBooking(agendamentoData);
+      setOpenPaymentDialog(true);
+      setOpenAgendamentoModal(false);
+
+    } catch (error) {
+      console.error('Erro ao criar agendamento:', error);
+      showNotification('Erro ao criar agendamento. Por favor, tente novamente.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <Stack 
@@ -930,9 +964,15 @@ export default function ScheduleTab({ isPublic = false }) {
 
       <PaymentDialog
         open={openPaymentDialog}
-        onClose={() => setOpenPaymentDialog(false)}
-        agendamento={pendingBooking}
-        onPaymentSuccess={handlePaymentSuccess}
+        onClose={() => {
+          setOpenPaymentDialog(false);
+          setPendingBooking(null);
+        }}
+        agendamento={{
+          nomeAluno: pendingBooking?.nomeAluno,
+          email: pendingBooking?.email,
+          valor: pendingBooking?.valorTotal || 0
+        }}
       />
     </>
   );
