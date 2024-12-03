@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 
-// Handler para a função serverless
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -8,12 +7,12 @@ export default async function handler(req, res) {
 
   try {
     console.log('Recebendo requisição de checkout:', req.body);
-    const { agendamento, paymentMethod, cardData } = req.body;
+    const { agendamento } = req.body;
     
-    if (!agendamento || !paymentMethod) {
+    if (!agendamento) {
       return res.status(400).json({ 
         error: 'Dados incompletos',
-        details: 'agendamento e paymentMethod são obrigatórios'
+        details: 'agendamento é obrigatório'
       });
     }
     
@@ -23,15 +22,14 @@ export default async function handler(req, res) {
       : 'https://sandbox.api.pagseguro.com';
 
     console.log('Ambiente PagBank:', process.env.PAGBANK_ENV);
-    console.log('URL Base:', baseUrl);
     
-    // 1. Criar o pedido
+    // Configurar o pedido para o PagBank
     const order = {
       reference_id: `AULA_${Date.now()}`,
       customer: {
         name: agendamento.nomeAluno,
         email: agendamento.email,
-        tax_id: "12345678909"
+        tax_id: "12345678909" // CPF do cliente
       },
       items: [
         {
@@ -39,101 +37,55 @@ export default async function handler(req, res) {
           quantity: 1,
           unit_amount: agendamento.valor * 100
         }
-      ]
+      ],
+      notification_urls: ["https://dancing-webapp.com.br/api/pagbank/webhook"],
+      charges: [{
+        amount: {
+          value: agendamento.valor * 100,
+          currency: "BRL"
+        },
+        payment_methods: {
+          enabled_methods: ["CREDIT_CARD", "PIX"],
+          redirect_url: "https://dancing-webapp.com.br/agendar"
+        }
+      }]
     };
 
-    // Gerar chave de idempotência para criação do pedido
-    const orderIdempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    // Gerar chave de idempotência
+    const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Criar o pedido
-    const orderResponse = await fetch(`${baseUrl}/orders`, {
+    // Criar o pedido no PagBank
+    const response = await fetch(`${baseUrl}/orders`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
         'Content-Type': 'application/json',
-        'x-idempotency-key': orderIdempotencyKey
+        'x-idempotency-key': idempotencyKey
       },
       body: JSON.stringify(order)
     });
 
-    const orderData = await orderResponse.json();
+    const data = await response.json();
 
-    if (!orderResponse.ok) {
-      throw new Error(JSON.stringify(orderData.error_messages || orderData));
+    if (!response.ok) {
+      throw new Error(JSON.stringify(data.error_messages || data));
     }
 
-    // 2. Processar o pagamento
-    if (paymentMethod === 'credit_card' && cardData) {
-      // Gerar chave de idempotência para o pagamento
-      const paymentIdempotencyKey = `payment-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-
-      const paymentResponse = await fetch(`${baseUrl}/charges`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
-          'Content-Type': 'application/json',
-          'x-idempotency-key': paymentIdempotencyKey
-        },
-        body: JSON.stringify({
-          reference_id: orderData.id,
-          description: "Aula Individual de Patinação",
-          amount: {
-            value: agendamento.valor * 100,
-            currency: "BRL"
-          },
-          payment_method: {
-            type: "CREDIT_CARD",
-            installments: 1,
-            card: {
-              encrypted: cardData.encryptedCard
-            }
-          }
-        })
-      });
-
-      const paymentData = await paymentResponse.json();
-
-      if (!paymentResponse.ok) {
-        throw new Error(JSON.stringify(paymentData.error_messages || paymentData));
-      }
-
-      return res.status(200).json({
-        success: true,
-        order_id: orderData.id,
-        payment_id: paymentData.id,
-        status: paymentData.status
-      });
-
-    } else if (paymentMethod === 'pix') {
-      // Para PIX, gerar QR Code
-      const qrCodeResponse = await fetch(`${baseUrl}/orders/${orderData.id}/qr_codes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: {
-            value: agendamento.valor * 100
-          }
-        })
-      });
-
-      const qrCodeData = await qrCodeResponse.json();
-
-      if (!qrCodeResponse.ok) {
-        throw new Error(JSON.stringify(qrCodeData.error_messages || qrCodeData));
-      }
-
-      return res.status(200).json({
-        success: true,
-        order_id: orderData.id,
-        qr_code: qrCodeData
-      });
+    // Encontrar a URL de pagamento
+    const paymentUrl = data.charges[0]?.payment_method?.redirect_url;
+    
+    if (!paymentUrl) {
+      throw new Error('URL de pagamento não encontrada na resposta');
     }
+
+    return res.status(200).json({
+      success: true,
+      order_id: data.id,
+      payment_url: paymentUrl
+    });
 
   } catch (error) {
-    console.error('Checkout error detalhado:', error);
+    console.error('Checkout error:', error);
     return res.status(500).json({ 
       error: error.message,
       details: error.toString()
