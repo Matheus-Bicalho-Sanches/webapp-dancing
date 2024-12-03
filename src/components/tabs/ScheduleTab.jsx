@@ -32,6 +32,7 @@ import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import PaymentDialog from '../PaymentDialog';
+import Payment from '../Payment';
 
 dayjs.locale('pt-br');
 
@@ -986,17 +987,15 @@ export default function ScheduleTab({ isPublic = false }) {
         </DialogActions>
       </Dialog>
 
-      <PaymentDialog
+      <Payment
         open={openPaymentDialog}
         onClose={() => {
           setOpenPaymentDialog(false);
           setPendingBooking(null);
         }}
-        agendamento={{
-          nomeAluno: pendingBooking?.nomeAluno,
-          email: pendingBooking?.email,
-          valor: selectedSlots.length * 3.00 // Valor por aula * quantidade de aulas
-        }}
+        nome={pendingBooking?.nomeAluno}
+        email={pendingBooking?.email}
+        valor={selectedSlots.length * 3.00}
       />
     </>
   );
