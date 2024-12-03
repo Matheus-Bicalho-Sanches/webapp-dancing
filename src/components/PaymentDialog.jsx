@@ -24,10 +24,15 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
         }
 
         const { nomeAluno, email, valor } = agendamento;
+        const valorNumerico = Number(valor);
         
-        if (!nomeAluno || !email || !valor) {
-          setError('Dados incompletos. Verifique nome, email e valor.');
-          console.error('Dados do agendamento:', agendamento);
+        if (!nomeAluno || !email || isNaN(valorNumerico) || valorNumerico <= 0) {
+          setError('Dados incompletos ou inválidos. Verifique nome, email e valor.');
+          console.error('Dados do agendamento:', {
+            ...agendamento,
+            valorNumerico,
+            valorValido: !isNaN(valorNumerico) && valorNumerico > 0
+          });
           return;
         }
 
@@ -37,7 +42,7 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
         console.log('Enviando dados para checkout:', {
           nomeAluno,
           email,
-          valor
+          valor: valorNumerico
         });
 
         const response = await fetch('/api/pagbank/checkout', {
@@ -49,7 +54,7 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
             agendamento: {
               nomeAluno,
               email,
-              valor: Number(valor)
+              valor: valorNumerico
             }
           })
         });
@@ -88,7 +93,7 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
                 Detalhes: 
                 Nome: {agendamento.nomeAluno || 'não informado'}, 
                 Email: {agendamento.email || 'não informado'}, 
-                Valor: R$ {agendamento.valor?.toFixed(2) || '0,00'}
+                Valor: R$ {Number(agendamento.valor).toFixed(2) || '0,00'}
               </Typography>
             )}
           </Alert>

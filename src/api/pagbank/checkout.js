@@ -9,14 +9,23 @@ export default async function handler(req, res) {
     console.log('Recebendo requisição de checkout:', req.body);
     const { agendamento } = req.body;
     
-    if (!agendamento || !agendamento.nomeAluno || !agendamento.email || !agendamento.valor) {
+    // Validar dados essenciais
+    if (!agendamento?.nomeAluno || !agendamento?.email || typeof agendamento?.valor !== 'number') {
+      console.error('Dados inválidos:', {
+        temAgendamento: !!agendamento,
+        nomeAluno: agendamento?.nomeAluno,
+        email: agendamento?.email,
+        valor: agendamento?.valor,
+        tipoValor: typeof agendamento?.valor
+      });
+      
       return res.status(400).json({ 
         error: 'Dados incompletos',
         details: 'Nome do aluno, email e valor são obrigatórios',
         received: agendamento
       });
     }
-    
+
     // URL base baseada no ambiente
     const baseUrl = process.env.PAGBANK_ENV === 'production'
       ? 'https://api.pagseguro.com'
@@ -24,6 +33,9 @@ export default async function handler(req, res) {
 
     console.log('Ambiente PagBank:', process.env.PAGBANK_ENV);
     console.log('Dados do agendamento:', agendamento);
+
+    // Valor em centavos
+    const valorCentavos = Math.round(agendamento.valor * 100);
     
     // Configurar o pedido para o PagBank
     const order = {
@@ -31,29 +43,35 @@ export default async function handler(req, res) {
       customer: {
         name: agendamento.nomeAluno,
         email: agendamento.email,
-        tax_id: "12345678909" // CPF do cliente
+        tax_id: "12345678909"
       },
       items: [
         {
+          reference_id: `AULA_${Date.now()}`,
           name: "Aula Individual de Patinação",
           quantity: 1,
-          unit_amount: Math.round(agendamento.valor * 100) // Converter para centavos e garantir número inteiro
+          unit_amount: valorCentavos
         }
       ],
       notification_urls: ["https://dancing-webapp.com.br/api/pagbank/webhook"],
-      charges: [{
-        amount: {
-          value: Math.round(agendamento.valor * 100), // Converter para centavos e garantir número inteiro
-          currency: "BRL"
-        },
-        payment_methods: {
-          enabled_methods: ["CREDIT_CARD", "PIX"],
-          redirect_url: "https://dancing-webapp.com.br/agendar"
+      charges: [
+        {
+          reference_id: `AULA_${Date.now()}`,
+          description: "Aula Individual de Patinação",
+          amount: {
+            value: valorCentavos,
+            currency: "BRL"
+          },
+          payment_method: {
+            type: "CREDIT_CARD",
+            installments: 1,
+            capture: true
+          }
         }
-      }]
+      ]
     };
 
-    console.log('Pedido a ser enviado:', order);
+    console.log('Pedido a ser enviado:', JSON.stringify(order, null, 2));
 
     // Gerar chave de idempotência
     const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -70,9 +88,10 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-    console.log('Resposta do PagBank:', data);
+    console.log('Resposta do PagBank:', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
+      console.error('Erro do PagBank:', data);
       throw new Error(JSON.stringify(data.error_messages || data));
     }
 
@@ -80,6 +99,7 @@ export default async function handler(req, res) {
     const paymentUrl = data.links?.find(link => link.rel === "payment")?.href;
     
     if (!paymentUrl) {
+      console.error('Resposta sem URL de pagamento:', data);
       throw new Error('URL de pagamento não encontrada na resposta');
     }
 
