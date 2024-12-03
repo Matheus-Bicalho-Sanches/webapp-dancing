@@ -478,9 +478,27 @@ export default function ScheduleTab({ isPublic = false }) {
     try {
       setSaving(true);
 
+      // Validar dados básicos
+      if (!agendamentoForm.nomeAluno || !agendamentoForm.email) {
+        showNotification('Por favor, preencha todos os campos obrigatórios.', 'error');
+        return;
+      }
+
+      // Validar horários selecionados
+      if (selectedSlots.length === 0) {
+        showNotification('Por favor, selecione pelo menos um horário.', 'error');
+        return;
+      }
+
       // Calcular valor total
-      const valorPorAula = 3.00; // ou pegue de alguma configuração
+      const valorPorAula = 3.00;
       const valorTotal = selectedSlots.length * valorPorAula;
+
+      console.log('Calculando valor:', {
+        valorPorAula,
+        quantidadeAulas: selectedSlots.length,
+        valorTotal
+      });
 
       // Criar objeto de agendamento
       const agendamentoData = {
@@ -492,7 +510,13 @@ export default function ScheduleTab({ isPublic = false }) {
         status: 'pendente',
         valorTotal: valorTotal,
         valorPorAula: valorPorAula,
-        quantidadeAulas: selectedSlots.length
+        quantidadeAulas: selectedSlots.length,
+        horariosSelecionados: Object.values(selectedTeachers).map(slot => ({
+          data: slot.date,
+          horario: slot.horario,
+          professorId: slot.professorId,
+          professorNome: slot.professorNome
+        }))
       };
 
       // Definir o agendamento pendente e abrir diálogo de pagamento
@@ -971,7 +995,7 @@ export default function ScheduleTab({ isPublic = false }) {
         agendamento={{
           nomeAluno: pendingBooking?.nomeAluno,
           email: pendingBooking?.email,
-          valor: pendingBooking?.valorTotal || 0
+          valor: selectedSlots.length * 3.00 // Valor por aula * quantidade de aulas
         }}
       />
     </>
