@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import ReCAPTCHA from 'react-google-recaptcha';
 import PaymentStatus from './PaymentStatus';
+import ScriptLoader from './ScriptLoader';
 
 const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -30,103 +31,12 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     securityCode: '',
     holderName: ''
   });
-  const [scriptsLoaded, setScriptsLoaded] = useState({
-    recaptcha: false,
-    pagbank: false
-  });
   const recaptchaRef = useRef();
-  const initializationAttempted = useRef(false);
-
-  // Verificar se os scripts estão carregados
-  useEffect(() => {
-    const checkScripts = () => {
-      // Debug logs detalhados
-      console.group('Debug de Scripts - ' + new Date().toISOString());
-      
-      const scriptsLoaded = window.externalScriptsLoaded === true;
-      console.log('Scripts carregados:', {
-        global: scriptsLoaded,
-        recaptcha: !!window.grecaptcha,
-        pagbank: !!window.PagSeguro
-      });
-
-      if (scriptsLoaded) {
-        setScriptsLoaded({
-          recaptcha: true,
-          pagbank: true
-        });
-      } else {
-        // Tentar novamente em 1 segundo
-        setTimeout(checkScripts, 1000);
-      }
-
-      console.groupEnd();
-    };
-
-    if (open) {
-      checkScripts();
-    }
-
-    return () => {
-      console.log('Componente desmontado ou diálogo fechado');
-    };
-  }, [open]);
-
-  // Resetar estados quando o diálogo é aberto
-  useEffect(() => {
-    if (open) {
-      setError(null);
-      setPaymentData(null);
-      initializationAttempted.current = false;
-      
-      if (recaptchaRef.current) {
-        try {
-          recaptchaRef.current.reset();
-        } catch (error) {
-          console.error('Erro ao resetar reCAPTCHA:', error);
-        }
-      }
-    }
-  }, [open]);
-
-  // Iniciar pagamento PIX quando tudo estiver carregado
-  useEffect(() => {
-    if (open && 
-        !paymentData && 
-        !loading && 
-        paymentMethod === 'pix' && 
-        scriptsLoaded.recaptcha && 
-        scriptsLoaded.pagbank && 
-        !initializationAttempted.current) {
-      initializationAttempted.current = true;
-      handlePayment();
-    }
-  }, [open, paymentMethod, scriptsLoaded]);
-
-  const handleCardDataChange = (field) => (event) => {
-    setCardData({
-      ...cardData,
-      [field]: event.target.value
-    });
-  };
-
-  const handlePaymentMethodChange = (event) => {
-    setPaymentMethod(event.target.value);
-    setPaymentData(null);
-    setError(null);
-  };
 
   const handlePayment = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Verificar se os scripts estão carregados
-      if (!scriptsLoaded.recaptcha || !scriptsLoaded.pagbank) {
-        setError('Aguarde o carregamento dos componentes de pagamento...');
-        setLoading(false);
-        return;
-      }
 
       // Verificar se o reCAPTCHA está disponível
       if (!recaptchaRef.current) {
@@ -197,189 +107,158 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
       setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
     } finally {
       setLoading(false);
+      if (recaptchaRef.current) {
+        try {
+          recaptchaRef.current.reset();
+        } catch (error) {
+          console.error('Erro ao resetar reCAPTCHA:', error);
+        }
+      }
     }
   };
 
-  const handlePaymentCompleted = () => {
-    onPaymentSuccess();
-    onClose();
-  };
-
-  const handlePaymentRetry = () => {
-    setPaymentData(null);
-    setError(null);
-    handlePayment();
-  };
-
-  const renderPaymentForm = () => {
-    if (paymentMethod === 'credit_card') {
-      return (
-        <Grid container spacing={2} sx={{ mt: 2 }}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Número do Cartão"
-              value={cardData.number}
-              onChange={handleCardDataChange('number')}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              label="Mês de Expiração"
-              value={cardData.expMonth}
-              onChange={handleCardDataChange('expMonth')}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              label="Ano de Expiração"
-              value={cardData.expYear}
-              onChange={handleCardDataChange('expYear')}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              label="CVV"
-              value={cardData.securityCode}
-              onChange={handleCardDataChange('securityCode')}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Nome no Cartão"
-              value={cardData.holderName}
-              onChange={handleCardDataChange('holderName')}
-              variant="outlined"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-              <ReCAPTCHA
-                ref={recaptchaRef}
-                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                size="normal"
-                onChange={(value) => {
-                  if (value) {
-                    setError(null);
-                  }
-                }}
-                onExpired={() => {
-                  setError('Verificação expirada. Por favor, marque a caixa novamente.');
-                }}
-                onErrored={(err) => {
-                  console.error('Erro no reCAPTCHA:', err);
-                  setError('Erro ao carregar verificação de segurança');
-                  setLoading(false);
-                }}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
-            <Button
-              fullWidth
-              variant="contained"
-              color="primary"
-              onClick={handlePayment}
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Pagar com Cartão'}
-            </Button>
-          </Grid>
-        </Grid>
-      );
+  // Iniciar pagamento PIX automaticamente
+  React.useEffect(() => {
+    if (open && !paymentData && !loading && paymentMethod === 'pix') {
+      handlePayment();
     }
-    
-    return null;
-  };
+  }, [open, paymentMethod]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Pagamento
-        {!scriptsLoaded.recaptcha || !scriptsLoaded.pagbank ? (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            Carregando componentes de pagamento...
-          </Typography>
-        ) : null}
-      </DialogTitle>
-      <DialogContent>
-        <RadioGroup
-          value={paymentMethod}
-          onChange={handlePaymentMethodChange}
-          sx={{ mb: 2 }}
-        >
-          <FormControlLabel value="pix" control={<Radio />} label="PIX" />
-          <FormControlLabel value="credit_card" control={<Radio />} label="Cartão de Crédito" />
-        </RadioGroup>
+      <ScriptLoader>
+        <DialogTitle>
+          Pagamento
+        </DialogTitle>
+        <DialogContent>
+          <RadioGroup
+            value={paymentMethod}
+            onChange={(e) => {
+              setPaymentMethod(e.target.value);
+              setPaymentData(null);
+              setError(null);
+            }}
+            sx={{ mb: 2 }}
+          >
+            <FormControlLabel value="pix" control={<Radio />} label="PIX" />
+            <FormControlLabel value="credit_card" control={<Radio />} label="Cartão de Crédito" />
+          </RadioGroup>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-        {loading && paymentMethod === 'pix' ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : paymentData && paymentMethod === 'pix' ? (
-          <Box>
-            <Box sx={{ textAlign: 'center', p: 2 }}>
-              <Typography variant="body1" gutterBottom>
-                Escaneie o QR Code abaixo para pagar:
-              </Typography>
-              <Box sx={{ my: 2 }}>
-                <img 
-                  src={paymentData.qr_code.links.find(link => link.media === 'image/png')?.href}
-                  alt="QR Code PIX"
-                  style={{ maxWidth: '200px' }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Valor: R$ {(paymentData.qr_code.amount.value / 100).toFixed(2)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Código PIX expira em 24 horas
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 2, fontWeight: 'bold' }}>
-                ID do Pedido: {paymentData.order_id}
-              </Typography>
+          {loading && paymentMethod === 'pix' ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
             </Box>
-            <PaymentStatus
-              orderId={paymentData.order_id}
-              onPaymentCompleted={handlePaymentCompleted}
-              onPaymentRetry={handlePaymentRetry}
-            />
-          </Box>
-        ) : paymentData && paymentMethod === 'credit_card' ? (
-          <Box sx={{ textAlign: 'center', p: 2 }}>
-            <Typography variant="h6" color="primary">
-              Pagamento Processado!
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 2 }}>
-              ID do Pedido: {paymentData.order_id}
-            </Typography>
-            <PaymentStatus
-              orderId={paymentData.order_id}
-              onPaymentCompleted={handlePaymentCompleted}
-              onPaymentRetry={handlePaymentRetry}
-            />
-          </Box>
-        ) : renderPaymentForm()}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} color="primary">
-          Fechar
-        </Button>
-      </DialogActions>
+          ) : paymentData && paymentMethod === 'pix' ? (
+            <Box>
+              <Box sx={{ textAlign: 'center', p: 2 }}>
+                <Typography variant="body1" gutterBottom>
+                  Escaneie o QR Code abaixo para pagar:
+                </Typography>
+                <Box sx={{ my: 2 }}>
+                  <img 
+                    src={paymentData.qr_code.links.find(link => link.media === 'image/png')?.href}
+                    alt="QR Code PIX"
+                    style={{ maxWidth: '200px' }}
+                  />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Valor: R$ {(paymentData.qr_code.amount.value / 100).toFixed(2)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Código PIX expira em 24 horas
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 2, fontWeight: 'bold' }}>
+                  ID do Pedido: {paymentData.order_id}
+                </Typography>
+              </Box>
+              <PaymentStatus
+                orderId={paymentData.order_id}
+                onPaymentCompleted={onPaymentSuccess}
+                onPaymentRetry={handlePayment}
+              />
+            </Box>
+          ) : paymentMethod === 'credit_card' ? (
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Número do Cartão"
+                  value={cardData.number}
+                  onChange={(e) => setCardData({ ...cardData, number: e.target.value })}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Mês de Expiração"
+                  value={cardData.expMonth}
+                  onChange={(e) => setCardData({ ...cardData, expMonth: e.target.value })}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Ano de Expiração"
+                  value={cardData.expYear}
+                  onChange={(e) => setCardData({ ...cardData, expYear: e.target.value })}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="CVV"
+                  value={cardData.securityCode}
+                  onChange={(e) => setCardData({ ...cardData, securityCode: e.target.value })}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Nome no Cartão"
+                  value={cardData.holderName}
+                  onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                    size="normal"
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={handlePayment}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Pagar com Cartão'}
+                </Button>
+              </Grid>
+            </Grid>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose} color="primary">
+            Fechar
+          </Button>
+        </DialogActions>
+      </ScriptLoader>
     </Dialog>
   );
 };
