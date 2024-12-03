@@ -40,23 +40,47 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
   // Verificar se os scripts estão carregados
   useEffect(() => {
     const checkScripts = () => {
-      // Debug logs
-      console.log('Checking scripts...');
-      console.log('reCAPTCHA:', !!window.grecaptcha);
-      console.log('PagBank:', !!window.PagSeguro);
+      // Debug logs detalhados
+      console.group('Debug de Scripts - ' + new Date().toISOString());
+      console.log('Estado do Componente:', {
+        open,
+        loading,
+        paymentMethod,
+        error: error ? error : 'none'
+      });
 
-      // Considerar carregado se o objeto existe
-      const recaptchaLoaded = !!window.grecaptcha;
+      // Verificar objetos globais
+      console.log('Window objects:', {
+        hasRecaptcha: typeof window.grecaptcha !== 'undefined',
+        recaptchaReady: window.grecaptcha?.ready ? true : false,
+        hasPagSeguro: typeof window.PagSeguro !== 'undefined',
+        pagSeguroMethods: window.PagSeguro ? Object.keys(window.PagSeguro) : []
+      });
+
+      // Verificar carregamento dos scripts
+      const scripts = document.querySelectorAll('script');
+      console.log('Scripts carregados:', Array.from(scripts).map(s => ({
+        src: s.src,
+        async: s.async,
+        defer: s.defer,
+        loaded: s.complete
+      })));
+
+      const recaptchaLoaded = !!window.grecaptcha?.ready;
       const pagbankLoaded = !!window.PagSeguro;
 
-      console.log('Scripts loaded:', { recaptchaLoaded, pagbankLoaded });
+      console.log('Status final:', {
+        recaptchaLoaded,
+        pagbankLoaded,
+        previousState: scriptsLoaded
+      });
+      console.groupEnd();
 
       setScriptsLoaded({
         recaptcha: recaptchaLoaded,
         pagbank: pagbankLoaded
       });
 
-      // Continuar verificando se algum não estiver carregado
       if (!recaptchaLoaded || !pagbankLoaded) {
         setTimeout(checkScripts, 1000);
       }
@@ -65,6 +89,11 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     if (open) {
       checkScripts();
     }
+
+    // Cleanup function
+    return () => {
+      console.log('Componente desmontado ou diálogo fechado');
+    };
   }, [open]);
 
   // Resetar estados quando o diálogo é aberto

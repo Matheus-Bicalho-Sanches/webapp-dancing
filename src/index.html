@@ -7,11 +7,25 @@
     <title>WebApp Dancing</title>
     <!-- Carregar reCAPTCHA primeiro -->
     <script src="https://www.google.com/recaptcha/api.js"></script>
-    <!-- Depois carregar PagBank -->
-    <script src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js"></script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Script do PagBank com verificação de carregamento -->
+    <script>
+      // Função para verificar se o script carregou
+      function checkPagSeguro() {
+        if (window.PagSeguro) {
+          console.log('PagSeguro SDK carregado com sucesso');
+        } else {
+          console.error('Erro ao carregar PagSeguro SDK');
+        }
+      }
+    </script>
+    <script 
+      src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js"
+      onload="checkPagSeguro()"
+      onerror="console.error('Erro ao carregar script do PagBank')"
+    ></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html> 
