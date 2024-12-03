@@ -10,18 +10,35 @@ export default async function handler(request, response) {
   try {
     const { agendamento } = request.body;
     
-    // Criar o pagamento usando a função createPayment
+    // Log para debug
+    console.log('Dados do agendamento recebidos:', {
+      ...agendamento,
+      cpf: 'XXXXX' // Não logar o CPF completo por segurança
+    });
+    
+    // Log das variáveis de ambiente (não logar o token completo)
+    console.log('Variáveis de ambiente:', {
+      tokenExists: !!process.env.PAGBANK_TOKEN,
+      tokenFirstChars: process.env.PAGBANK_TOKEN?.substring(0, 5),
+      apiUrl: process.env.NEXT_PUBLIC_API_URL
+    });
+
     const paymentResult = await createPayment({
-      referenceId: agendamento.id, // ID do agendamento no Firestore
+      referenceId: agendamento.id,
       customerName: agendamento.nomeCliente,
       customerEmail: agendamento.email,
       customerTaxId: agendamento.cpf,
       serviceName: 'Aula de Dança',
-      amount: agendamento.valor * 100, // Converter para centavos
+      amount: agendamento.valor * 100,
+    });
+
+    // Log do resultado
+    console.log('Resultado do pagamento:', {
+      success: paymentResult.success,
+      hasUrl: !!paymentResult.paymentUrl
     });
 
     if (paymentResult.success) {
-      // Atualizar o agendamento com o status inicial
       const agendamentoRef = doc(db, 'agendamentos', agendamento.id);
       await updateDoc(agendamentoRef, {
         statusPagamento: 'pendente',
@@ -37,7 +54,12 @@ export default async function handler(request, response) {
     }
 
   } catch (error) {
-    console.error('Checkout error:', error);
+    console.error('Erro completo:', error);
+    console.error('Detalhes do erro:', {
+      message: error.message,
+      response: error.response?.data,
+      stack: error.stack
+    });
     return response.status(400).json({ error: error.message });
   }
 } 
