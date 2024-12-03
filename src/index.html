@@ -36,9 +36,12 @@
       // Carregar scripts em sequência
       async function loadAllScripts() {
         try {
-          // Carregar reCAPTCHA
+          // Carregar reCAPTCHA com a chave do site
+          const recaptchaKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+          console.log('Carregando reCAPTCHA com chave:', recaptchaKey);
+          
           await loadExternalScript(
-            'https://www.google.com/recaptcha/api.js?render=explicit',
+            `https://www.google.com/recaptcha/api.js?render=explicit&key=${recaptchaKey}`,
             'recaptcha-script'
           );
           console.log('reCAPTCHA disponível:', !!window.grecaptcha);
