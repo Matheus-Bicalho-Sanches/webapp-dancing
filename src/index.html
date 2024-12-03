@@ -5,27 +5,63 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebApp Dancing</title>
-    <!-- Carregar reCAPTCHA primeiro -->
-    <script src="https://www.google.com/recaptcha/api.js"></script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Script do PagBank com verificação de carregamento -->
     <script>
-      // Função para verificar se o script carregou
-      function checkPagSeguro() {
-        if (window.PagSeguro) {
-          console.log('PagSeguro SDK carregado com sucesso');
-        } else {
-          console.error('Erro ao carregar PagSeguro SDK');
+      // Função para carregar script de forma controlada
+      function loadExternalScript(url, id) {
+        return new Promise((resolve, reject) => {
+          const existingScript = document.getElementById(id);
+          if (existingScript) {
+            resolve();
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.src = url;
+          script.id = id;
+          script.onload = () => {
+            console.log(`Script ${id} carregado com sucesso`);
+            resolve();
+          };
+          script.onerror = (error) => {
+            console.error(`Erro ao carregar script ${id}:`, error);
+            reject(error);
+          };
+          document.body.appendChild(script);
+        });
+      }
+
+      // Carregar scripts em sequência
+      async function loadAllScripts() {
+        try {
+          // Carregar reCAPTCHA
+          await loadExternalScript(
+            'https://www.google.com/recaptcha/api.js?render=explicit',
+            'recaptcha-script'
+          );
+          console.log('reCAPTCHA disponível:', !!window.grecaptcha);
+
+          // Carregar PagBank SDK
+          await loadExternalScript(
+            'https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js',
+            'pagbank-script'
+          );
+          console.log('PagBank SDK disponível:', !!window.PagSeguro);
+
+          // Definir variável global para indicar que os scripts carregaram
+          window.externalScriptsLoaded = true;
+          console.log('Todos os scripts externos carregados');
+        } catch (error) {
+          console.error('Erro ao carregar scripts:', error);
+          window.externalScriptsLoaded = false;
         }
       }
+
+      // Iniciar carregamento
+      loadAllScripts();
     </script>
-    <script 
-      src="https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js"
-      onload="checkPagSeguro()"
-      onerror="console.error('Erro ao carregar script do PagBank')"
-    ></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html> 

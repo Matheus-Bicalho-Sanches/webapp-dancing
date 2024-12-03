@@ -42,55 +42,31 @@ const PaymentDialog = ({ open, onClose, agendamento, onPaymentSuccess }) => {
     const checkScripts = () => {
       // Debug logs detalhados
       console.group('Debug de Scripts - ' + new Date().toISOString());
-      console.log('Estado do Componente:', {
-        open,
-        loading,
-        paymentMethod,
-        error: error ? error : 'none'
+      
+      const scriptsLoaded = window.externalScriptsLoaded === true;
+      console.log('Scripts carregados:', {
+        global: scriptsLoaded,
+        recaptcha: !!window.grecaptcha,
+        pagbank: !!window.PagSeguro
       });
 
-      // Verificar objetos globais
-      console.log('Window objects:', {
-        hasRecaptcha: typeof window.grecaptcha !== 'undefined',
-        recaptchaReady: window.grecaptcha?.ready ? true : false,
-        hasPagSeguro: typeof window.PagSeguro !== 'undefined',
-        pagSeguroMethods: window.PagSeguro ? Object.keys(window.PagSeguro) : []
-      });
-
-      // Verificar carregamento dos scripts
-      const scripts = document.querySelectorAll('script');
-      console.log('Scripts carregados:', Array.from(scripts).map(s => ({
-        src: s.src,
-        async: s.async,
-        defer: s.defer,
-        loaded: s.complete
-      })));
-
-      const recaptchaLoaded = !!window.grecaptcha?.ready;
-      const pagbankLoaded = !!window.PagSeguro;
-
-      console.log('Status final:', {
-        recaptchaLoaded,
-        pagbankLoaded,
-        previousState: scriptsLoaded
-      });
-      console.groupEnd();
-
-      setScriptsLoaded({
-        recaptcha: recaptchaLoaded,
-        pagbank: pagbankLoaded
-      });
-
-      if (!recaptchaLoaded || !pagbankLoaded) {
+      if (scriptsLoaded) {
+        setScriptsLoaded({
+          recaptcha: true,
+          pagbank: true
+        });
+      } else {
+        // Tentar novamente em 1 segundo
         setTimeout(checkScripts, 1000);
       }
+
+      console.groupEnd();
     };
 
     if (open) {
       checkScripts();
     }
 
-    // Cleanup function
     return () => {
       console.log('Componente desmontado ou diálogo fechado');
     };
