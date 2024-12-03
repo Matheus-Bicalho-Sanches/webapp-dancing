@@ -68,6 +68,11 @@ export async function createPayment(orderData) {
   try {
     console.log('Iniciando criação do pagamento:', orderData);
 
+    // Define a URL base baseada no ambiente
+    const baseUrl = process.env.PAGBANK_ENV === 'production'
+      ? 'https://api.pagseguro.com'
+      : 'https://sandbox.api.pagseguro.com';
+
     const paymentRequest = {
       reference_id: orderData.referenceId,
       customer: {
@@ -101,11 +106,12 @@ export async function createPayment(orderData) {
     };
 
     console.log('Requisição para o PagBank:', paymentRequest);
+    console.log('Ambiente:', process.env.PAGBANK_ENV);
+    console.log('URL base:', baseUrl);
     console.log('Token PagBank existe:', !!process.env.PAGBANK_TOKEN);
-    console.log('URL da API:', process.env.NEXT_PUBLIC_API_URL);
 
     const response = await axios.post(
-      'https://api.pagseguro.com/orders',
+      `${baseUrl}/orders`,
       paymentRequest,
       {
         headers: {
