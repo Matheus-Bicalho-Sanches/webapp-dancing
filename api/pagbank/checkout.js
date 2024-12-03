@@ -68,17 +68,24 @@ export async function createPayment(orderData) {
   try {
     console.log('Iniciando criação do pagamento:', orderData);
 
-    // Define a URL base baseada no ambiente
     const baseUrl = process.env.PAGBANK_ENV === 'production'
       ? 'https://api.pagseguro.com'
       : 'https://sandbox.api.pagseguro.com';
+
+    // Log para debug
+    console.log('Configurações:', {
+      baseUrl,
+      env: process.env.PAGBANK_ENV,
+      hasToken: !!process.env.PAGBANK_TOKEN,
+      tokenStart: process.env.PAGBANK_TOKEN?.substring(0, 10)
+    });
 
     const paymentRequest = {
       reference_id: orderData.referenceId,
       customer: {
         name: orderData.customerName,
         email: orderData.customerEmail,
-        tax_id: orderData.customerTaxId,
+        tax_id: orderData.customerTaxId.replace(/\D/g, ''), // Remove não-números do CPF
       },
       items: [
         {
@@ -105,38 +112,52 @@ export async function createPayment(orderData) {
       ]
     };
 
-    console.log('Requisição para o PagBank:', paymentRequest);
-    console.log('Ambiente:', process.env.PAGBANK_ENV);
-    console.log('URL base:', baseUrl);
-    console.log('Token PagBank existe:', !!process.env.PAGBANK_TOKEN);
+    try {
+      const token = process.env.PAGBANK_TOKEN;
+      const bearerToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
 
-    const response = await axios.post(
-      `${baseUrl}/orders`,
-      paymentRequest,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
-          'Content-Type': 'application/json'
+      const response = await axios.post(
+        `${baseUrl}/orders`,
+        paymentRequest,
+        {
+          headers: {
+            'Authorization': bearerToken,
+            'Content-Type': 'application/json'
+          }
         }
-      }
-    );
+      );
 
-    console.log('Resposta do PagBank:', response.data);
+      console.log('Resposta do PagBank:', response.data);
+      return {
+        success: true,
+        paymentUrl: response.data.links.find(link => link.rel === "payment").href
+      };
 
-    return {
-      success: true,
-      paymentUrl: response.data.links.find(link => link.rel === "payment").href
-    };
+    } catch (axiosError) {
+      console.error('Erro na requisição:', {
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+      
+      throw new Error(
+        `Erro na comunicação com PagBank: ${
+          axiosError.response?.data?.message || 
+          axiosError.message
+        }`
+      );
+    }
 
   } catch (error) {
     console.error('Erro detalhado:', {
       message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
+      name: error.name,
+      stack: error.stack
     });
     return {
       success: false,
-      error: error.response?.data?.message || error.message
+      error: error.message
     };
   }
 } 
