@@ -18,6 +18,19 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
       if (!open || loading) return;
 
       try {
+        if (!agendamento) {
+          setError('Dados do agendamento não encontrados');
+          return;
+        }
+
+        const { nomeAluno, email, valor } = agendamento;
+        
+        if (!nomeAluno || !email || !valor) {
+          setError('Dados incompletos. Verifique nome, email e valor.');
+          console.error('Dados do agendamento:', agendamento);
+          return;
+        }
+
         setLoading(true);
         setError(null);
 
@@ -26,16 +39,22 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ agendamento })
+          body: JSON.stringify({ 
+            agendamento: {
+              nomeAluno,
+              email,
+              valor: Number(valor)
+            }
+          })
         });
 
         const data = await response.json();
         
         if (data.success && data.payment_url) {
-          // Redirecionar para a página de pagamento do PagSeguro
           window.location.href = data.payment_url;
         } else {
           setError(data.error || 'Erro ao gerar link de pagamento. Por favor, tente novamente.');
+          console.error('Resposta do servidor:', data);
         }
       } catch (error) {
         console.error('Erro ao processar pagamento:', error);
@@ -46,7 +65,7 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
     };
 
     redirectToPagSeguro();
-  }, [open, agendamento]);
+  }, [open, agendamento, loading]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -57,6 +76,14 @@ const PaymentDialog = ({ open, onClose, agendamento }) => {
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+            {agendamento && (
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Detalhes: 
+                Nome: {agendamento.nomeAluno || 'não informado'}, 
+                Email: {agendamento.email || 'não informado'}, 
+                Valor: {agendamento.valor || 'não informado'}
+              </Typography>
+            )}
           </Alert>
         ) : (
           <Box sx={{ textAlign: 'center', p: 3 }}>
