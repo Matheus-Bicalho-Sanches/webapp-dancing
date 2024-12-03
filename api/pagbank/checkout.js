@@ -44,12 +44,14 @@ export default async function handler(request, response) {
 
 export async function createPayment(orderData) {
   try {
+    console.log('Iniciando criação do pagamento:', orderData);
+
     const paymentRequest = {
-      reference_id: orderData.referenceId, // ID único do seu pedido
+      reference_id: orderData.referenceId,
       customer: {
         name: orderData.customerName,
         email: orderData.customerEmail,
-        tax_id: orderData.customerTaxId, // CPF do cliente
+        tax_id: orderData.customerTaxId,
       },
       items: [
         {
@@ -76,6 +78,10 @@ export async function createPayment(orderData) {
       ]
     };
 
+    console.log('Requisição para o PagBank:', paymentRequest);
+    console.log('Token PagBank existe:', !!process.env.PAGBANK_TOKEN);
+    console.log('URL da API:', process.env.NEXT_PUBLIC_API_URL);
+
     const response = await axios.post(
       'https://api.pagseguro.com/orders',
       paymentRequest,
@@ -87,17 +93,22 @@ export async function createPayment(orderData) {
       }
     );
 
-    // Retorna a URL de pagamento para redirecionamento
+    console.log('Resposta do PagBank:', response.data);
+
     return {
       success: true,
       paymentUrl: response.data.links.find(link => link.rel === "payment").href
     };
 
   } catch (error) {
-    console.error('Erro ao criar pagamento:', error);
+    console.error('Erro detalhado:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
     return {
       success: false,
-      error: error.message
+      error: error.response?.data?.message || error.message
     };
   }
 } 
