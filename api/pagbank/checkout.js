@@ -1,5 +1,5 @@
 import { db } from '../../src/config/firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { doc, setDoc, collection, updateDoc } from 'firebase/firestore';
 import axios from 'axios';
 
 export default async function handler(request, response) {
@@ -8,38 +8,37 @@ export default async function handler(request, response) {
   }
 
   try {
-    // Teste das variáveis de ambiente
-    console.log('PagBank Environment:', process.env.PAGBANK_ENV);
-    console.log('Token exists:', !!process.env.PAGBANK_TOKEN);
-
-    // Teste de conexão com PagBank
-    const headers = {
-      'Authorization': `Bearer ${process.env.PAGBANK_TOKEN}`,
-      'Content-Type': 'application/json'
-    };
-
-    // URL base baseada no ambiente
-    const baseUrl = process.env.PAGBANK_ENV === 'production'
-      ? 'https://api.pagseguro.com'
-      : 'https://sandbox.api.pagseguro.com';
-
-    console.log('Using PagBank URL:', baseUrl);
-
     const { agendamento } = request.body;
     
-    return response.status(200).json({
-      environment: process.env.PAGBANK_ENV,
-      baseUrl,
-      tokenExists: !!process.env.PAGBANK_TOKEN,
-      agendamento
+    // Criar o pagamento usando a função createPayment
+    const paymentResult = await createPayment({
+      referenceId: agendamento.id, // ID do agendamento no Firestore
+      customerName: agendamento.nomeCliente,
+      customerEmail: agendamento.email,
+      customerTaxId: agendamento.cpf,
+      serviceName: 'Aula de Dança',
+      amount: agendamento.valor * 100, // Converter para centavos
     });
+
+    if (paymentResult.success) {
+      // Atualizar o agendamento com o status inicial
+      const agendamentoRef = doc(db, 'agendamentos', agendamento.id);
+      await updateDoc(agendamentoRef, {
+        statusPagamento: 'pendente',
+        urlPagamento: paymentResult.paymentUrl
+      });
+
+      return response.status(200).json({
+        success: true,
+        paymentUrl: paymentResult.paymentUrl
+      });
+    } else {
+      throw new Error(paymentResult.error);
+    }
 
   } catch (error) {
     console.error('Checkout error:', error);
-    return response.status(400).json({ 
-      error: error.message,
-      env: process.env.PAGBANK_ENV
-    });
+    return response.status(400).json({ error: error.message });
   }
 } 
 
