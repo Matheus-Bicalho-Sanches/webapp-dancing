@@ -1,79 +1,53 @@
 # WebApp Dancing
 
-Sistema de agendamento de aulas de patinação com pagamento integrado.
+Aplicação web para agendamento de aulas de dança.
 
 ## Funcionalidades
 
-- Agendamento de aulas individuais
-- Gerenciamento de professores
-- Gerenciamento de horários
-- Pagamento via PIX (PagBank)
+- Agendamento de aulas
 - Área administrativa
-- Área pública para alunos
+- Autenticação de usuários
+- Integração com Firebase
+- Proteção contra bots (reCAPTCHA)
 
 ## Tecnologias
 
 - React
-- Firebase (Firestore)
+- Firebase
 - Material-UI
-- PagBank API
+- Google reCAPTCHA
 
-## Configuração do Ambiente
+## Configuração
 
 1. Clone o repositório
-```bash
-git clone [URL_DO_REPOSITÓRIO]
-```
+2. Instale as dependências com `npm install`
+3. Configure as variáveis de ambiente:
+   - Copie `.env.example` para `.env.local`
+   - Preencha as variáveis com suas credenciais
 
-2. Instale as dependências
-```bash
-npm install
-```
+## Variáveis de Ambiente
 
-3. Configure as variáveis de ambiente
-Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
 ```env
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-PAGBANK_ENV=sandbox
-PAGBANK_TOKEN=
+# Firebase
+FIREBASE_API_KEY=
+FIREBASE_AUTH_DOMAIN=
+FIREBASE_PROJECT_ID=
+FIREBASE_STORAGE_BUCKET=
+FIREBASE_MESSAGING_SENDER_ID=
+FIREBASE_APP_ID=
+
+# reCAPTCHA
+VITE_RECAPTCHA_SITE_KEY=
 ```
 
-4. Inicie o servidor de desenvolvimento
+## Desenvolvimento
+
 ```bash
 npm run dev
 ```
 
-## Scripts Disponíveis
+## Build
 
-- `npm run dev`: Inicia o servidor de desenvolvimento
-- `npm run build`: Gera a versão de produção
-- `npm run preview`: Visualiza a versão de produção localmente
-
-## Estrutura do Projeto
-
+```bash
+npm run build
 ```
-src/
-  ├── api/          # Endpoints da API
-  ├── components/   # Componentes React
-  ├── config/       # Configurações (Firebase, etc)
-  ├── contexts/     # Contextos React
-  ├── layouts/      # Layouts da aplicação
-  └── pages/        # Páginas da aplicação
-```
-
-## Contribuição
-
-1. Faça um Fork do projeto
-2. Crie uma Branch para sua Feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a Branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## Licença
-
-Este projeto está sob a licença MIT.

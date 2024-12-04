@@ -4,18 +4,10 @@
     {
       "source": "/api/:path*",
       "destination": "/api/:path*"
-    },
-    {
-      "source": "/assets/(.*)",
-      "destination": "/assets/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ],
   "functions": {
-    "api/pagbank/*.js": {
+    "api/*.js": {
       "memory": 1024,
       "maxDuration": 10
     }
