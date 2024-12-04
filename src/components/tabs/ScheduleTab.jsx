@@ -24,18 +24,29 @@ import {
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { db } from '../../config/firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  Timestamp, 
+  writeBatch, 
+  doc, 
+  deleteDoc, 
+  getDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
 import { alpha } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import Payment from '../Payment';
 
 dayjs.locale('pt-br');
 
-export default function ScheduleTab({ isPublic = false }) {
+export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [schedules, setSchedules] = useState({});
   const [loading, setLoading] = useState(true);
@@ -61,9 +72,6 @@ export default function ScheduleTab({ isPublic = false }) {
   const [bookingToDelete, setBookingToDelete] = useState(null);
   const [viewBooking, setViewBooking] = useState(null);
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
-  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
-  const [pendingBooking, setPendingBooking] = useState(null);
-  const [priceRanges, setPriceRanges] = useState([]);
 
   // Inicializar as três datas (hoje, amanhã, depois)
   useEffect(() => {
@@ -157,45 +165,72 @@ export default function ScheduleTab({ isPublic = false }) {
     loadTeachers();
   }, []);
 
-  // Função para carregar agendamentos existentes
+  // Função super otimizada para carregar agendamentos existentes
   const loadExistingBookings = async () => {
     try {
       const bookingsData = {};
+      const datesArray = selectedDates.map(date => date.format('YYYY-MM-DD'));
       
-      for (const date of selectedDates) {
-        const dateStr = date.format('YYYY-MM-DD');
-        const agendamentosRef = collection(db, 'agendamentos');
-        const agendamentosQuery = await getDocs(agendamentosRef);
+      // Buscar apenas os agendamentos com status confirmado
+      const agendamentosRef = collection(db, 'agendamentos');
+      const agendamentosQuery = query(
+        agendamentosRef,
+        where('status', '==', 'confirmado')
+      );
+      const agendamentosSnapshot = await getDocs(agendamentosQuery);
+      
+      // Criar um mapa de agendamentos para referência rápida
+      const agendamentosMap = new Map(
+        agendamentosSnapshot.docs.map(doc => [
+          doc.id,
+          { id: doc.id, ...doc.data() }
+        ])
+      );
+      
+      // Buscar horários para todas as datas de uma vez
+      const horariosPromises = agendamentosSnapshot.docs.map(async (agendamentoDoc) => {
+        const horariosRef = collection(agendamentoDoc.ref, 'horarios');
+        const horariosQuery = query(
+          horariosRef,
+          where('data', 'in', datesArray)
+        );
         
-        for (const agendamentoDoc of agendamentosQuery.docs) {
-          const agendamentoData = agendamentoDoc.data();
-          const horariosRef = collection(agendamentoDoc.ref, 'horarios');
-          const horariosSnapshot = await getDocs(horariosRef);
+        const horariosSnapshot = await getDocs(horariosQuery);
+        
+        horariosSnapshot.docs.forEach(horarioDoc => {
+          const horarioData = horarioDoc.data();
+          const agendamento = agendamentosMap.get(agendamentoDoc.id);
           
-          horariosSnapshot.docs.forEach(horarioDoc => {
-            const horarioData = horarioDoc.data();
-            if (horarioData.data === dateStr) {
-              const key = `${dateStr}-${horarioData.horario}-${horarioData.professorId}`;
-              bookingsData[key] = {
-                ...horarioData,
-                agendamentoId: agendamentoDoc.id,
-                nomeAluno: agendamentoData.nomeAluno
-              };
-            }
-          });
-        }
-      }
+          const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
+          bookingsData[key] = {
+            ...horarioData,
+            agendamentoId: agendamentoDoc.id,
+            nomeAluno: agendamento.nomeAluno
+          };
+        });
+      });
       
+      await Promise.all(horariosPromises);
       setExistingBookings(bookingsData);
     } catch (error) {
       console.error('Erro ao carregar agendamentos:', error);
+      showNotification('Erro ao carregar agendamentos', 'error');
     }
   };
 
-  // Carregar agendamentos quando as datas mudarem
+  // Polling para verificar novos agendamentos
   useEffect(() => {
+    // Carregar agendamentos inicialmente
     loadExistingBookings();
-  }, [selectedDates]);
+
+    // Configurar o intervalo para verificar a cada segundo
+    const interval = setInterval(() => {
+      loadExistingBookings();
+    }, 1000);
+
+    // Limpar o intervalo quando o componente for desmontado
+    return () => clearInterval(interval);
+  }, [selectedDates]); // Recriar o intervalo quando as datas mudarem
 
   const formatDate = (date) => {
     return `${date.format('dddd')} ${date.format('DD/MM/YY')}`;
@@ -269,119 +304,6 @@ export default function ScheduleTab({ isPublic = false }) {
       ...prev,
       [name]: value
     }));
-  };
-
-  // Carregar valores das aulas
-  useEffect(() => {
-    const loadPriceRanges = async () => {
-      try {
-        const valuesSnapshot = await getDocs(collection(db, 'valores_aulas'));
-        const valuesData = valuesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        // Ordenar por quantidade mínima de aulas
-        const sortedValues = valuesData.sort((a, b) => a.minClasses - b.minClasses);
-        setPriceRanges(sortedValues);
-      } catch (error) {
-        console.error('Erro ao carregar valores das aulas:', error);
-      }
-    };
-
-    loadPriceRanges();
-  }, []);
-
-  // Função para calcular o valor total baseado na quantidade de aulas
-  const calculateTotalValue = (numberOfClasses) => {
-    // Encontrar a faixa de preço adequada
-    const priceRange = priceRanges.find(range => 
-      numberOfClasses >= range.minClasses && 
-      numberOfClasses <= range.maxClasses
-    ) || priceRanges.find(range => range.maxClasses === 999);
-
-    if (!priceRange) {
-      console.error('Faixa de preço não encontrada');
-      return 0;
-    }
-
-    return numberOfClasses * priceRange.valuePerClass;
-  };
-
-  // Atualizar a função handleSaveAgendamento
-  const handleSaveAgendamento = async () => {
-    if (isPublic) {
-      // Calcular o valor total baseado na quantidade de aulas selecionadas
-      const numberOfClasses = selectedSlots.length;
-      const totalValue = calculateTotalValue(numberOfClasses);
-
-      // Preparar dados do agendamento para pagamento
-      const agendamentoData = {
-        nomeAluno: agendamentoForm.nomeAluno,
-        email: agendamentoForm.email,
-        telefone: agendamentoForm.telefone,
-        valor: totalValue, // Usar o valor calculado
-        horarios: Object.values(selectedTeachers).map(slot => ({
-          data: slot.date,
-          horario: slot.horario,
-          professorId: slot.professorId,
-          professorNome: slot.professorNome
-        }))
-      };
-
-      // Salvar dados temporariamente e abrir diálogo de pagamento
-      setPendingBooking(agendamentoData);
-      setOpenPaymentDialog(true);
-      setOpenAgendamentoModal(false);
-    } else {
-      // Lógica existente para admin
-      await saveAgendamento();
-    }
-  };
-
-  const handlePaymentSuccess = async () => {
-    if (pendingBooking) {
-      try {
-        setSaving(true);
-        
-        // Criar novo agendamento
-        const agendamentoRef = await addDoc(collection(db, 'agendamentos'), {
-          nomeAluno: pendingBooking.nomeAluno,
-          email: pendingBooking.email,
-          telefone: pendingBooking.telefone,
-          observacoes: agendamentoForm.observacoes,
-          dataCriacao: Timestamp.now(),
-          status: 'confirmado',
-          pagamento: 'aprovado'
-        });
-
-        // Adicionar horários ao agendamento
-        const batch = writeBatch(db);
-        pendingBooking.horarios.forEach(horario => {
-          const horarioRef = doc(collection(agendamentoRef, 'horarios'));
-          batch.set(horarioRef, {
-            data: horario.data,
-            horario: horario.horario,
-            professorId: horario.professorId
-          });
-        });
-
-        await batch.commit();
-
-        // Limpar seleções e mostrar sucesso
-        setSelectedSlots([]);
-        setSelectedTeachers({});
-        setPendingBooking(null);
-        showNotification('Agendamento realizado com sucesso!', 'success');
-        
-        // Recarregar agendamentos
-        await loadExistingBookings();
-      } catch (error) {
-        console.error('Erro ao salvar agendamento:', error);
-        showNotification('Erro ao salvar agendamento. Por favor, tente novamente.', 'error');
-      } finally {
-        setSaving(false);
-      }
-    }
   };
 
   const showNotification = (message, severity) => {
@@ -474,12 +396,12 @@ export default function ScheduleTab({ isPublic = false }) {
     }
   };
 
-  const handleConfirmAgendamento = async () => {
+  const handleSaveAgendamento = async () => {
     try {
       setSaving(true);
 
       // Validar dados básicos
-      if (!agendamentoForm.nomeAluno || !agendamentoForm.email) {
+      if (!agendamentoForm.nomeAluno || !agendamentoForm.email || !agendamentoForm.telefone) {
         showNotification('Por favor, preencha todos os campos obrigatórios.', 'error');
         return;
       }
@@ -490,40 +412,60 @@ export default function ScheduleTab({ isPublic = false }) {
         return;
       }
 
-      // Calcular valor total
-      const valorPorAula = 3.00;
-      const valorTotal = selectedSlots.length * valorPorAula;
-
-      console.log('Calculando valor:', {
-        valorPorAula,
-        quantidadeAulas: selectedSlots.length,
-        valorTotal
-      });
-
-      // Criar objeto de agendamento
+      // Criar objeto de agendamento base
       const agendamentoData = {
         nomeAluno: agendamentoForm.nomeAluno,
         email: agendamentoForm.email,
         telefone: agendamentoForm.telefone,
-        observacoes: agendamentoForm.observacoes,
-        dataAgendamento: Timestamp.now(),
-        status: 'pendente',
-        valorTotal: valorTotal,
-        valorPorAula: valorPorAula,
-        quantidadeAulas: selectedSlots.length,
-        horariosSelecionados: Object.values(selectedTeachers).map(slot => ({
-          data: slot.date,
-          horario: slot.horario,
-          professorId: slot.professorId,
-          professorNome: slot.professorNome
-        }))
+        observacoes: agendamentoForm.observacoes || ''
       };
 
-      // Definir o agendamento pendente e abrir diálogo de pagamento
-      setPendingBooking(agendamentoData);
-      setOpenPaymentDialog(true);
-      setOpenAgendamentoModal(false);
+      if (!isPublic) {
+        // Formato específico para o admin
+        await saveAgendamento({
+          ...agendamentoData,
+          horarios: Object.values(selectedTeachers).map(slot => ({
+            data: slot.date,
+            horario: slot.horario,
+            professorId: slot.professorId
+          }))
+        });
+      } else {
+        // Criar agendamento diretamente
+        const agendamentoRef = await addDoc(collection(db, 'agendamentos'), {
+          ...agendamentoData,
+          createdAt: serverTimestamp(),
+          status: 'confirmado'
+        });
 
+        // Adicionar horários
+        const batch = writeBatch(db);
+        Object.values(selectedTeachers).forEach(slot => {
+          const horarioRef = doc(collection(agendamentoRef, 'horarios'));
+          batch.set(horarioRef, {
+            data: slot.date,
+            horario: slot.horario,
+            professorId: slot.professorId
+          });
+        });
+
+        await batch.commit();
+      }
+
+      // Limpar formulário e fechar modal
+      setSelectedSlots([]);
+      setSelectedTeachers({});
+      setAgendamentoForm({
+        nomeAluno: '',
+        email: '',
+        telefone: '',
+        observacoes: ''
+      });
+      setOpenAgendamentoModal(false);
+      showNotification('Agendamento realizado com sucesso!', 'success');
+
+      // Recarregar agendamentos
+      await loadExistingBookings();
     } catch (error) {
       console.error('Erro ao criar agendamento:', error);
       showNotification('Erro ao criar agendamento. Por favor, tente novamente.', 'error');
@@ -757,38 +699,35 @@ export default function ScheduleTab({ isPublic = false }) {
               value={agendamentoForm.nomeAluno}
               onChange={handleAgendamentoChange}
               required
-              error={isPublic && !agendamentoForm.nomeAluno}
-              helperText={isPublic && !agendamentoForm.nomeAluno ? "Nome é obrigatório" : ""}
+              error={!agendamentoForm.nomeAluno}
+              helperText={!agendamentoForm.nomeAluno ? "Nome é obrigatório" : ""}
               sx={{ mb: 2 }}
             />
 
-            {isPublic && (
-              <>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={agendamentoForm.email}
-                  onChange={handleAgendamentoChange}
-                  required
-                  error={!agendamentoForm.email}
-                  helperText={!agendamentoForm.email ? "Email é obrigatório" : ""}
-                  sx={{ mb: 2 }}
-                />
-                <TextField
-                  fullWidth
-                  label="Telefone/WhatsApp"
-                  name="telefone"
-                  value={agendamentoForm.telefone}
-                  onChange={handleAgendamentoChange}
-                  required
-                  error={!agendamentoForm.telefone}
-                  helperText={!agendamentoForm.telefone ? "Telefone é obrigatório" : ""}
-                  sx={{ mb: 2 }}
-                />
-              </>
-            )}
+            <TextField
+              fullWidth
+              label="Email"
+              name="email"
+              type="email"
+              value={agendamentoForm.email}
+              onChange={handleAgendamentoChange}
+              required
+              error={!agendamentoForm.email}
+              helperText={!agendamentoForm.email ? "Email é obrigatório" : ""}
+              sx={{ mb: 2 }}
+            />
+
+            <TextField
+              fullWidth
+              label="Telefone/WhatsApp"
+              name="telefone"
+              value={agendamentoForm.telefone}
+              onChange={handleAgendamentoChange}
+              required
+              error={!agendamentoForm.telefone}
+              helperText={!agendamentoForm.telefone ? "Telefone é obrigatório" : ""}
+              sx={{ mb: 2 }}
+            />
 
             <TextField
               fullWidth
@@ -827,42 +766,6 @@ export default function ScheduleTab({ isPublic = false }) {
                 </ListItem>
               ))}
             </List>
-
-            {isPublic && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Resumo do Valor:
-                </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Quantidade de aulas:</Typography>
-                  <Typography>{selectedSlots.length}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Valor por aula:</Typography>
-                  <Typography>
-                    {priceRanges.find(range => 
-                      selectedSlots.length >= range.minClasses && 
-                      selectedSlots.length <= range.maxClasses
-                    )?.valuePerClass.toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    }) || 'Calculando...'}
-                  </Typography>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    Valor Total:
-                  </Typography>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    {calculateTotalValue(selectedSlots.length).toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    })}
-                  </Typography>
-                </Box>
-              </Box>
-            )}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -874,7 +777,8 @@ export default function ScheduleTab({ isPublic = false }) {
             onClick={handleSaveAgendamento}
             disabled={
               !agendamentoForm.nomeAluno || 
-              (isPublic && (!agendamentoForm.email || !agendamentoForm.telefone)) ||
+              !agendamentoForm.email || 
+              !agendamentoForm.telefone || 
               saving
             }
           >
@@ -985,17 +889,6 @@ export default function ScheduleTab({ isPublic = false }) {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Payment
-        open={openPaymentDialog}
-        onClose={() => {
-          setOpenPaymentDialog(false);
-          setPendingBooking(null);
-        }}
-        nome={pendingBooking?.nomeAluno}
-        email={pendingBooking?.email}
-        valor={selectedSlots.length * 3.00}
-      />
     </>
   );
 } 

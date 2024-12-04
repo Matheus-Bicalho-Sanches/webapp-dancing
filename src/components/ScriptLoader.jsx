@@ -1,103 +1,86 @@
-import React, { useEffect, useState } from 'react';
-import { CircularProgress, Alert, Box } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Alert } from '@mui/material';
 
-const ScriptLoader = ({ children }) => {
+export default function ScriptLoader({ children }) {
   const [status, setStatus] = useState({
     recaptcha: false,
-    pagbank: false,
+    loading: true,
     error: null
   });
 
   useEffect(() => {
-    // Função para adicionar script
     const addScript = (src, id) => {
       const script = document.createElement('script');
       script.src = src;
-      script.id = id;
       script.async = true;
-      document.head.appendChild(script);
+      script.id = id;
       return script;
     };
 
-    // Adicionar reCAPTCHA
-    const recaptchaScript = addScript(
-      'https://www.google.com/recaptcha/api.js',
-      'recaptcha'
-    );
+    // Verificar se os scripts já foram carregados
+    const recaptchaLoaded = !!window.grecaptcha;
 
-    // Adicionar PagBank
-    const pagbankScript = addScript(
-      'https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/browser/pagseguro.min.js',
-      'pagbank'
-    );
+    // Atualizar status inicial
+    setStatus(prev => ({
+      ...prev,
+      recaptcha: recaptchaLoaded
+    }));
 
-    // Verificar carregamento a cada 500ms
-    const interval = setInterval(() => {
-      const recaptchaLoaded = !!window.grecaptcha;
-      const pagbankLoaded = !!window.PagSeguro;
-
+    // Se todos os scripts já estiverem carregados, não fazer nada
+    if (recaptchaLoaded) {
       setStatus(prev => ({
         ...prev,
-        recaptcha: recaptchaLoaded,
-        pagbank: pagbankLoaded
+        loading: false
       }));
+      return;
+    }
 
-      // Se ambos carregaram, limpar intervalo
-      if (recaptchaLoaded && pagbankLoaded) {
-        clearInterval(interval);
-      }
-    }, 500);
+    // Adicionar reCAPTCHA se necessário
+    if (!recaptchaLoaded) {
+      const recaptchaScript = addScript(
+        'https://www.google.com/recaptcha/api.js',
+        'recaptcha'
+      );
 
-    // Timeout de 10 segundos
-    const timeout = setTimeout(() => {
-      if (!status.recaptcha || !status.pagbank) {
+      recaptchaScript.onload = () => {
         setStatus(prev => ({
           ...prev,
-          error: 'Tempo limite excedido ao carregar componentes. Por favor, recarregue a página.'
+          recaptcha: true,
+          loading: false
         }));
-        clearInterval(interval);
-      }
-    }, 10000);
+      };
 
-    // Tratamento de erros
-    recaptchaScript.onerror = () => {
-      setStatus(prev => ({
-        ...prev,
-        error: 'Erro ao carregar reCAPTCHA. Verifique sua conexão.'
-      }));
-    };
+      recaptchaScript.onerror = () => {
+        setStatus(prev => ({
+          ...prev,
+          loading: false,
+          error: 'Erro ao carregar reCAPTCHA. Verifique sua conexão.'
+        }));
+      };
 
-    pagbankScript.onerror = () => {
-      setStatus(prev => ({
-        ...prev,
-        error: 'Erro ao carregar PagBank. Verifique sua conexão.'
-      }));
-    };
+      document.body.appendChild(recaptchaScript);
+    }
 
     // Cleanup
     return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
+      const recaptchaScript = document.getElementById('recaptcha');
+      if (recaptchaScript) {
+        recaptchaScript.remove();
+      }
     };
   }, []);
 
-  if (status.error) {
-    return (
-      <Alert severity="error" sx={{ m: 2 }}>
-        {status.error}
-      </Alert>
-    );
+  if (status.loading) {
+    return <Alert severity="info">Carregando recursos necessários...</Alert>;
   }
 
-  if (!status.recaptcha || !status.pagbank) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-      </Box>
-    );
+  if (status.error) {
+    return <Alert severity="error">{status.error}</Alert>;
+  }
+
+  if (!status.recaptcha) {
+    return <Alert severity="warning">Aguardando carregamento dos recursos...</Alert>;
   }
 
   return children;
-};
-
-export default ScriptLoader; 
+} 
