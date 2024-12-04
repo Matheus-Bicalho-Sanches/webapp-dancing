@@ -72,6 +72,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [bookingToDelete, setBookingToDelete] = useState(null);
   const [viewBooking, setViewBooking] = useState(null);
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
+  const [values, setValues] = useState([]);
 
   // Inicializar as três datas (hoje, amanhã, depois)
   useEffect(() => {
@@ -474,6 +475,42 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     }
   };
 
+  // Carregar valores das aulas
+  useEffect(() => {
+    const loadValues = async () => {
+      try {
+        const valuesSnapshot = await getDocs(collection(db, 'valores_aulas'));
+        const valuesData = valuesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        // Ordenar por quantidade mínima de aulas
+        const sortedValues = valuesData.sort((a, b) => a.minClasses - b.minClasses);
+        setValues(sortedValues);
+      } catch (error) {
+        console.error('Erro ao carregar valores:', error);
+      }
+    };
+
+    loadValues();
+  }, []);
+
+  // Função para calcular o valor por aula baseado na quantidade
+  const getValuePerClass = (quantity) => {
+    const priceRange = values.find(
+      value => quantity >= value.minClasses && quantity <= value.maxClasses
+    ) || values.find(value => value.maxClasses === 999);
+
+    return priceRange ? priceRange.valuePerClass : 0;
+  };
+
+  // Função para calcular o valor total
+  const calculateTotal = () => {
+    const quantity = selectedSlots.length;
+    const valuePerClass = getValuePerClass(quantity);
+    return quantity * valuePerClass;
+  };
+
   return (
     <>
       <Stack 
@@ -766,6 +803,39 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 </ListItem>
               ))}
             </List>
+
+            {selectedSlots.length > 0 && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Resumo do Valor:
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Quantidade de aulas:</Typography>
+                  <Typography>{selectedSlots.length}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography>Valor por aula:</Typography>
+                  <Typography>
+                    {getValuePerClass(selectedSlots.length).toLocaleString('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    })}
+                  </Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    Valor Total:
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    {calculateTotal().toLocaleString('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    })}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
