@@ -8,38 +8,65 @@ export default function Schedule() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Função para testar a API
-  const testCheckoutAPI = async () => {
+  // Função para testar a API do Mercado Pago
+  const testMercadoPago = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/pagbank/checkout', {
+      // Dados de teste
+      const testData = {
+        items: [{
+          id: "TEST-1",
+          title: "Aula de Patinação",
+          description: "Aula individual de patinação",
+          quantity: 1,
+          currency_id: "BRL",
+          unit_price: 90.00
+        }],
+        payer: {
+          email: "test_user_123456@testuser.com",
+          first_name: "Test",
+          last_name: "User",
+          identification: {
+            type: "CPF",
+            number: "19119119100"
+          }
+        }
+      };
+
+      console.log('Enviando dados para criação de preferência:', testData);
+
+      const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          agendamento: {
-            nomeAluno: 'Teste',
-            email: 'teste@teste.com',
-            valor: 100
-          }
-        })
+        body: JSON.stringify(testData)
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao criar preferência de pagamento');
+      }
+
       const data = await response.json();
-      console.log('Resposta da API:', data);
+      console.log('Resposta do Mercado Pago:', data);
       
-      if (data.success && data.qr_code) {
-        setPaymentData(data);
-        setOpenDialog(true);
+      if (data.success) {
+        // Em ambiente de desenvolvimento, usar sandbox_init_point
+        const paymentUrl = data.sandbox_init_point || data.init_point;
+        if (paymentUrl) {
+          window.location.href = paymentUrl;
+        } else {
+          throw new Error('URL de pagamento não encontrada na resposta');
+        }
       } else {
-        setError(data.error || 'Erro ao gerar pagamento. Por favor, tente novamente.');
+        throw new Error('URL de pagamento não encontrada na resposta');
       }
     } catch (error) {
-      console.error('Erro ao testar API:', error);
-      setError('Erro ao conectar com o servidor. Por favor, tente novamente.');
+      console.error('Erro ao testar Mercado Pago:', error);
+      setError(error.message || 'Erro ao conectar com o servidor');
     } finally {
       setLoading(false);
     }
@@ -51,7 +78,8 @@ export default function Schedule() {
     setError(null);
   };
 
-  const isDevelopment = import.meta.env.DEV;
+  // Sempre mostrar o botão de teste por enquanto
+  const showTestButton = true;
 
   return (
     <Box sx={{ 
@@ -65,13 +93,14 @@ export default function Schedule() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Dancing Patinação
           </Typography>
-          {isDevelopment && (
+          {showTestButton && (
             <Button 
               color="inherit" 
-              onClick={testCheckoutAPI}
+              onClick={testMercadoPago}
               disabled={loading}
+              sx={{ mr: 2 }}
             >
-              {loading ? 'Processando...' : 'Testar API PagBank'}
+              {loading ? 'Processando...' : 'Testar Mercado Pago'}
             </Button>
           )}
         </Toolbar>
@@ -108,35 +137,16 @@ export default function Schedule() {
 
       <Dialog open={openDialog} onClose={handleCloseDialog}>
         <DialogTitle>
-          {error ? 'Erro no Pagamento' : 'Pagamento via PIX'}
+          {error ? 'Erro no Pagamento' : 'Pagamento via Mercado Pago'}
         </DialogTitle>
         <DialogContent>
           {error ? (
             <Typography color="error" sx={{ p: 2 }}>
               {error}
             </Typography>
-          ) : paymentData?.qr_code ? (
-            <Box sx={{ textAlign: 'center', p: 2 }}>
-              <Typography variant="body1" gutterBottom>
-                Escaneie o QR Code abaixo para pagar:
-              </Typography>
-              <Box sx={{ my: 2 }}>
-                <img 
-                  src={paymentData.qr_code.links.find(link => link.media === 'image/png')?.href}
-                  alt="QR Code PIX"
-                  style={{ maxWidth: '200px' }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Código PIX expira em 24 horas
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 2 }}>
-                ID do Pedido: {paymentData.order_id}
-              </Typography>
-            </Box>
           ) : (
             <Typography sx={{ p: 2 }}>
-              Aguarde, processando pagamento...
+              Redirecionando para o Mercado Pago...
             </Typography>
           )}
         </DialogContent>

@@ -74,6 +74,20 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
   const [values, setValues] = useState([]);
 
+  // Função para calcular valor por aula baseado na quantidade
+  const getValuePerClass = (quantity) => {
+    if (quantity >= 10) return 70; // R$70 por aula para 10 ou mais aulas
+    if (quantity >= 5) return 80;  // R$80 por aula para 5-9 aulas
+    return 90;                     // R$90 por aula para 1-4 aulas
+  };
+
+  // Função para calcular o valor total
+  const calculateTotal = () => {
+    const quantity = selectedSlots.length;
+    const valuePerClass = getValuePerClass(quantity);
+    return quantity * valuePerClass;
+  };
+
   // Inicializar as três datas (hoje, amanhã, depois)
   useEffect(() => {
     const today = dayjs();
@@ -494,22 +508,6 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
     loadValues();
   }, []);
-
-  // Função para calcular o valor por aula baseado na quantidade
-  const getValuePerClass = (quantity) => {
-    const priceRange = values.find(
-      value => quantity >= value.minClasses && quantity <= value.maxClasses
-    ) || values.find(value => value.maxClasses === 999);
-
-    return priceRange ? priceRange.valuePerClass : 0;
-  };
-
-  // Função para calcular o valor total
-  const calculateTotal = () => {
-    const quantity = selectedSlots.length;
-    const valuePerClass = getValuePerClass(quantity);
-    return quantity * valuePerClass;
-  };
 
   return (
     <>
