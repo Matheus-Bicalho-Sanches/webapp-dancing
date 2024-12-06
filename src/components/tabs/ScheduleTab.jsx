@@ -76,9 +76,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
-    if (quantity >= 10) return 70; // R$70 por aula para 10 ou mais aulas
-    if (quantity >= 5) return 80;  // R$80 por aula para 5-9 aulas
-    return 90;                     // R$90 por aula para 1-4 aulas
+    // Encontrar a faixa de valor adequada para a quantidade de aulas
+    const valueRange = values.find(v => 
+      quantity >= v.minClasses && 
+      quantity <= v.maxClasses
+    );
+    
+    return valueRange ? valueRange.valuePerClass : 0;
   };
 
   // Função para calcular o valor total
@@ -427,12 +431,20 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         return;
       }
 
+      // Calcular valores
+      const quantity = selectedSlots.length;
+      const valuePerClass = getValuePerClass(quantity);
+      const totalValue = calculateTotal();
+
       // Criar objeto de agendamento base
       const agendamentoData = {
         nomeAluno: agendamentoForm.nomeAluno,
         email: agendamentoForm.email,
         telefone: agendamentoForm.telefone,
-        observacoes: agendamentoForm.observacoes || ''
+        observacoes: agendamentoForm.observacoes || '',
+        valorPorAula: valuePerClass,
+        quantidadeAulas: quantity,
+        valorTotal: totalValue
       };
 
       if (!isPublic) {
@@ -489,7 +501,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     }
   };
 
-  // Carregar valores das aulas
+  // useEffect para carregar valores das aulas
   useEffect(() => {
     const loadValues = async () => {
       try {

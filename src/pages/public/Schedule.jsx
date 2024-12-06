@@ -22,7 +22,7 @@ export default function Schedule() {
           description: "Aula individual de patinação",
           quantity: 1,
           currency_id: "BRL",
-          unit_price: 90.00
+          unit_price: getValuePerClass(1)
         }],
         payer: {
           email: "test_user_123456@testuser.com",
