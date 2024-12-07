@@ -38,17 +38,23 @@ export default async function handler(req, res) {
       });
     }
 
+    // Garantir que os items estejam no formato correto
+    const formattedItems = items.map(item => ({
+      id: item.id || 'aula',
+      title: item.title || 'Aula de Patinação',
+      quantity: item.quantity || 1,
+      unit_price: Number(item.unit_price) || 1,
+      currency_id: 'BRL'
+    }));
+
     // Criar a preferência
     const preference = {
-      items,
-      payer,
-      payment_methods: {
-        excluded_payment_methods: [],
-        excluded_payment_types: [],
-        installments: 12,
-        default_installments: 1
+      items: formattedItems,
+      payer: {
+        name: payer?.name || '',
+        email: payer?.email || '',
+        identification: payer?.identification || {}
       },
-      binary_mode: false,
       back_urls: {
         success: `${process.env.NEXT_PUBLIC_API_URL}/success`,
         failure: `${process.env.NEXT_PUBLIC_API_URL}/failure`,
@@ -59,11 +65,6 @@ export default async function handler(req, res) {
       statement_descriptor: "Dancing Patinação",
       external_reference: new Date().getTime().toString()
     };
-
-    // Adicionar configurações específicas para cartão de crédito
-    if (items[0].unit_price > 0) {
-      preference.payment_methods.installments = Math.min(12, Math.floor(items[0].unit_price / 5));
-    }
 
     console.log('[Payment] Criando preferência:', JSON.stringify(preference, null, 2));
 
@@ -77,7 +78,7 @@ export default async function handler(req, res) {
       success: true,
       init_point: response.init_point,
       sandbox_init_point: response.sandbox_init_point,
-      preferenceId: response.id
+      id: response.id
     });
 
   } catch (error) {
@@ -85,7 +86,8 @@ export default async function handler(req, res) {
     console.error('[Payment] Stack trace:', error.stack);
     return res.status(500).json({
       error: 'Erro ao criar preferência de pagamento',
-      details: error.message
+      details: error.message,
+      stack: error.stack
     });
   }
 } 
