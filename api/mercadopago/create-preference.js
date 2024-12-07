@@ -42,6 +42,13 @@ export default async function handler(req, res) {
     const preference = {
       items,
       payer,
+      payment_methods: {
+        excluded_payment_methods: [],
+        excluded_payment_types: [],
+        installments: 12,
+        default_installments: 1
+      },
+      binary_mode: false,
       back_urls: {
         success: `${process.env.NEXT_PUBLIC_API_URL}/success`,
         failure: `${process.env.NEXT_PUBLIC_API_URL}/failure`,
@@ -52,6 +59,11 @@ export default async function handler(req, res) {
       statement_descriptor: "Dancing Patinação",
       external_reference: new Date().getTime().toString()
     };
+
+    // Adicionar configurações específicas para cartão de crédito
+    if (items[0].unit_price > 0) {
+      preference.payment_methods.installments = Math.min(12, Math.floor(items[0].unit_price / 5));
+    }
 
     console.log('[Payment] Criando preferência:', JSON.stringify(preference, null, 2));
 
