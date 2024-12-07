@@ -1,13 +1,30 @@
 import crypto from 'crypto';
-import { MercadoPagoConfig } from 'mercadopago';
+import { MercadoPagoConfig, Payment } from 'mercadopago';
+import fs from 'fs/promises';
+import path from 'path';
 
-// Configurações do Mercado Pago
-const WEBHOOK_SECRET = '8176de12b3ec21fb29a38d9b10a1573f21361a98e5f30b9068a55c8d19826bcf';
-
-// Configurar o cliente do Mercado Pago
-const client = new MercadoPagoConfig({ 
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
-});
+// Função para ler o token salvo
+async function getStoredToken() {
+  try {
+    const tokenFilePath = path.join(process.cwd(), 'mp_token.json');
+    const tokenData = JSON.parse(await fs.readFile(tokenFilePath, 'utf8'));
+    
+    // Verificar se o token ainda é válido
+    const createdAt = new Date(tokenData.created_at);
+    const expiresIn = tokenData.expires_in * 1000; // converter para milissegundos
+    const now = new Date();
+    
+    if (now.getTime() - createdAt.getTime() > expiresIn) {
+      console.warn('[Webhook] Token expirado, necessário reautorizar');
+      return null;
+    }
+    
+    return tokenData.access_token;
+  } catch (error) {
+    console.error('[Webhook] Erro ao ler token:', error);
+    return null;
+  }
+}
 
 export default async function handler(req, res) {
   // Log inicial para debug
@@ -39,6 +56,21 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Obter o token de acesso
+    const accessToken = await getStoredToken();
+    if (!accessToken) {
+      console.error('[Webhook] Token de acesso não encontrado ou expirado');
+      return res.status(401).json({
+        error: 'Token não encontrado ou expirado',
+        message: 'É necessário reautorizar o aplicativo'
+      });
+    }
+
+    // Configurar cliente do Mercado Pago com o token
+    const client = new MercadoPagoConfig({ 
+      accessToken: accessToken
+    });
+
     // Log do corpo da requisição
     const rawBody = JSON.stringify(req.body);
     console.log('[Webhook] Body:', rawBody);
@@ -62,10 +94,17 @@ export default async function handler(req, res) {
     switch (type) {
       case 'payment':
       case 'payment.created':
-      case 'payment.updated':
+      case 'payment.updated': {
         console.log('[Webhook] Processando notificação de pagamento:', id);
+        
+        // Buscar informações do pagamento
+        const payment = new Payment(client);
+        const paymentInfo = await payment.get({ id });
+        console.log('[Webhook] Informações do pagamento:', JSON.stringify(paymentInfo, null, 2));
+        
         // Aqui você implementaria a lógica de atualização do pagamento
         break;
+      }
       
       default:
         console.log('[Webhook] Tipo de notificação não processado:', type);

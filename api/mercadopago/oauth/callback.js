@@ -1,4 +1,6 @@
 import { MercadoPagoConfig, OAuth } from 'mercadopago';
+import fs from 'fs/promises';
+import path from 'path';
 
 const CLIENT_ID = '6064176381936791';
 const CLIENT_SECRET = process.env.MERCADOPAGO_CLIENT_SECRET;
@@ -8,6 +10,17 @@ const REDIRECT_URI = 'https://dancing-webapp.com.br/api/mercadopago/oauth/callba
 const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
 });
+
+// Função para salvar o token
+async function saveToken(tokenData) {
+  try {
+    const tokenFilePath = path.join(process.cwd(), 'mp_token.json');
+    await fs.writeFile(tokenFilePath, JSON.stringify(tokenData, null, 2));
+    console.log('[OAuth] Token salvo com sucesso');
+  } catch (error) {
+    console.error('[OAuth] Erro ao salvar token:', error);
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -38,9 +51,17 @@ export default async function handler(req, res) {
       }
     });
 
-    // Salvar o token (você deve implementar isso de acordo com sua necessidade)
-    const { access_token, refresh_token, user_id } = response;
-    console.log('[OAuth] Token obtido com sucesso:', { user_id, access_token });
+    // Salvar o token
+    const tokenData = {
+      access_token: response.access_token,
+      refresh_token: response.refresh_token,
+      user_id: response.user_id,
+      expires_in: response.expires_in,
+      created_at: new Date().toISOString()
+    };
+
+    await saveToken(tokenData);
+    console.log('[OAuth] Token obtido e salvo com sucesso:', { user_id: tokenData.user_id });
 
     // Retornar uma página HTML com a mensagem de sucesso
     res.setHeader('Content-Type', 'text/html');
@@ -65,11 +86,25 @@ export default async function handler(req, res) {
               background: white;
               border-radius: 8px;
               box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              max-width: 600px;
+              width: 90%;
             }
             .success-icon {
               color: #4CAF50;
               font-size: 48px;
               margin-bottom: 16px;
+            }
+            .details {
+              margin-top: 20px;
+              padding: 15px;
+              background: #f9f9f9;
+              border-radius: 4px;
+              text-align: left;
+            }
+            .details code {
+              background: #eee;
+              padding: 2px 5px;
+              border-radius: 3px;
             }
           </style>
         </head>
@@ -77,7 +112,12 @@ export default async function handler(req, res) {
           <div class="container">
             <div class="success-icon">✓</div>
             <h1>Autorização Concluída com Sucesso!</h1>
-            <p>Você pode fechar esta janela e voltar para a aplicação.</p>
+            <p>A integração com o Mercado Pago foi configurada corretamente.</p>
+            <div class="details">
+              <p><strong>User ID:</strong> <code>${tokenData.user_id}</code></p>
+              <p><strong>Status:</strong> Token salvo e pronto para uso</p>
+              <p><strong>Próximos passos:</strong> Você pode fechar esta janela e voltar para a aplicação.</p>
+            </div>
           </div>
         </body>
       </html>
