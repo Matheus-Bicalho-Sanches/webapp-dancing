@@ -1,7 +1,5 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-
-const LOG_FILE = '/tmp/mp_payment_logs.json';
+// Armazenamento em memória para os logs
+let memoryLogs = [];
 
 // Função para formatar data
 const getFormattedDate = () => {
@@ -11,29 +9,17 @@ const getFormattedDate = () => {
 // Função para salvar logs
 async function saveLog(logEntry) {
   try {
-    // Tentar ler logs existentes
-    let logs = [];
-    try {
-      const existingLogs = await fs.readFile(LOG_FILE, 'utf8');
-      logs = JSON.parse(existingLogs);
-    } catch (error) {
-      // Se o arquivo não existir, começamos com um array vazio
-      console.log('[Logger] Criando novo arquivo de logs');
-    }
-
     // Adicionar novo log
-    logs.push({
+    memoryLogs.push({
       timestamp: getFormattedDate(),
       ...logEntry
     });
 
     // Manter apenas os últimos 100 logs
-    if (logs.length > 100) {
-      logs = logs.slice(-100);
+    if (memoryLogs.length > 100) {
+      memoryLogs = memoryLogs.slice(-100);
     }
 
-    // Salvar logs
-    await fs.writeFile(LOG_FILE, JSON.stringify(logs, null, 2));
     console.log('[Logger] Log salvo com sucesso');
   } catch (error) {
     console.error('[Logger] Erro ao salvar log:', error);
@@ -43,8 +29,7 @@ async function saveLog(logEntry) {
 // Função para ler logs
 async function getLogs() {
   try {
-    const logs = await fs.readFile(LOG_FILE, 'utf8');
-    return JSON.parse(logs);
+    return memoryLogs;
   } catch (error) {
     console.error('[Logger] Erro ao ler logs:', error);
     return [];

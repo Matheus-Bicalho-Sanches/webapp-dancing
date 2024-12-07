@@ -200,13 +200,10 @@ export default async function handler(req, res) {
 
     await logWebhook('notification_received', { type, id });
 
-    if (!type || !id) {
-      await logWebhook('invalid_data', { type, id });
-      return res.status(400).json({
-        error: 'Dados inválidos',
-        message: 'A requisição deve conter type/topic e id/data_id'
-      });
-    }
+    // Configurar cliente do Mercado Pago com o token de produção
+    const client = new MercadoPagoConfig({ 
+      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
+    });
 
     // Processar diferentes tipos de notificação
     switch (type) {
@@ -214,21 +211,6 @@ export default async function handler(req, res) {
       case 'payment.created':
       case 'payment.updated': {
         await logPaymentEvent('processing_payment', { id });
-        
-        // Obter o token de acesso
-        const accessToken = await getStoredToken();
-        if (!accessToken) {
-          await logPaymentEvent('token_missing', { id });
-          return res.status(401).json({
-            error: 'Token não encontrado ou expirado',
-            message: 'É necessário reautorizar o aplicativo'
-          });
-        }
-
-        // Configurar cliente do Mercado Pago com o token
-        const client = new MercadoPagoConfig({ 
-          accessToken: accessToken
-        });
         
         // Buscar informações do pagamento
         const payment = new Payment(client);

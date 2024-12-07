@@ -74,7 +74,9 @@ export default async function handler(req, res) {
       statement_descriptor: "Dancing Patinação",
       external_reference: new Date().getTime().toString(),
       expires: false,
-      binary_mode: false
+      binary_mode: false,
+      purpose: 'wallet_purchase',
+      marketplace: 'MP-MKT-6064176381936791'
     };
 
     console.log('[Payment] Criando preferência:', JSON.stringify(preference, null, 2));
@@ -88,7 +90,6 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       init_point: response.init_point,
-      sandbox_init_point: response.sandbox_init_point,
       id: response.id
     });
 
