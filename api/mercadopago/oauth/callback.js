@@ -23,8 +23,10 @@ async function saveToken(tokenData) {
     try {
       const content = await fs.readFile(TOKEN_FILE_PATH, 'utf8');
       console.log('[OAuth] Conteúdo do arquivo:', content);
+      return true;
     } catch (err) {
       console.error('[OAuth] Erro ao ler arquivo após salvar:', err);
+      return false;
     }
   } catch (error) {
     console.error('[OAuth] Erro ao salvar token:', error);
@@ -33,6 +35,12 @@ async function saveToken(tokenData) {
 }
 
 export default async function handler(req, res) {
+  console.log('[OAuth] Callback recebido:', {
+    method: req.method,
+    query: req.query,
+    headers: req.headers
+  });
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Método não permitido' });
   }
@@ -41,14 +49,17 @@ export default async function handler(req, res) {
 
   if (error) {
     console.error('[OAuth] Erro na autorização:', error);
-    return res.status(400).json({ error: 'Erro na autorização' });
+    return res.status(400).json({ error: 'Erro na autorização', details: error });
   }
 
   if (!code) {
+    console.error('[OAuth] Código de autorização não fornecido');
     return res.status(400).json({ error: 'Código de autorização não fornecido' });
   }
 
   try {
+    console.log('[OAuth] Iniciando troca de código por token');
+    
     // Trocar o código de autorização por um token de acesso
     const oauth = new OAuth(client);
     const response = await oauth.create({
@@ -61,6 +72,16 @@ export default async function handler(req, res) {
       }
     });
 
+    console.log('[OAuth] Resposta do Mercado Pago:', JSON.stringify(response, null, 2));
+
+    if (!response || !response.access_token) {
+      console.error('[OAuth] Resposta inválida do Mercado Pago');
+      return res.status(500).json({ 
+        error: 'Resposta inválida do Mercado Pago',
+        response: response 
+      });
+    }
+
     // Salvar o token
     const tokenData = {
       access_token: response.access_token,
@@ -70,7 +91,12 @@ export default async function handler(req, res) {
       created_at: new Date().toISOString()
     };
 
-    await saveToken(tokenData);
+    const saved = await saveToken(tokenData);
+    if (!saved) {
+      console.error('[OAuth] Falha ao salvar o token');
+      return res.status(500).json({ error: 'Falha ao salvar o token' });
+    }
+
     console.log('[OAuth] Token obtido e salvo com sucesso:', { user_id: tokenData.user_id });
 
     // Retornar uma página HTML com a mensagem de sucesso
@@ -134,6 +160,11 @@ export default async function handler(req, res) {
     `);
   } catch (error) {
     console.error('[OAuth] Erro ao obter token:', error);
-    res.status(500).json({ error: 'Erro ao obter token de acesso' });
+    console.error('[OAuth] Stack trace:', error.stack);
+    return res.status(500).json({ 
+      error: 'Erro ao obter token de acesso',
+      message: error.message,
+      details: error.response?.data || error
+    });
   }
 } 

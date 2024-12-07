@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import fs from 'fs/promises';
 import path from 'path';
@@ -10,25 +9,38 @@ async function getStoredToken() {
   try {
     console.log('[Webhook] Tentando ler token de:', TOKEN_FILE_PATH);
     const tokenData = JSON.parse(await fs.readFile(TOKEN_FILE_PATH, 'utf8'));
-    console.log('[Webhook] Token encontrado');
+    console.log('[Webhook] Token encontrado:', { user_id: tokenData.user_id });
     
     // Verificar se o token ainda é válido
     const createdAt = new Date(tokenData.created_at);
     const expiresIn = tokenData.expires_in * 1000; // converter para milissegundos
     const now = new Date();
+    const timeUntilExpiry = (createdAt.getTime() + expiresIn) - now.getTime();
     
+    console.log('[Webhook] Status do token:', {
+      createdAt: createdAt.toISOString(),
+      expiresIn: expiresIn / 1000 / 60 / 60 + ' horas',
+      timeUntilExpiry: timeUntilExpiry / 1000 / 60 / 60 + ' horas'
+    });
+
     // Se o token vai expirar em menos de 1 hora, tentar renovar
     const oneHour = 60 * 60 * 1000;
-    if (now.getTime() - createdAt.getTime() > (expiresIn - oneHour)) {
+    if (timeUntilExpiry < oneHour) {
       console.log('[Webhook] Token próximo de expirar, tentando renovar');
       try {
         const response = await fetch('https://dancing-webapp.com.br/api/mercadopago/oauth/refresh', {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
         
         if (!response.ok) {
-          throw new Error('Falha ao renovar token');
+          throw new Error(`Falha ao renovar token: ${response.status} ${response.statusText}`);
         }
+        
+        const refreshResult = await response.json();
+        console.log('[Webhook] Token renovado com sucesso');
         
         // Ler o novo token
         const newTokenData = JSON.parse(await fs.readFile(TOKEN_FILE_PATH, 'utf8'));
@@ -36,9 +48,11 @@ async function getStoredToken() {
       } catch (refreshError) {
         console.error('[Webhook] Erro ao renovar token:', refreshError);
         // Se falhar a renovação, retorna o token atual se ainda for válido
-        if (now.getTime() - createdAt.getTime() <= expiresIn) {
+        if (timeUntilExpiry > 0) {
+          console.log('[Webhook] Usando token atual pois ainda é válido');
           return tokenData.access_token;
         }
+        console.error('[Webhook] Token expirado e não foi possível renovar');
         return null;
       }
     }
@@ -52,10 +66,13 @@ async function getStoredToken() {
 
 export default async function handler(req, res) {
   // Log inicial para debug
-  console.log('[Webhook] Requisição recebida');
-  console.log('[Webhook] Método:', req.method);
-  console.log('[Webhook] URL:', req.url);
-  console.log('[Webhook] Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('[Webhook] Requisição recebida:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    query: req.query,
+    body: req.body
+  });
 
   // Habilitar CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -96,8 +113,7 @@ export default async function handler(req, res) {
     });
 
     // Log do corpo da requisição
-    const rawBody = JSON.stringify(req.body);
-    console.log('[Webhook] Body:', rawBody);
+    console.log('[Webhook] Body:', JSON.stringify(req.body, null, 2));
 
     // Verificar tipo de notificação
     const type = req.query.type || req.query.topic || req.body.type || req.body.action;
