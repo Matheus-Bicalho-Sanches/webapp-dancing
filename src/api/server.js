@@ -82,6 +82,44 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
   }
 });
 
+// Rotas de retorno do Mercado Pago
+app.get('/success', (req, res) => {
+  console.log('Pagamento bem-sucedido:', req.query);
+  res.redirect('/#/payment-success');
+});
+
+app.get('/failure', (req, res) => {
+  console.log('Pagamento falhou:', req.query);
+  res.redirect('/#/payment-failure');
+});
+
+app.get('/pending', (req, res) => {
+  console.log('Pagamento pendente:', req.query);
+  res.redirect('/#/payment-pending');
+});
+
+// Webhook do Mercado Pago
+app.post('/api/mercadopago/webhook', async (req, res) => {
+  try {
+    console.log('Webhook recebido:', req.body);
+    
+    const { type, data } = req.body;
+    
+    if (type === 'payment') {
+      const paymentId = data.id;
+      console.log('ID do pagamento:', paymentId);
+      
+      // Aqui você pode adicionar a lógica para atualizar o status do pagamento no seu banco de dados
+      // Por exemplo, atualizar o status da matrícula do aluno
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Erro no webhook:', error);
+    res.status(500).json({ error: 'Erro ao processar webhook' });
+  }
+});
+
 // Tratamento de erros
 app.use((err, req, res, next) => {
   console.error('Erro na aplicação:', err);
