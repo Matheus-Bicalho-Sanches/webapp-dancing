@@ -14,9 +14,30 @@ async function getStoredToken() {
     const expiresIn = tokenData.expires_in * 1000; // converter para milissegundos
     const now = new Date();
     
-    if (now.getTime() - createdAt.getTime() > expiresIn) {
-      console.warn('[Webhook] Token expirado, necessário reautorizar');
-      return null;
+    // Se o token vai expirar em menos de 1 hora, tentar renovar
+    const oneHour = 60 * 60 * 1000;
+    if (now.getTime() - createdAt.getTime() > (expiresIn - oneHour)) {
+      console.log('[Webhook] Token próximo de expirar, tentando renovar');
+      try {
+        const response = await fetch('/api/mercadopago/oauth/refresh', {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Falha ao renovar token');
+        }
+        
+        // Ler o novo token
+        const newTokenData = JSON.parse(await fs.readFile(tokenFilePath, 'utf8'));
+        return newTokenData.access_token;
+      } catch (refreshError) {
+        console.error('[Webhook] Erro ao renovar token:', refreshError);
+        // Se falhar a renovação, retorna o token atual se ainda for válido
+        if (now.getTime() - createdAt.getTime() <= expiresIn) {
+          return tokenData.access_token;
+        }
+        return null;
+      }
     }
     
     return tokenData.access_token;
