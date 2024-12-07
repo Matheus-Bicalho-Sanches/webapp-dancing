@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       payment_methods: {
         excluded_payment_methods: [],
         excluded_payment_types: [],
-        installments: 1
+        installments: 12
       },
       back_urls: {
         success: `${process.env.NEXT_PUBLIC_API_URL}/success`,
@@ -48,18 +48,14 @@ export default async function handler(req, res) {
     const preferenceClient = new Preference(client);
     const response = await preferenceClient.create({ body: preference });
     
-    console.log('Preferência criada - response completo:', JSON.stringify(response, null, 2));
-
-    // Extrair o ID da preferência da URL do sandbox
-    const sandboxUrl = response.response.sandbox_init_point;
-    const preferenceId = sandboxUrl.split('pref_id=')[1];
+    console.log('Preferência criada:', JSON.stringify(response, null, 2));
 
     // Retornar a resposta com o formato correto
     return res.status(200).json({
       success: true,
-      preferenceId: preferenceId,
-      init_point: response.response.init_point,
-      sandbox_init_point: response.response.sandbox_init_point
+      init_point: response.init_point,
+      sandbox_init_point: response.sandbox_init_point,
+      preferenceId: response.id
     });
 
   } catch (error) {
