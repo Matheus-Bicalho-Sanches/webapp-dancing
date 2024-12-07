@@ -1,4 +1,4 @@
-import { getLogs } from './logger';
+import { getLogs } from './logger.js';
 
 export default async function handler(req, res) {
   // Habilitar CORS

@@ -1,7 +1,7 @@
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import fs from 'fs/promises';
 import path from 'path';
-import { logWebhook, logError, logPaymentEvent } from './logger';
+import { logWebhook, logError, logPaymentEvent } from './logger.js';
 
 const TOKEN_FILE_PATH = '/tmp/mp_token.json';
 

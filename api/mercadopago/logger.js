@@ -1,5 +1,5 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 const LOG_FILE = '/tmp/mp_payment_logs.json';
 
