@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Dashboard from './pages/admin/Dashboard';
 import IndividualClasses from './pages/admin/IndividualClasses';
 import Schedule from './pages/public/Schedule';
+import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           {/* Rotas Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/agendar" element={<Schedule />} />
+          <Route path="/payment-failure" element={<PaymentFailure />} />
           
           {/* Rotas Administrativas */}
           <Route 

@@ -53,17 +53,28 @@ export default async function handler(req, res) {
       payer: {
         name: payer?.name || '',
         email: payer?.email || '',
-        identification: payer?.identification || {}
+        identification: payer?.identification || {},
+        address: payer?.address || {},
+        phone: payer?.phone || {},
+        date_created: new Date().toISOString()
+      },
+      payment_methods: {
+        excluded_payment_methods: [],
+        excluded_payment_types: [],
+        installments: 12,
+        default_installments: 1
       },
       back_urls: {
         success: `${process.env.NEXT_PUBLIC_API_URL}/success`,
-        failure: `${process.env.NEXT_PUBLIC_API_URL}/failure`,
+        failure: `${process.env.NEXT_PUBLIC_API_URL}/payment-failure`,
         pending: `${process.env.NEXT_PUBLIC_API_URL}/pending`
       },
       auto_return: "approved",
       notification_url: `${process.env.NEXT_PUBLIC_API_URL}/api/mercadopago/webhook`,
       statement_descriptor: "Dancing Patinação",
-      external_reference: new Date().getTime().toString()
+      external_reference: new Date().getTime().toString(),
+      expires: false,
+      binary_mode: false
     };
 
     console.log('[Payment] Criando preferência:', JSON.stringify(preference, null, 2));
