@@ -36,11 +36,13 @@ app.get('/api/test', (req, res) => {
 // Rota para criar preferência de pagamento
 app.post('/api/mercadopago/create-preference', async (req, res) => {
   try {
-    console.log('Recebendo requisição:', req.body);
+    console.log('[Payment] Nova requisição de pagamento recebida');
+    console.log('[Payment] Dados da requisição:', JSON.stringify(req.body, null, 2));
     
     const { items, payer } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
+      console.log('[Payment] Erro: Items inválidos');
       return res.status(400).json({
         error: 'Items inválidos',
         details: 'O array de items é obrigatório e não pode estar vazio'
@@ -62,12 +64,13 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
       external_reference: new Date().getTime().toString()
     };
 
-    console.log('Criando preferência:', preference);
+    console.log('[Payment] Criando preferência:', JSON.stringify(preference, null, 2));
 
     const preferenceClient = new Preference(client);
     const response = await preferenceClient.create({ body: preference });
     
-    console.log('Preferência criada:', JSON.stringify(response, null, 2));
+    console.log('[Payment] Preferência criada com sucesso');
+    console.log('[Payment] Resposta do Mercado Pago:', JSON.stringify(response, null, 2));
 
     // Retornar a resposta com o formato correto
     return res.status(200).json({
@@ -78,7 +81,8 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao criar preferência:', error);
+    console.error('[Payment] Erro ao criar preferência:', error);
+    console.error('[Payment] Stack trace:', error.stack);
     return res.status(500).json({
       error: 'Erro ao criar preferência de pagamento',
       details: error.message
@@ -88,30 +92,35 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
 
 // Rotas de retorno do Mercado Pago
 app.get('/success', (req, res) => {
-  console.log('Pagamento bem-sucedido:', req.query);
+  console.log('[Payment] Pagamento bem-sucedido');
+  console.log('[Payment] Dados do retorno:', JSON.stringify(req.query, null, 2));
   res.redirect('/#/payment-success');
 });
 
 app.get('/failure', (req, res) => {
-  console.log('Pagamento falhou:', req.query);
+  console.log('[Payment] Pagamento falhou');
+  console.log('[Payment] Dados do retorno:', JSON.stringify(req.query, null, 2));
   res.redirect('/#/payment-failure');
 });
 
 app.get('/pending', (req, res) => {
-  console.log('Pagamento pendente:', req.query);
+  console.log('[Payment] Pagamento pendente');
+  console.log('[Payment] Dados do retorno:', JSON.stringify(req.query, null, 2));
   res.redirect('/#/payment-pending');
 });
 
 // Webhook do Mercado Pago
 app.post('/api/mercadopago/webhook', async (req, res) => {
   try {
-    console.log('Webhook recebido:', req.body);
+    console.log('[Webhook] Notificação recebida do Mercado Pago');
+    console.log('[Webhook] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[Webhook] Corpo da requisição:', JSON.stringify(req.body, null, 2));
     
     const { type, data } = req.body;
     
     if (type === 'payment') {
       const paymentId = data.id;
-      console.log('ID do pagamento:', paymentId);
+      console.log('[Webhook] Notificação de pagamento recebida. ID:', paymentId);
       
       // Aqui você pode adicionar a lógica para atualizar o status do pagamento no seu banco de dados
       // Por exemplo, atualizar o status da matrícula do aluno
@@ -119,7 +128,8 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
     
     res.status(200).send('OK');
   } catch (error) {
-    console.error('Erro no webhook:', error);
+    console.error('[Webhook] Erro ao processar webhook:', error);
+    console.error('[Webhook] Stack trace:', error.stack);
     res.status(500).json({ error: 'Erro ao processar webhook' });
   }
 });
