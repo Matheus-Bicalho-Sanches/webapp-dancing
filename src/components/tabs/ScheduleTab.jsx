@@ -461,10 +461,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       console.log('Resposta da criação de preferência:', data);
       
       if (data.success) {
-        // Redirecionar para o sandbox em desenvolvimento ou produção em produção
-        const redirectUrl = import.meta.env.MODE === 'development' 
-          ? data.sandbox_init_point 
-          : data.init_point;
+        // Em produção, sempre usar init_point
+        const redirectUrl = data.init_point;
           
         if (redirectUrl) {
           window.location.href = redirectUrl;
