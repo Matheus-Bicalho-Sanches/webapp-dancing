@@ -3,63 +3,47 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 import fs from 'fs/promises';
 import path from 'path';
 
+const TOKEN_FILE_PATH = '/tmp/mp_token.json';
+
 // Função para ler o token salvo
 async function getStoredToken() {
   try {
-    // Tentar diferentes caminhos para ler o token
-    const possiblePaths = [
-      path.join(process.cwd(), 'mp_token.json'),
-      path.join('/tmp', 'mp_token.json'),
-      './mp_token.json'
-    ];
-
-    console.log('[Webhook] Procurando token nos seguintes caminhos:', possiblePaths);
-
-    for (const tokenFilePath of possiblePaths) {
+    console.log('[Webhook] Tentando ler token de:', TOKEN_FILE_PATH);
+    const tokenData = JSON.parse(await fs.readFile(TOKEN_FILE_PATH, 'utf8'));
+    console.log('[Webhook] Token encontrado');
+    
+    // Verificar se o token ainda é válido
+    const createdAt = new Date(tokenData.created_at);
+    const expiresIn = tokenData.expires_in * 1000; // converter para milissegundos
+    const now = new Date();
+    
+    // Se o token vai expirar em menos de 1 hora, tentar renovar
+    const oneHour = 60 * 60 * 1000;
+    if (now.getTime() - createdAt.getTime() > (expiresIn - oneHour)) {
+      console.log('[Webhook] Token próximo de expirar, tentando renovar');
       try {
-        console.log(`[Webhook] Tentando ler de: ${tokenFilePath}`);
-        const tokenData = JSON.parse(await fs.readFile(tokenFilePath, 'utf8'));
-        console.log(`[Webhook] Token encontrado em: ${tokenFilePath}`);
+        const response = await fetch('https://dancing-webapp.com.br/api/mercadopago/oauth/refresh', {
+          method: 'POST'
+        });
         
-        // Verificar se o token ainda é válido
-        const createdAt = new Date(tokenData.created_at);
-        const expiresIn = tokenData.expires_in * 1000; // converter para milissegundos
-        const now = new Date();
-        
-        // Se o token vai expirar em menos de 1 hora, tentar renovar
-        const oneHour = 60 * 60 * 1000;
-        if (now.getTime() - createdAt.getTime() > (expiresIn - oneHour)) {
-          console.log('[Webhook] Token próximo de expirar, tentando renovar');
-          try {
-            const response = await fetch('/api/mercadopago/oauth/refresh', {
-              method: 'POST'
-            });
-            
-            if (!response.ok) {
-              throw new Error('Falha ao renovar token');
-            }
-            
-            // Ler o novo token
-            const newTokenData = JSON.parse(await fs.readFile(tokenFilePath, 'utf8'));
-            return newTokenData.access_token;
-          } catch (refreshError) {
-            console.error('[Webhook] Erro ao renovar token:', refreshError);
-            // Se falhar a renovação, retorna o token atual se ainda for válido
-            if (now.getTime() - createdAt.getTime() <= expiresIn) {
-              return tokenData.access_token;
-            }
-            return null;
-          }
+        if (!response.ok) {
+          throw new Error('Falha ao renovar token');
         }
         
-        return tokenData.access_token;
-      } catch (err) {
-        console.log(`[Webhook] Não foi possível ler ${tokenFilePath}:`, err.message);
+        // Ler o novo token
+        const newTokenData = JSON.parse(await fs.readFile(TOKEN_FILE_PATH, 'utf8'));
+        return newTokenData.access_token;
+      } catch (refreshError) {
+        console.error('[Webhook] Erro ao renovar token:', refreshError);
+        // Se falhar a renovação, retorna o token atual se ainda for válido
+        if (now.getTime() - createdAt.getTime() <= expiresIn) {
+          return tokenData.access_token;
+        }
+        return null;
       }
     }
     
-    console.error('[Webhook] Token não encontrado em nenhum caminho');
-    return null;
+    return tokenData.access_token;
   } catch (error) {
     console.error('[Webhook] Erro ao ler token:', error);
     return null;

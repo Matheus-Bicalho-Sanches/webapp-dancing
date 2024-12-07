@@ -5,6 +5,7 @@ import path from 'path';
 const CLIENT_ID = '6064176381936791';
 const CLIENT_SECRET = process.env.MERCADOPAGO_CLIENT_SECRET;
 const REDIRECT_URI = 'https://dancing-webapp.com.br/api/mercadopago/oauth/callback';
+const TOKEN_FILE_PATH = '/tmp/mp_token.json';
 
 // Configurar o cliente do Mercado Pago
 const client = new MercadoPagoConfig({
@@ -14,43 +15,16 @@ const client = new MercadoPagoConfig({
 // Função para salvar o token
 async function saveToken(tokenData) {
   try {
-    // Tentar diferentes caminhos para salvar o token
-    const possiblePaths = [
-      path.join(process.cwd(), 'mp_token.json'),
-      path.join('/tmp', 'mp_token.json'),
-      './mp_token.json'
-    ];
-
-    console.log('[OAuth] Tentando salvar token nos seguintes caminhos:', possiblePaths);
-
-    let savedSuccessfully = false;
-    let errors = [];
-
-    for (const tokenFilePath of possiblePaths) {
-      try {
-        console.log(`[OAuth] Tentando salvar em: ${tokenFilePath}`);
-        await fs.writeFile(tokenFilePath, JSON.stringify(tokenData, null, 2));
-        console.log(`[OAuth] Token salvo com sucesso em: ${tokenFilePath}`);
-        savedSuccessfully = true;
-        break;
-      } catch (err) {
-        console.error(`[OAuth] Erro ao salvar em ${tokenFilePath}:`, err);
-        errors.push({ path: tokenFilePath, error: err.message });
-      }
-    }
-
-    if (!savedSuccessfully) {
-      throw new Error(`Falha ao salvar token em todos os caminhos. Erros: ${JSON.stringify(errors)}`);
-    }
-
-    // Tentar ler o arquivo para confirmar
-    for (const tokenFilePath of possiblePaths) {
-      try {
-        const content = await fs.readFile(tokenFilePath, 'utf8');
-        console.log(`[OAuth] Conteúdo do arquivo ${tokenFilePath}:`, content);
-      } catch (err) {
-        console.log(`[OAuth] Não foi possível ler ${tokenFilePath}:`, err.message);
-      }
+    console.log('[OAuth] Salvando token em:', TOKEN_FILE_PATH);
+    await fs.writeFile(TOKEN_FILE_PATH, JSON.stringify(tokenData, null, 2));
+    console.log('[OAuth] Token salvo com sucesso');
+    
+    // Verificar se o arquivo foi salvo corretamente
+    try {
+      const content = await fs.readFile(TOKEN_FILE_PATH, 'utf8');
+      console.log('[OAuth] Conteúdo do arquivo:', content);
+    } catch (err) {
+      console.error('[OAuth] Erro ao ler arquivo após salvar:', err);
     }
   } catch (error) {
     console.error('[OAuth] Erro ao salvar token:', error);
