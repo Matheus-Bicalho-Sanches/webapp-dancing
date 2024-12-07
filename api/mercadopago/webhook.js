@@ -1,7 +1,35 @@
 import crypto from 'crypto';
+import { MercadoPagoConfig, OAuth } from 'mercadopago';
 
-// Assinatura secreta do webhook
+// Configurações do Mercado Pago
 const WEBHOOK_SECRET = '8176de12b3ec21fb29a38d9b10a1573f21361a98e5f30b9068a55c8d19826bcf';
+const CLIENT_ID = process.env.MERCADOPAGO_CLIENT_ID;
+const CLIENT_SECRET = process.env.MERCADOPAGO_CLIENT_SECRET;
+
+// Configurar o cliente do Mercado Pago
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
+  clientId: CLIENT_ID,
+  clientSecret: CLIENT_SECRET
+});
+
+// Função para obter token OAuth
+async function getOAuthToken() {
+  try {
+    const oauth = new OAuth(client);
+    const response = await oauth.create({
+      body: {
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        grant_type: 'authorization_code'
+      }
+    });
+    return response.access_token;
+  } catch (error) {
+    console.error('[OAuth] Erro ao obter token:', error);
+    throw error;
+  }
+}
 
 export default async function handler(req, res) {
   // Log inicial para debug
@@ -16,7 +44,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-Signature, X-Hub-Signature, User-Agent'
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-Signature, X-Hub-Signature, User-Agent, Authorization'
   );
 
   // Preflight request
@@ -33,6 +61,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Tentar obter token OAuth
+    try {
+      const oauthToken = await getOAuthToken();
+      console.log('[OAuth] Token obtido com sucesso');
+    } catch (oauthError) {
+      console.error('[OAuth] Erro na autenticação:', oauthError);
+    }
+
     // Log do corpo da requisição
     const rawBody = JSON.stringify(req.body);
     console.log('[Webhook] Body:', rawBody);
