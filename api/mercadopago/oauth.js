@@ -1,15 +1,7 @@
 import { MercadoPagoConfig, OAuth } from 'mercadopago';
 
-const CLIENT_ID = process.env.MERCADOPAGO_CLIENT_ID;
-const CLIENT_SECRET = process.env.MERCADOPAGO_CLIENT_SECRET;
-const REDIRECT_URI = `${process.env.NEXT_PUBLIC_API_URL}/api/mercadopago/oauth/callback`;
-
-// Configurar o cliente do Mercado Pago
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
-  clientId: CLIENT_ID,
-  clientSecret: CLIENT_SECRET
-});
+const CLIENT_ID = '6064176381936791'; // ID da aplicação que aparece na sua tela
+const REDIRECT_URI = 'https://dancing-webapp.com.br/api/mercadopago/oauth/callback';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
