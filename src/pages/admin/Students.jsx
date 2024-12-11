@@ -18,16 +18,22 @@ import {
   TextField,
   Box,
   Stack,
-  CircularProgress
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useNavigate } from 'react-router-dom';
 
 export default function Students() {
+  const navigate = useNavigate();
   const [students, setStudents] = useState([]);
+  const [filteredStudents, setFilteredStudents] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -48,6 +54,14 @@ export default function Students() {
     loadStudents();
   }, []);
 
+  useEffect(() => {
+    // Filtrar alunos quando o termo de pesquisa mudar
+    const filtered = students.filter(student =>
+      student.nome.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredStudents(filtered);
+  }, [searchTerm, students]);
+
   const loadStudents = async () => {
     try {
       setLoading(true);
@@ -58,12 +72,22 @@ export default function Students() {
         ...doc.data()
       }));
       setStudents(studentsData);
+      setFilteredStudents(studentsData);
     } catch (error) {
       console.error('Erro ao carregar alunos:', error);
       showNotification('Erro ao carregar alunos', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleRowClick = (student) => {
+    // Abrir perfil do aluno em nova aba
+    window.open(`/admin/alunos/${student.id}`, '_blank');
   };
 
   const showNotification = (message, severity = 'success') => {
@@ -155,8 +179,25 @@ export default function Students() {
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          mb: 3 
+          mb: 3,
+          gap: 2
         }}>
+          <TextField
+            placeholder="Pesquisar aluno..."
+            variant="outlined"
+            size="small"
+            fullWidth
+            value={searchTerm}
+            onChange={handleSearchChange}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ maxWidth: 300 }}
+          />
           <Button 
             variant="contained" 
             startIcon={<AddIcon />}
@@ -183,8 +224,17 @@ export default function Students() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
+                {filteredStudents.map((student) => (
+                  <TableRow 
+                    key={student.id}
+                    onClick={() => handleRowClick(student)}
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': { 
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
+                  >
                     <TableCell>{student.nome}</TableCell>
                     <TableCell>{student.email}</TableCell>
                     <TableCell>{student.telefone}</TableCell>
@@ -192,23 +242,29 @@ export default function Students() {
                     <TableCell align="right">
                       <IconButton 
                         color="primary"
-                        onClick={() => handleEditClick(student)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClick(student);
+                        }}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton 
                         color="error"
-                        onClick={() => handleDeleteClick(student)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(student);
+                        }}
                       >
                         <DeleteIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
-                {students.length === 0 && (
+                {filteredStudents.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
-                      Nenhum aluno cadastrado
+                      {searchTerm ? 'Nenhum aluno encontrado' : 'Nenhum aluno cadastrado'}
                     </TableCell>
                   </TableRow>
                 )}
