@@ -41,14 +41,20 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
     
-    // Regras para agendamentos
+    // Regras para horários
+    match /horarios/{horarioId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Regras para agendamentos e seus horários
     match /agendamentos/{agendamentoId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isCurrentUserMaster();
+      allow write: if isAuthenticated();
       
       match /horarios/{horarioId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isCurrentUserMaster();
+        allow write: if isAuthenticated();
       }
     }
     

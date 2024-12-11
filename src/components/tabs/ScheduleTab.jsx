@@ -495,15 +495,31 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         return;
       }
 
+      setSaving(true);
+
       if (isPublic) {
         await createPreference();
       } else {
-        // Lógica existente para admin
-        // ... resto do código para admin ...
+        // Preparar dados do agendamento
+        const agendamentoData = {
+          ...agendamentoForm,
+          horarios: Object.values(selectedTeachers).map(slot => ({
+            data: slot.date,
+            horario: slot.horario,
+            professorId: slot.professorId,
+            professorNome: slot.professorNome
+          }))
+        };
+
+        // Chamar a função saveAgendamento passada como prop
+        await saveAgendamento(agendamentoData);
+        handleCloseAgendamento();
       }
     } catch (error) {
       console.error('Erro:', error);
       showNotification('Erro ao processar agendamento', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
