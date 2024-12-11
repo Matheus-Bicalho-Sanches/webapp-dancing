@@ -41,32 +41,32 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
     
-    // Regras para horários
+    // Regras para horários - permitir leitura pública
     match /horarios/{horarioId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated();
     }
     
-    // Regras para agendamentos e seus horários
+    // Regras para agendamentos e seus horários - permitir leitura pública
     match /agendamentos/{agendamentoId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if true; // Permitir leitura pública para verificar horários ocupados
+      allow write: if true; // Permitir criação de agendamentos sem autenticação
       
       match /horarios/{horarioId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read: if true; // Permitir leitura pública dos horários dos agendamentos
+        allow write: if true; // Permitir criação de horários de agendamento sem autenticação
       }
     }
     
-    // Regras para professores
+    // Regras para professores - permitir leitura pública
     match /professores/{professorId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
     
-    // Regras para valores das aulas
+    // Regras para valores das aulas - permitir leitura pública
     match /valores_aulas/{valorId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
   }
