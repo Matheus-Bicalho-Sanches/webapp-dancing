@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Dashboard from './pages/admin/Dashboard';
 import IndividualClasses from './pages/admin/IndividualClasses';
+import Users from './pages/admin/Users';
 import Schedule from './pages/public/Schedule';
 import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
@@ -32,6 +33,14 @@ function App() {
             element={
               <PrivateRoute>
                 <IndividualClasses />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/usuarios" 
+            element={
+              <PrivateRoute>
+                <Users />
               </PrivateRoute>
             } 
           />

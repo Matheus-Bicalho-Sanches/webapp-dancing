@@ -19,6 +19,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PersonIcon from '@mui/icons-material/Person';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import GroupIcon from '@mui/icons-material/Group';
 
 const drawerWidth = 240;
 
@@ -46,6 +47,11 @@ export default function MainLayout({ children, title }) {
       text: 'Aulas Individuais',
       icon: <PersonIcon />,
       path: '/admin/aulas'
+    },
+    {
+      text: 'Usuários',
+      icon: <GroupIcon />,
+      path: '/admin/usuarios'
     }
   ];
 
