@@ -57,6 +57,11 @@ export default function Users() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Debug log para currentUser
+  useEffect(() => {
+    console.log('Current User:', currentUser);
+  }, [currentUser]);
+
   // Carregar usuários
   useEffect(() => {
     loadUsers();
@@ -65,15 +70,27 @@ export default function Users() {
   const loadUsers = async () => {
     try {
       const data = await listUsers();
+      console.log('Usuários carregados:', data);
       setUsers(data);
     } catch (error) {
       setError('Erro ao carregar usuários');
-      console.error(error);
+      console.error('Erro ao carregar usuários:', error);
     }
+  };
+
+  // Verificar se o usuário é master
+  const isMasterUser = () => {
+    const isMaster = currentUser?.userType === 'master';
+    console.log('Verificação de Master:', { 
+      userType: currentUser?.userType, 
+      isMaster 
+    });
+    return isMaster;
   };
 
   // Handlers
   const handleOpenCreateDialog = () => {
+    console.log('Abrindo diálogo de criação. É master?', isMasterUser());
     setFormData({
       name: '',
       email: '',
@@ -85,6 +102,7 @@ export default function Users() {
   };
 
   const handleOpenEditDialog = (user) => {
+    console.log('Abrindo diálogo de edição:', { user, isMaster: isMasterUser() });
     setSelectedUser(user);
     setFormData({
       name: user.name,
@@ -282,14 +300,14 @@ export default function Users() {
                   <IconButton 
                     onClick={() => handleOpenEditDialog(user)} 
                     color="primary"
-                    disabled={loading || (user.userType === 'master' && currentUser?.userType !== 'master')}
+                    disabled={!isMasterUser() && user.userType === 'master'}
                   >
                     <EditIcon />
                   </IconButton>
                   <IconButton 
                     onClick={() => handleDelete(user.id)} 
                     color="error"
-                    disabled={loading || currentUser?.userType !== 'master'}
+                    disabled={!isMasterUser()}
                   >
                     <DeleteIcon />
                   </IconButton>

@@ -118,23 +118,37 @@ export const updateUser = async (userId, userData) => {
 // Função para excluir um usuário
 export const deleteUser = async (userId) => {
   try {
+    console.log('Iniciando exclusão do usuário:', userId);
+
     // 1. Obter o documento do usuário
-    const userDoc = await getDocs(query(
-      collection(db, USERS_COLLECTION),
-      where('id', '==', userId)
-    ));
+    const userDocRef = doc(db, USERS_COLLECTION, userId);
+    const userDoc = await getDoc(userDocRef);
 
-    if (!userDoc.empty) {
-      const user = userDoc.docs[0].data();
-      
-      // 2. Excluir usuário do Authentication
-      if (user.uid) {
-        await deleteAuthUser(auth.currentUser);
-      }
-
-      // 3. Excluir documento do Firestore
-      await deleteDoc(doc(db, USERS_COLLECTION, userId));
+    if (!userDoc.exists()) {
+      throw new Error('Usuário não encontrado');
     }
+
+    const userData = userDoc.data();
+    console.log('Dados do usuário encontrados:', userData);
+
+    // 2. Se o usuário tiver um UID do Authentication, tentar excluí-lo
+    if (userData.uid) {
+      try {
+        // Primeiro, precisamos obter uma referência ao usuário no Authentication
+        const userAuth = await getAuth().getUser(userData.uid);
+        if (userAuth) {
+          await getAuth().deleteUser(userData.uid);
+          console.log('Usuário excluído do Authentication');
+        }
+      } catch (authError) {
+        console.error('Erro ao excluir usuário do Authentication:', authError);
+        // Continuar mesmo se falhar no Authentication, para garantir a limpeza do Firestore
+      }
+    }
+
+    // 3. Excluir documento do Firestore
+    await deleteDoc(userDocRef);
+    console.log('Documento excluído do Firestore');
 
     return true;
   } catch (error) {
@@ -219,6 +233,29 @@ export const setUserAsMaster = async (uid) => {
     return true;
   } catch (error) {
     console.error('Erro ao definir usuário como master:', error);
+    throw error;
+  }
+};
+
+// Função para atualizar dados básicos do usuário
+export const updateUserBasicInfo = async (uid, userData) => {
+  try {
+    if (!uid) {
+      throw new Error('UID não fornecido');
+    }
+
+    const userDocRef = doc(db, USERS_COLLECTION, uid);
+    await setDoc(userDocRef, {
+      name: userData.name,
+      email: userData.email,
+      whatsapp: userData.whatsapp,
+      updatedAt: new Date().toISOString()
+    }, { merge: true }); // merge: true mantém os outros campos existentes
+
+    console.log('Dados do usuário atualizados com sucesso');
+    return true;
+  } catch (error) {
+    console.error('Erro ao atualizar dados do usuário:', error);
     throw error;
   }
 }; 

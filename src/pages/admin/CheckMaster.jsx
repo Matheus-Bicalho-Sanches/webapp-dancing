@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { checkCurrentUserType, setUserAsMaster } from '../../services/userService';
+import { 
+  checkCurrentUserType, 
+  setUserAsMaster, 
+  updateUserBasicInfo 
+} from '../../services/userService';
 import { 
   Box, 
   Typography, 
   Button, 
   Paper,
-  Alert
+  Alert,
+  TextField,
+  Stack
 } from '@mui/material';
 
 export default function CheckMaster() {
@@ -15,10 +21,25 @@ export default function CheckMaster() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [userData, setUserData] = useState({
+    name: '',
+    email: '',
+    whatsapp: ''
+  });
 
   useEffect(() => {
     checkUser();
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      setUserData({
+        name: currentUser.name || '',
+        email: currentUser.email || '',
+        whatsapp: currentUser.whatsapp || ''
+      });
+    }
+  }, [currentUser]);
 
   const checkUser = async () => {
     if (!currentUser?.uid) return;
@@ -48,6 +69,28 @@ export default function CheckMaster() {
     }
   };
 
+  const handleUpdateUserData = async () => {
+    if (!currentUser?.uid) return;
+
+    try {
+      setLoading(true);
+      await updateUserBasicInfo(currentUser.uid, userData);
+      setSuccess('Dados atualizados com sucesso!');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setUserData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   if (!currentUser) {
     return (
       <Box sx={{ p: 3 }}>
@@ -71,12 +114,34 @@ export default function CheckMaster() {
           <>
             <Box sx={{ mb: 2 }}>
               <Typography>
-                <strong>Email do usuário:</strong> {currentUser.email}
-              </Typography>
-              <Typography>
                 <strong>Tipo atual:</strong> {userType || 'Não definido'}
               </Typography>
             </Box>
+
+            <Stack spacing={2} sx={{ mb: 3 }}>
+              <TextField
+                label="Nome completo"
+                name="name"
+                value={userData.name}
+                onChange={handleInputChange}
+                fullWidth
+              />
+              <TextField
+                label="Email"
+                name="email"
+                value={userData.email}
+                onChange={handleInputChange}
+                fullWidth
+                disabled
+              />
+              <TextField
+                label="WhatsApp"
+                name="whatsapp"
+                value={userData.whatsapp}
+                onChange={handleInputChange}
+                fullWidth
+              />
+            </Stack>
 
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
@@ -90,16 +155,27 @@ export default function CheckMaster() {
               </Alert>
             )}
 
-            {userType !== 'master' && (
+            <Stack direction="row" spacing={2}>
+              {userType !== 'master' && (
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  onClick={handleSetMaster}
+                  disabled={loading}
+                >
+                  Definir como Master
+                </Button>
+              )}
+              
               <Button 
                 variant="contained" 
-                color="primary" 
-                onClick={handleSetMaster}
+                color="secondary" 
+                onClick={handleUpdateUserData}
                 disabled={loading}
               >
-                Definir como Master
+                Atualizar Dados
               </Button>
-            )}
+            </Stack>
           </>
         )}
       </Paper>
