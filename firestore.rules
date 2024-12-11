@@ -35,8 +35,8 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
     
-    // Regras para a coleção matriculas
-    match /matriculas/{matriculaId} {
+    // Regras para a coleção planos
+    match /planos/{planoId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }

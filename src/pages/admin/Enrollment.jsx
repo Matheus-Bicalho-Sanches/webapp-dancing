@@ -19,10 +19,6 @@ import {
   Box,
   Stack,
   CircularProgress,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
   InputAdornment
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -32,49 +28,32 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy,
 import { db } from '../../config/firebase';
 
 export default function Enrollment() {
-  const [enrollments, setEnrollments] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [editingEnrollment, setEditingEnrollment] = useState(null);
+  const [editingPlan, setEditingPlan] = useState(null);
   const [formData, setFormData] = useState({
-    alunoId: '',
+    nome: '',
     valor: '',
-    dataMatricula: new Date().toISOString().split('T')[0],
-    status: 'ativa'
+    descricao: ''
   });
 
   useEffect(() => {
-    loadEnrollments();
-    loadStudents();
+    loadPlans();
   }, []);
 
-  const loadStudents = async () => {
-    try {
-      const studentsQuery = query(collection(db, 'alunos'), orderBy('nome'));
-      const querySnapshot = await getDocs(studentsQuery);
-      const studentsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setStudents(studentsData);
-    } catch (error) {
-      console.error('Erro ao carregar alunos:', error);
-    }
-  };
-
-  const loadEnrollments = async () => {
+  const loadPlans = async () => {
     try {
       setLoading(true);
-      const enrollmentsQuery = query(collection(db, 'matriculas'));
-      const querySnapshot = await getDocs(enrollmentsQuery);
-      const enrollmentsData = querySnapshot.docs.map(doc => ({
+      const plansQuery = query(collection(db, 'planos'), orderBy('nome'));
+      const querySnapshot = await getDocs(plansQuery);
+      const plansData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setEnrollments(enrollmentsData);
+      setPlans(plansData);
     } catch (error) {
-      console.error('Erro ao carregar matrículas:', error);
+      console.error('Erro ao carregar planos:', error);
     } finally {
       setLoading(false);
     }
@@ -86,12 +65,11 @@ export default function Enrollment() {
 
   const handleClose = () => {
     setOpen(false);
-    setEditingEnrollment(null);
+    setEditingPlan(null);
     setFormData({
-      alunoId: '',
+      nome: '',
       valor: '',
-      dataMatricula: new Date().toISOString().split('T')[0],
-      status: 'ativa'
+      descricao: ''
     });
   };
 
@@ -103,24 +81,23 @@ export default function Enrollment() {
     }));
   };
 
-  const handleEditClick = (enrollment) => {
-    setEditingEnrollment(enrollment);
+  const handleEditClick = (plan) => {
+    setEditingPlan(plan);
     setFormData({
-      alunoId: enrollment.alunoId,
-      valor: enrollment.valor,
-      dataMatricula: enrollment.dataMatricula,
-      status: enrollment.status
+      nome: plan.nome,
+      valor: plan.valor,
+      descricao: plan.descricao || ''
     });
     setOpen(true);
   };
 
-  const handleDeleteClick = async (enrollment) => {
-    if (window.confirm('Tem certeza que deseja excluir esta matrícula?')) {
+  const handleDeleteClick = async (plan) => {
+    if (window.confirm('Tem certeza que deseja excluir este plano?')) {
       try {
-        await deleteDoc(doc(db, 'matriculas', enrollment.id));
-        loadEnrollments();
+        await deleteDoc(doc(db, 'planos', plan.id));
+        loadPlans();
       } catch (error) {
-        console.error('Erro ao excluir matrícula:', error);
+        console.error('Erro ao excluir plano:', error);
       }
     }
   };
@@ -128,32 +105,27 @@ export default function Enrollment() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     try {
-      const enrollmentData = {
+      const planData = {
         ...formData,
         updatedAt: serverTimestamp()
       };
 
-      if (editingEnrollment) {
-        await updateDoc(doc(db, 'matriculas', editingEnrollment.id), enrollmentData);
+      if (editingPlan) {
+        await updateDoc(doc(db, 'planos', editingPlan.id), planData);
       } else {
-        enrollmentData.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'matriculas'), enrollmentData);
+        planData.createdAt = serverTimestamp();
+        await addDoc(collection(db, 'planos'), planData);
       }
 
       handleClose();
-      loadEnrollments();
+      loadPlans();
     } catch (error) {
-      console.error('Erro ao salvar matrícula:', error);
+      console.error('Erro ao salvar plano:', error);
     }
   };
 
-  const getStudentName = (studentId) => {
-    const student = students.find(s => s.id === studentId);
-    return student ? student.nome : 'Aluno não encontrado';
-  };
-
   return (
-    <MainLayout title="Matrículas">
+    <MainLayout title="Planos de Matrícula">
       <Box sx={{ p: 3 }}>
         <Box sx={{ 
           display: 'flex', 
@@ -166,7 +138,7 @@ export default function Enrollment() {
             startIcon={<AddIcon />}
             onClick={handleOpen}
           >
-            Nova Matrícula
+            Novo Plano
           </Button>
         </Box>
 
@@ -179,45 +151,43 @@ export default function Enrollment() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Aluno</TableCell>
+                  <TableCell>Nome do Plano</TableCell>
                   <TableCell>Valor</TableCell>
-                  <TableCell>Data da Matrícula</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>Descrição</TableCell>
                   <TableCell align="right">Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {enrollments.map((enrollment) => (
-                  <TableRow key={enrollment.id}>
-                    <TableCell>{getStudentName(enrollment.alunoId)}</TableCell>
+                {plans.map((plan) => (
+                  <TableRow key={plan.id}>
+                    <TableCell>{plan.nome}</TableCell>
                     <TableCell>
-                      {Number(enrollment.valor).toLocaleString('pt-BR', {
+                      {Number(plan.valor).toLocaleString('pt-BR', {
                         style: 'currency',
                         currency: 'BRL'
                       })}
                     </TableCell>
-                    <TableCell>{enrollment.dataMatricula}</TableCell>
-                    <TableCell>{enrollment.status}</TableCell>
+                    <TableCell>{plan.descricao}</TableCell>
                     <TableCell align="right">
                       <IconButton 
                         color="primary"
-                        onClick={() => handleEditClick(enrollment)}
+                        onClick={() => handleEditClick(plan)}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton 
                         color="error"
-                        onClick={() => handleDeleteClick(enrollment)}
+                        onClick={() => handleDeleteClick(plan)}
                       >
                         <DeleteIcon />
                       </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
-                {enrollments.length === 0 && (
+                {plans.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      Nenhuma matrícula cadastrada
+                    <TableCell colSpan={4} align="center">
+                      Nenhum plano cadastrado
                     </TableCell>
                   </TableRow>
                 )}
@@ -233,26 +203,19 @@ export default function Enrollment() {
           fullWidth
         >
           <DialogTitle>
-            {editingEnrollment ? 'Editar Matrícula' : 'Nova Matrícula'}
+            {editingPlan ? 'Editar Plano' : 'Novo Plano'}
           </DialogTitle>
           <form onSubmit={handleSubmit}>
             <DialogContent>
               <Stack spacing={2}>
-                <FormControl fullWidth required>
-                  <InputLabel>Aluno</InputLabel>
-                  <Select
-                    name="alunoId"
-                    value={formData.alunoId}
-                    onChange={handleChange}
-                    label="Aluno"
-                  >
-                    {students.map((student) => (
-                      <MenuItem key={student.id} value={student.id}>
-                        {student.nome}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Nome do Plano"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleChange}
+                  required
+                />
 
                 <TextField
                   fullWidth
@@ -269,30 +232,13 @@ export default function Enrollment() {
 
                 <TextField
                   fullWidth
-                  label="Data da Matrícula"
-                  name="dataMatricula"
-                  type="date"
-                  value={formData.dataMatricula}
+                  label="Descrição"
+                  name="descricao"
+                  value={formData.descricao}
                   onChange={handleChange}
-                  required
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
+                  multiline
+                  rows={4}
                 />
-
-                <FormControl fullWidth required>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    label="Status"
-                  >
-                    <MenuItem value="ativa">Ativa</MenuItem>
-                    <MenuItem value="inativa">Inativa</MenuItem>
-                    <MenuItem value="cancelada">Cancelada</MenuItem>
-                  </Select>
-                </FormControl>
               </Stack>
             </DialogContent>
             <DialogActions>
