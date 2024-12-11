@@ -24,7 +24,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db } from '../../config/firebase';
 
 export default function Students() {
   const [students, setStudents] = useState([]);
