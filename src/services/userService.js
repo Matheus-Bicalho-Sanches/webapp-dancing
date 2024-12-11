@@ -6,7 +6,9 @@ import {
   deleteDoc, 
   doc, 
   query, 
-  where 
+  where, 
+  setDoc, 
+  getDoc 
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -43,8 +45,9 @@ export const createUser = async (userData) => {
       userData.password
     );
 
-    // 2. Criar documento do usuário no Firestore
-    const userDoc = await addDoc(collection(db, USERS_COLLECTION), {
+    // 2. Criar documento do usuário no Firestore usando o UID como ID do documento
+    const userDocRef = doc(db, USERS_COLLECTION, userCredential.user.uid);
+    await setDoc(userDocRef, {
       uid: userCredential.user.uid,
       name: userData.name,
       email: userData.email,
@@ -55,12 +58,18 @@ export const createUser = async (userData) => {
     });
 
     return {
-      id: userDoc.id,
+      id: userCredential.user.uid,
       uid: userCredential.user.uid,
       ...userData
     };
   } catch (error) {
     console.error('Erro ao criar usuário:', error);
+    // Se der erro, tentar limpar o usuário do Authentication
+    if (error.code === 'permission-denied') {
+      console.error('Erro de permissão no Firestore. Verificando permissões do usuário...');
+      const currentUserType = await checkCurrentUserType(auth.currentUser?.uid);
+      console.log('Tipo do usuário atual:', currentUserType);
+    }
     throw error;
   }
 };
@@ -163,6 +172,53 @@ export const markFirstAccessComplete = async (userId) => {
     });
   } catch (error) {
     console.error('Erro ao marcar primeiro acesso como completo:', error);
+    throw error;
+  }
+};
+
+// Função para verificar o tipo do usuário atual
+export const checkCurrentUserType = async (uid) => {
+  try {
+    if (!uid) {
+      console.log('UID não fornecido');
+      return null;
+    }
+
+    // Buscar documento diretamente pelo ID (que é o mesmo que o UID)
+    const userDocRef = doc(db, USERS_COLLECTION, uid);
+    const userDoc = await getDoc(userDocRef);
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      console.log('Tipo do usuário atual:', userData.userType);
+      return userData.userType;
+    }
+    
+    console.log('Usuário não encontrado na coleção users');
+    return null;
+  } catch (error) {
+    console.error('Erro ao verificar tipo do usuário:', error);
+    throw error;
+  }
+};
+
+// Função para definir um usuário como master
+export const setUserAsMaster = async (uid) => {
+  try {
+    if (!uid) {
+      throw new Error('UID não fornecido');
+    }
+
+    // Atualizar documento diretamente pelo ID
+    const userDocRef = doc(db, USERS_COLLECTION, uid);
+    await setDoc(userDocRef, {
+      userType: 'master'
+    }, { merge: true }); // merge: true permite atualizar apenas o campo específico
+
+    console.log('Usuário definido como master com sucesso');
+    return true;
+  } catch (error) {
+    console.error('Erro ao definir usuário como master:', error);
     throw error;
   }
 }; 

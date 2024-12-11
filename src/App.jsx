@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Dashboard from './pages/admin/Dashboard';
 import IndividualClasses from './pages/admin/IndividualClasses';
 import Users from './pages/admin/Users';
+import CheckMaster from './pages/admin/CheckMaster';
 import Schedule from './pages/public/Schedule';
 import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
@@ -41,6 +42,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Users />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/check-master" 
+            element={
+              <PrivateRoute>
+                <CheckMaster />
               </PrivateRoute>
             } 
           />
