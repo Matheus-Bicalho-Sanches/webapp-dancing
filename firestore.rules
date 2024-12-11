@@ -1,1 +1,67 @@
- 
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para verificar se o usuário é master
+    function isMasterUser(userId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(userId));
+      return userDoc != null && userDoc.data.userType == 'master';
+    }
+    
+    // Função auxiliar para verificar se o usuário atual é master
+    function isCurrentUserMaster() {
+      return isAuthenticated() && isMasterUser(request.auth.uid);
+    }
+    
+    // Regras para a coleção users
+    match /users/{userId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação/atualização/exclusão se:
+      // 1. O usuário está autenticado E
+      // 2. O usuário é master OU está editando seu próprio documento
+      allow write: if isAuthenticated() && 
+        (isCurrentUserMaster() || userId == request.auth.uid);
+    }
+    
+    // Regras para a coleção alunos
+    match /alunos/{alunoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
+    // Regras para a coleção matriculas
+    match /matriculas/{matriculaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
+    // Regras para agendamentos
+    match /agendamentos/{agendamentoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMaster();
+      
+      match /horarios/{horarioId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isCurrentUserMaster();
+      }
+    }
+    
+    // Regras para professores
+    match /professores/{professorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
+    // Regras para valores das aulas
+    match /valores_aulas/{valorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMaster();
+    }
+  }
+} 
