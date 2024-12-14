@@ -19,7 +19,9 @@ import {
   Box,
   Stack,
   CircularProgress,
-  InputAdornment
+  InputAdornment,
+  Divider,
+  Grid
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -42,6 +44,18 @@ export default function Students() {
     email: '',
     telefone: '',
     dataNascimento: '',
+    nomePai: '',
+    nomeMae: '',
+    responsavelFinanceiro: '',
+    endereco: {
+      logradouro: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      cep: ''
+    },
     observacoes: ''
   });
   const [notification, setNotification] = useState({
@@ -110,16 +124,39 @@ export default function Students() {
       email: '',
       telefone: '',
       dataNascimento: '',
+      nomePai: '',
+      nomeMae: '',
+      responsavelFinanceiro: '',
+      endereco: {
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: ''
+      },
       observacoes: ''
     });
   };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    if (name.startsWith('endereco.')) {
+      const enderecoField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        endereco: {
+          ...prev.endereco,
+          [enderecoField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleEditClick = (student) => {
@@ -129,6 +166,18 @@ export default function Students() {
       email: student.email,
       telefone: student.telefone,
       dataNascimento: student.dataNascimento || '',
+      nomePai: student.nomePai || '',
+      nomeMae: student.nomeMae || '',
+      responsavelFinanceiro: student.responsavelFinanceiro || '',
+      endereco: student.endereco || {
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: ''
+      },
       observacoes: student.observacoes || ''
     });
     setOpen(true);
@@ -155,17 +204,23 @@ export default function Students() {
         updatedAt: serverTimestamp()
       };
 
+      let studentId;
       if (editingStudent) {
         await updateDoc(doc(db, 'alunos', editingStudent.id), studentData);
         showNotification('Aluno atualizado com sucesso!');
+        studentId = editingStudent.id;
       } else {
         studentData.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'alunos'), studentData);
+        const docRef = await addDoc(collection(db, 'alunos'), studentData);
         showNotification('Aluno cadastrado com sucesso!');
+        studentId = docRef.id;
       }
 
       handleClose();
       loadStudents();
+      
+      // Redirecionar para o perfil do aluno após criar/editar
+      navigate(`/admin/alunos/${studentId}`);
     } catch (error) {
       console.error('Erro ao salvar aluno:', error);
       showNotification('Erro ao salvar aluno', 'error');
@@ -249,15 +304,6 @@ export default function Students() {
                       >
                         <EditIcon />
                       </IconButton>
-                      <IconButton 
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(student);
-                        }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -321,6 +367,99 @@ export default function Students() {
                     shrink: true,
                   }}
                 />
+
+                <Divider textAlign="left">Informações Familiares</Divider>
+                
+                <TextField
+                  fullWidth
+                  label="Nome do Pai"
+                  name="nomePai"
+                  value={formData.nomePai}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Nome da Mãe"
+                  name="nomeMae"
+                  value={formData.nomeMae}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Responsável Financeiro"
+                  name="responsavelFinanceiro"
+                  value={formData.responsavelFinanceiro}
+                  onChange={handleChange}
+                />
+
+                <Divider textAlign="left">Endereço</Divider>
+
+                <TextField
+                  fullWidth
+                  label="Logradouro"
+                  name="endereco.logradouro"
+                  value={formData.endereco.logradouro}
+                  onChange={handleChange}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <TextField
+                      fullWidth
+                      label="Número"
+                      name="endereco.numero"
+                      value={formData.endereco.numero}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={8}>
+                    <TextField
+                      fullWidth
+                      label="Complemento"
+                      name="endereco.complemento"
+                      value={formData.endereco.complemento}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                </Grid>
+                <TextField
+                  fullWidth
+                  label="Bairro"
+                  name="endereco.bairro"
+                  value={formData.endereco.bairro}
+                  onChange={handleChange}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Cidade"
+                      name="endereco.cidade"
+                      value={formData.endereco.cidade}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={2}>
+                    <TextField
+                      fullWidth
+                      label="Estado"
+                      name="endereco.estado"
+                      value={formData.endereco.estado}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <TextField
+                      fullWidth
+                      label="CEP"
+                      name="endereco.cep"
+                      value={formData.endereco.cep}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Divider textAlign="left">Observações</Divider>
+
                 <TextField
                   fullWidth
                   label="Observações"
