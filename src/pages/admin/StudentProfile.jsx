@@ -20,10 +20,23 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  InputAdornment
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import AddIcon from '@mui/icons-material/Add';
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +65,237 @@ function TabPanel(props) {
         </Box>
       )}
     </div>
+  );
+}
+
+// Componente da aba de Matrículas
+function MatriculasTab({ studentId }) {
+  const [matriculas, setMatriculas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [planos, setPlanos] = useState([]);
+  const [formData, setFormData] = useState({
+    planoId: '',
+    valor: 0,
+    dataInicio: dayjs().format('YYYY-MM-DD'),
+    dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD')
+  });
+
+  useEffect(() => {
+    loadMatriculas();
+    loadPlanos();
+  }, [studentId]);
+
+  const loadPlanos = async () => {
+    try {
+      const planosQuery = query(collection(db, 'planos'));
+      const querySnapshot = await getDocs(planosQuery);
+      const planosData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPlanos(planosData);
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+    }
+  };
+
+  const loadMatriculas = async () => {
+    try {
+      setLoading(true);
+      const matriculasQuery = query(
+        collection(db, 'matriculas'),
+        where('alunoId', '==', studentId)
+      );
+      const querySnapshot = await getDocs(matriculasQuery);
+      const matriculasData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMatriculas(matriculasData);
+    } catch (error) {
+      console.error('Erro ao carregar matrículas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePlanoChange = (event) => {
+    const planoId = event.target.value;
+    const planoSelecionado = planos.find(p => p.id === planoId);
+    setFormData(prev => ({
+      ...prev,
+      planoId,
+      valor: planoSelecionado?.valor || 0
+    }));
+  };
+
+  const handleDateChange = (event) => {
+    const { name, value } = event.target;
+    const dataInicio = name === 'dataInicio' ? value : formData.dataInicio;
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+      dataTermino: dayjs(dataInicio).add(1, 'year').format('YYYY-MM-DD')
+    }));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const planoSelecionado = planos.find(p => p.id === formData.planoId);
+      const matriculaData = {
+        alunoId: studentId,
+        planoId: formData.planoId,
+        planoNome: planoSelecionado.nome,
+        valor: formData.valor,
+        dataInicio: formData.dataInicio,
+        dataTermino: formData.dataTermino,
+        status: 'ativa',
+        createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'matriculas'), matriculaData);
+      setOpenDialog(false);
+      loadMatriculas();
+    } catch (error) {
+      console.error('Erro ao criar matrícula:', error);
+    }
+  };
+
+  const getStatusColor = (status, dataTermino) => {
+    if (status === 'cancelada') return 'error';
+    if (dayjs(dataTermino) < dayjs()) return 'warning';
+    return 'success';
+  };
+
+  return (
+    <Box>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenDialog(true)}
+        >
+          Nova Matrícula
+        </Button>
+      </Box>
+
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Plano</TableCell>
+                <TableCell>Valor</TableCell>
+                <TableCell>Data de Início</TableCell>
+                <TableCell>Data de Término</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {matriculas.map((matricula) => (
+                <TableRow key={matricula.id}>
+                  <TableCell>{matricula.planoNome}</TableCell>
+                  <TableCell>R$ {matricula.valor}</TableCell>
+                  <TableCell>{dayjs(matricula.dataInicio).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>{dayjs(matricula.dataTermino).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={matricula.status}
+                      color={getStatusColor(matricula.status, matricula.dataTermino)}
+                      size="small"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {matriculas.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhuma matrícula encontrada
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Dialog de Nova Matrícula */}
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Nova Matrícula</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Plano</InputLabel>
+              <Select
+                value={formData.planoId}
+                onChange={handlePlanoChange}
+                label="Plano"
+              >
+                {planos.map((plano) => (
+                  <MenuItem key={plano.id} value={plano.id}>
+                    {plano.nome} - R$ {plano.valor}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              label="Valor Total"
+              type="number"
+              value={formData.valor}
+              onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+              }}
+            />
+
+            <TextField
+              fullWidth
+              label="Data de Início"
+              type="date"
+              value={formData.dataInicio}
+              onChange={handleDateChange}
+              name="dataInicio"
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+
+            <TextField
+              fullWidth
+              label="Data de Término"
+              type="date"
+              value={formData.dataTermino}
+              disabled
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            variant="contained"
+          >
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }
 
@@ -305,9 +549,7 @@ export default function StudentProfile() {
           </TabPanel>
 
           <TabPanel value={currentTab} index={1}>
-            <Typography variant="body1">
-              Informações sobre matrículas serão exibidas aqui.
-            </Typography>
+            <MatriculasTab studentId={id} />
           </TabPanel>
 
           <TabPanel value={currentTab} index={2}>
