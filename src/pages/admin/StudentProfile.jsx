@@ -64,8 +64,8 @@ export default function StudentProfile() {
   const [currentTab, setCurrentTab] = useState(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
-  // Verificar se o usuário tem permissão de admin/master
-  const hasDeletePermission = currentUser?.userType === 'master' || currentUser?.userType === 'administrative';
+  // Verificar se o usuário tem permissão de master
+  const hasDeletePermission = currentUser?.userType === 'master';
 
   useEffect(() => {
     loadStudent();
