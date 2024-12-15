@@ -68,16 +68,21 @@ function TabPanel(props) {
 
 // Componente da aba de Matrículas
 function MatriculasTab({ studentId }) {
+  const { currentUser } = useAuth();
   const [matriculas, setMatriculas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [planos, setPlanos] = useState([]);
+  const [editingMatricula, setEditingMatricula] = useState(null);
   const [formData, setFormData] = useState({
     planoId: '',
     valor: 0,
     dataInicio: dayjs().format('YYYY-MM-DD'),
     dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD')
   });
+
+  // Verificar se o usuário tem permissão de master
+  const hasDeletePermission = currentUser?.userType === 'master';
 
   useEffect(() => {
     loadMatriculas();
@@ -118,6 +123,43 @@ function MatriculasTab({ studentId }) {
     }
   };
 
+  const handleEditClick = (matricula) => {
+    setEditingMatricula(matricula);
+    setFormData({
+      planoId: matricula.planoId,
+      valor: matricula.valor,
+      dataInicio: matricula.dataInicio,
+      dataTermino: matricula.dataTermino
+    });
+    setOpenDialog(true);
+  };
+
+  const handleDeleteClick = async (matriculaId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta matrícula? Esta ação não pode ser desfeita.')) {
+      try {
+        // Excluir a matrícula
+        await deleteDoc(doc(db, 'matriculas', matriculaId));
+
+        // Excluir os pagamentos associados a esta matrícula
+        const pagamentosQuery = query(
+          collection(db, 'pagamentos'),
+          where('matriculaId', '==', matriculaId)
+        );
+        const pagamentosSnapshot = await getDocs(pagamentosQuery);
+        
+        const batch = writeBatch(db);
+        pagamentosSnapshot.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        loadMatriculas();
+      } catch (error) {
+        console.error('Erro ao excluir matrícula:', error);
+      }
+    }
+  };
+
   const handlePlanoChange = (event) => {
     const planoId = event.target.value;
     const planoSelecionado = planos.find(p => p.id === planoId);
@@ -150,56 +192,62 @@ function MatriculasTab({ studentId }) {
         dataInicio: formData.dataInicio,
         dataTermino: formData.dataTermino,
         status: 'ativa',
-        createdAt: serverTimestamp()
+        updatedAt: serverTimestamp()
       };
 
-      // Criar a matrícula
-      const matriculaRef = await addDoc(collection(db, 'matriculas'), matriculaData);
+      if (editingMatricula) {
+        await updateDoc(doc(db, 'matriculas', editingMatricula.id), matriculaData);
+      } else {
+        // Criar a matrícula
+        matriculaData.createdAt = serverTimestamp();
+        const matriculaRef = await addDoc(collection(db, 'matriculas'), matriculaData);
 
-      // Se o valor da matrícula for maior que 0, criar os 12 pagamentos mensais
-      if (formData.valor > 0) {
-        const valorMensal = formData.valor / 12;
-        const batch = writeBatch(db);
+        // Se o valor da matrícula for maior que 0, criar os 12 pagamentos mensais
+        if (formData.valor > 0) {
+          const valorMensal = formData.valor / 12;
+          const batch = writeBatch(db);
 
-        // Pegar o dia do mês da data de início
-        const dataInicio = dayjs(formData.dataInicio);
-        const diaVencimento = dataInicio.date();
+          // Pegar o dia do mês da data de início
+          const dataInicio = dayjs(formData.dataInicio);
+          const diaVencimento = dataInicio.date();
 
-        // Criar 12 pagamentos
-        for (let i = 0; i < 12; i++) {
-          // Primeiro, tentamos adicionar os meses à data inicial
-          let dataVencimento = dataInicio.add(i, 'month');
-          
-          // Verificar se o mês tem menos dias que o dia de vencimento original
-          const ultimoDiaDoMes = dataVencimento.endOf('month').date();
-          if (diaVencimento > ultimoDiaDoMes) {
-            // Se o dia original não existe neste mês, usar o último dia do mês
-            dataVencimento = dataVencimento.endOf('month');
+          // Criar 12 pagamentos
+          for (let i = 0; i < 12; i++) {
+            // Primeiro, tentamos adicionar os meses à data inicial
+            let dataVencimento = dataInicio.add(i, 'month');
+            
+            // Verificar se o mês tem menos dias que o dia de vencimento original
+            const ultimoDiaDoMes = dataVencimento.endOf('month').date();
+            if (diaVencimento > ultimoDiaDoMes) {
+              // Se o dia original não existe neste mês, usar o último dia do mês
+              dataVencimento = dataVencimento.endOf('month');
+            }
+
+            const pagamentoData = {
+              alunoId: studentId,
+              matriculaId: matriculaRef.id,
+              descricao: `${planoSelecionado.nome} - Parcela ${i + 1}/12`,
+              tipo: 'Mensalidade',
+              valor: valorMensal,
+              dataVencimento: dataVencimento.format('YYYY-MM-DD'),
+              status: 'pendente',
+              createdAt: serverTimestamp()
+            };
+
+            const pagamentoRef = doc(collection(db, 'pagamentos'));
+            batch.set(pagamentoRef, pagamentoData);
           }
 
-          const pagamentoData = {
-            alunoId: studentId,
-            matriculaId: matriculaRef.id,
-            descricao: `${planoSelecionado.nome} - Parcela ${i + 1}/12`,
-            tipo: 'Mensalidade',
-            valor: valorMensal,
-            dataVencimento: dataVencimento.format('YYYY-MM-DD'),
-            status: 'pendente',
-            createdAt: serverTimestamp()
-          };
-
-          const pagamentoRef = doc(collection(db, 'pagamentos'));
-          batch.set(pagamentoRef, pagamentoData);
+          // Executar todas as operações em batch
+          await batch.commit();
         }
-
-        // Executar todas as operações em batch
-        await batch.commit();
       }
 
       setOpenDialog(false);
+      setEditingMatricula(null);
       loadMatriculas();
     } catch (error) {
-      console.error('Erro ao criar matrícula:', error);
+      console.error('Erro ao salvar matrícula:', error);
     }
   };
 
@@ -215,7 +263,16 @@ function MatriculasTab({ studentId }) {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
+          onClick={() => {
+            setEditingMatricula(null);
+            setFormData({
+              planoId: '',
+              valor: 0,
+              dataInicio: dayjs().format('YYYY-MM-DD'),
+              dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD')
+            });
+            setOpenDialog(true);
+          }}
         >
           Nova Matrícula
         </Button>
@@ -233,13 +290,19 @@ function MatriculasTab({ studentId }) {
                 <TableCell>Data de Início</TableCell>
                 <TableCell>Data de Término</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {matriculas.map((matricula) => (
                 <TableRow key={matricula.id}>
                   <TableCell>{matricula.planoNome}</TableCell>
-                  <TableCell>R$ {matricula.valor}</TableCell>
+                  <TableCell>
+                    {matricula.valor.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </TableCell>
                   <TableCell>{dayjs(matricula.dataInicio).format('DD/MM/YYYY')}</TableCell>
                   <TableCell>{dayjs(matricula.dataTermino).format('DD/MM/YYYY')}</TableCell>
                   <TableCell>
@@ -249,11 +312,29 @@ function MatriculasTab({ studentId }) {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleEditClick(matricula)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    {hasDeletePermission && (
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDeleteClick(matricula.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               {matriculas.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     Nenhuma matrícula encontrada
                   </TableCell>
                 </TableRow>
@@ -263,14 +344,19 @@ function MatriculasTab({ studentId }) {
         </TableContainer>
       )}
 
-      {/* Dialog de Nova Matrícula */}
+      {/* Dialog de Nova/Editar Matrícula */}
       <Dialog
         open={openDialog}
-        onClose={() => setOpenDialog(false)}
+        onClose={() => {
+          setOpenDialog(false);
+          setEditingMatricula(null);
+        }}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Nova Matrícula</DialogTitle>
+        <DialogTitle>
+          {editingMatricula ? 'Editar Matrícula' : 'Nova Matrícula'}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControl fullWidth>
@@ -324,14 +410,19 @@ function MatriculasTab({ studentId }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>
+          <Button 
+            onClick={() => {
+              setOpenDialog(false);
+              setEditingMatricula(null);
+            }}
+          >
             Cancelar
           </Button>
           <Button 
             onClick={handleSubmit}
             variant="contained"
           >
-            Confirmar
+            {editingMatricula ? 'Salvar' : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -488,8 +579,15 @@ function PaymentsTab({ studentId }) {
 
   const getStatusColor = (status, dataVencimento) => {
     if (status === 'pago') return 'success';
-    if (dayjs(dataVencimento) < dayjs()) return 'error';
+    if (dayjs(dataVencimento).isBefore(dayjs(), 'day')) return 'error';
+    if (dayjs(dataVencimento).isSame(dayjs(), 'day')) return 'warning';
     return 'warning';
+  };
+
+  const getStatusLabel = (status, dataVencimento) => {
+    if (status === 'pago') return 'pago';
+    if (dayjs(dataVencimento).isBefore(dayjs(), 'day')) return 'atrasado';
+    return 'pendente';
   };
 
   return (
@@ -557,7 +655,7 @@ function PaymentsTab({ studentId }) {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={payment.status}
+                      label={getStatusLabel(payment.status, payment.dataVencimento)}
                       color={getStatusColor(payment.status, payment.dataVencimento)}
                       size="small"
                     />
