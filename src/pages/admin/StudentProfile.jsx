@@ -303,12 +303,19 @@ function PaymentsTab({ studentId }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openReceiveDialog, setOpenReceiveDialog] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
+  const [receivingPayment, setReceivingPayment] = useState(null);
   const [formData, setFormData] = useState({
     descricao: '',
     tipo: '',
     valor: '',
     dataVencimento: dayjs().format('YYYY-MM-DD')
+  });
+  const [receiveFormData, setReceiveFormData] = useState({
+    valor: '',
+    meioPagamento: '',
+    dataRecebimento: dayjs().format('YYYY-MM-DD')
   });
 
   // Verificar se o usuário tem permissão de master
@@ -361,13 +368,27 @@ function PaymentsTab({ studentId }) {
     }
   };
 
-  const handleReceiveClick = async (paymentId) => {
+  const handleReceiveClick = (payment) => {
+    setReceivingPayment(payment);
+    setReceiveFormData({
+      valor: payment.valor.toString(),
+      meioPagamento: '',
+      dataRecebimento: dayjs().format('YYYY-MM-DD')
+    });
+    setOpenReceiveDialog(true);
+  };
+
+  const handleReceiveSubmit = async () => {
     try {
-      await updateDoc(doc(db, 'pagamentos', paymentId), {
+      await updateDoc(doc(db, 'pagamentos', receivingPayment.id), {
         status: 'pago',
-        dataPagamento: dayjs().format('YYYY-MM-DD'),
+        valorRecebido: parseFloat(receiveFormData.valor),
+        meioPagamento: receiveFormData.meioPagamento,
+        dataRecebimento: receiveFormData.dataRecebimento,
         updatedAt: serverTimestamp()
       });
+      setOpenReceiveDialog(false);
+      setReceivingPayment(null);
       loadPayments();
     } catch (error) {
       console.error('Erro ao receber pagamento:', error);
@@ -416,6 +437,13 @@ function PaymentsTab({ studentId }) {
     'Outros'
   ];
 
+  const meiosPagamento = [
+    'Dinheiro',
+    'PIX',
+    'Débito',
+    'Crédito'
+  ];
+
   const getStatusColor = (status, dataVencimento) => {
     if (status === 'pago') return 'success';
     if (dayjs(dataVencimento) < dayjs()) return 'error';
@@ -454,6 +482,7 @@ function PaymentsTab({ studentId }) {
                 <TableCell>Tipo</TableCell>
                 <TableCell>Valor</TableCell>
                 <TableCell>Vencimento</TableCell>
+                <TableCell>Recebimento</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
@@ -470,6 +499,20 @@ function PaymentsTab({ studentId }) {
                     })}
                   </TableCell>
                   <TableCell>{dayjs(payment.dataVencimento).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    {payment.dataRecebimento ? (
+                      <>
+                        {dayjs(payment.dataRecebimento).format('DD/MM/YYYY')}
+                        <br />
+                        <Typography variant="caption" color="textSecondary">
+                          {payment.meioPagamento} - {payment.valorRecebido?.toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                          })}
+                        </Typography>
+                      </>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={payment.status}
@@ -488,7 +531,7 @@ function PaymentsTab({ studentId }) {
                     {payment.status !== 'pago' && (
                       <IconButton
                         color="success"
-                        onClick={() => handleReceiveClick(payment.id)}
+                        onClick={() => handleReceiveClick(payment)}
                         size="small"
                         title="Receber pagamento"
                       >
@@ -509,7 +552,7 @@ function PaymentsTab({ studentId }) {
               ))}
               {payments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     Nenhum pagamento encontrado
                   </TableCell>
                 </TableRow>
@@ -597,6 +640,78 @@ function PaymentsTab({ studentId }) {
             disabled={!formData.descricao || !formData.tipo || !formData.valor || !formData.dataVencimento}
           >
             {editingPayment ? 'Salvar' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Recebimento */}
+      <Dialog
+        open={openReceiveDialog}
+        onClose={() => {
+          setOpenReceiveDialog(false);
+          setReceivingPayment(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Receber Pagamento</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Valor a Receber"
+              type="number"
+              value={receiveFormData.valor}
+              onChange={(e) => setReceiveFormData(prev => ({ ...prev, valor: e.target.value }))}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+              }}
+              required
+            />
+
+            <FormControl fullWidth required>
+              <InputLabel>Meio de Pagamento</InputLabel>
+              <Select
+                value={receiveFormData.meioPagamento}
+                onChange={(e) => setReceiveFormData(prev => ({ ...prev, meioPagamento: e.target.value }))}
+                label="Meio de Pagamento"
+              >
+                {meiosPagamento.map((meio) => (
+                  <MenuItem key={meio} value={meio}>
+                    {meio}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              label="Data de Recebimento"
+              type="date"
+              value={receiveFormData.dataRecebimento}
+              onChange={(e) => setReceiveFormData(prev => ({ ...prev, dataRecebimento: e.target.value }))}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              required
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setOpenReceiveDialog(false);
+              setReceivingPayment(null);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleReceiveSubmit}
+            variant="contained"
+            disabled={!receiveFormData.valor || !receiveFormData.meioPagamento || !receiveFormData.dataRecebimento}
+          >
+            Confirmar Recebimento
           </Button>
         </DialogActions>
       </Dialog>
