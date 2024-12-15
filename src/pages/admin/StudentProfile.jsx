@@ -32,11 +32,14 @@ import {
   FormControl,
   InputLabel,
   Select,
-  InputAdornment
+  InputAdornment,
+  IconButton
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import EditIcon from '@mui/icons-material/Edit';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
@@ -296,15 +299,20 @@ function MatriculasTab({ studentId }) {
 
 // Componente da aba de Pagamentos
 function PaymentsTab({ studentId }) {
+  const { currentUser } = useAuth();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(null);
   const [formData, setFormData] = useState({
     descricao: '',
     tipo: '',
     valor: '',
     dataVencimento: dayjs().format('YYYY-MM-DD')
   });
+
+  // Verificar se o usuário tem permissão de master
+  const hasDeletePermission = currentUser?.userType === 'master';
 
   useEffect(() => {
     loadPayments();
@@ -331,6 +339,41 @@ function PaymentsTab({ studentId }) {
     }
   };
 
+  const handleEditClick = (payment) => {
+    setEditingPayment(payment);
+    setFormData({
+      descricao: payment.descricao,
+      tipo: payment.tipo,
+      valor: payment.valor.toString(),
+      dataVencimento: payment.dataVencimento
+    });
+    setOpenDialog(true);
+  };
+
+  const handleDeleteClick = async (paymentId) => {
+    if (window.confirm('Tem certeza que deseja excluir este pagamento?')) {
+      try {
+        await deleteDoc(doc(db, 'pagamentos', paymentId));
+        loadPayments();
+      } catch (error) {
+        console.error('Erro ao excluir pagamento:', error);
+      }
+    }
+  };
+
+  const handleReceiveClick = async (paymentId) => {
+    try {
+      await updateDoc(doc(db, 'pagamentos', paymentId), {
+        status: 'pago',
+        dataPagamento: dayjs().format('YYYY-MM-DD'),
+        updatedAt: serverTimestamp()
+      });
+      loadPayments();
+    } catch (error) {
+      console.error('Erro ao receber pagamento:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       const paymentData = {
@@ -340,11 +383,18 @@ function PaymentsTab({ studentId }) {
         valor: parseFloat(formData.valor),
         dataVencimento: formData.dataVencimento,
         status: 'pendente',
-        createdAt: serverTimestamp()
+        updatedAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'pagamentos'), paymentData);
+      if (editingPayment) {
+        await updateDoc(doc(db, 'pagamentos', editingPayment.id), paymentData);
+      } else {
+        paymentData.createdAt = serverTimestamp();
+        await addDoc(collection(db, 'pagamentos'), paymentData);
+      }
+
       setOpenDialog(false);
+      setEditingPayment(null);
       loadPayments();
       setFormData({
         descricao: '',
@@ -353,7 +403,7 @@ function PaymentsTab({ studentId }) {
         dataVencimento: dayjs().format('YYYY-MM-DD')
       });
     } catch (error) {
-      console.error('Erro ao criar pagamento:', error);
+      console.error('Erro ao salvar pagamento:', error);
     }
   };
 
@@ -378,7 +428,16 @@ function PaymentsTab({ studentId }) {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
+          onClick={() => {
+            setEditingPayment(null);
+            setFormData({
+              descricao: '',
+              tipo: '',
+              valor: '',
+              dataVencimento: dayjs().format('YYYY-MM-DD')
+            });
+            setOpenDialog(true);
+          }}
         >
           Novo Pagamento
         </Button>
@@ -396,6 +455,7 @@ function PaymentsTab({ studentId }) {
                 <TableCell>Valor</TableCell>
                 <TableCell>Vencimento</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -417,11 +477,39 @@ function PaymentsTab({ studentId }) {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleEditClick(payment)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    {payment.status !== 'pago' && (
+                      <IconButton
+                        color="success"
+                        onClick={() => handleReceiveClick(payment.id)}
+                        size="small"
+                        title="Receber pagamento"
+                      >
+                        <AttachMoneyIcon />
+                      </IconButton>
+                    )}
+                    {hasDeletePermission && (
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDeleteClick(payment.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               {payments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     Nenhum pagamento encontrado
                   </TableCell>
                 </TableRow>
@@ -431,14 +519,19 @@ function PaymentsTab({ studentId }) {
         </TableContainer>
       )}
 
-      {/* Dialog de Novo Pagamento */}
+      {/* Dialog de Novo/Editar Pagamento */}
       <Dialog
         open={openDialog}
-        onClose={() => setOpenDialog(false)}
+        onClose={() => {
+          setOpenDialog(false);
+          setEditingPayment(null);
+        }}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Novo Pagamento</DialogTitle>
+        <DialogTitle>
+          {editingPayment ? 'Editar Pagamento' : 'Novo Pagamento'}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
@@ -490,7 +583,12 @@ function PaymentsTab({ studentId }) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>
+          <Button 
+            onClick={() => {
+              setOpenDialog(false);
+              setEditingPayment(null);
+            }}
+          >
             Cancelar
           </Button>
           <Button 
@@ -498,7 +596,7 @@ function PaymentsTab({ studentId }) {
             variant="contained"
             disabled={!formData.descricao || !formData.tipo || !formData.valor || !formData.dataVencimento}
           >
-            Confirmar
+            {editingPayment ? 'Salvar' : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>
