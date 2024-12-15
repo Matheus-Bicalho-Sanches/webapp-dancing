@@ -276,12 +276,12 @@ function MatriculasTab({ studentId }) {
   const getAvailableStatuses = (currentStatus, dataTermino) => {
     if (currentStatus === 'ativa') {
       if (dayjs(dataTermino).isBefore(dayjs(), 'day')) {
-        return ['ativa', 'baixada'];
+        return ['vencida', 'baixada'];
       }
       return ['ativa', 'rescindida'];
     }
     if (getStatusLabel(currentStatus, dataTermino) === 'vencida') {
-      return ['ativa', 'baixada'];
+      return ['vencida', 'baixada'];
     }
     return [currentStatus];
   };
@@ -432,7 +432,7 @@ function MatriculasTab({ studentId }) {
               label="Data de Término"
               type="date"
               value={formData.dataTermino}
-              onChange={(e) => setFormData(prev => ({ ...prev, dataTermino: e.target.value }))}
+              disabled
               name="dataTermino"
               InputLabelProps={{
                 shrink: true,
@@ -979,6 +979,26 @@ export default function StudentProfile() {
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    nome: '',
+    email: '',
+    telefone: '',
+    dataNascimento: '',
+    nomePai: '',
+    nomeMae: '',
+    responsavelFinanceiro: '',
+    endereco: {
+      logradouro: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      cep: ''
+    },
+    observacoes: ''
+  });
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -993,9 +1013,29 @@ export default function StudentProfile() {
       const studentDoc = await getDoc(doc(db, 'alunos', id));
       
       if (studentDoc.exists()) {
-        setStudent({
+        const studentData = {
           id: studentDoc.id,
           ...studentDoc.data()
+        };
+        setStudent(studentData);
+        setFormData({
+          nome: studentData.nome || '',
+          email: studentData.email || '',
+          telefone: studentData.telefone || '',
+          dataNascimento: studentData.dataNascimento || '',
+          nomePai: studentData.nomePai || '',
+          nomeMae: studentData.nomeMae || '',
+          responsavelFinanceiro: studentData.responsavelFinanceiro || '',
+          endereco: studentData.endereco || {
+            logradouro: '',
+            numero: '',
+            complemento: '',
+            bairro: '',
+            cidade: '',
+            estado: '',
+            cep: ''
+          },
+          observacoes: studentData.observacoes || ''
         });
       } else {
         console.error('Aluno não encontrado');
@@ -1015,6 +1055,23 @@ export default function StudentProfile() {
     setOpenDeleteDialog(true);
   };
 
+  const handleEditClick = () => {
+    setOpenEditDialog(true);
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      await updateDoc(doc(db, 'alunos', id), {
+        ...formData,
+        updatedAt: serverTimestamp()
+      });
+      setOpenEditDialog(false);
+      loadStudent();
+    } catch (error) {
+      console.error('Erro ao atualizar aluno:', error);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     try {
       await deleteDoc(doc(db, 'alunos', id));
@@ -1023,6 +1080,25 @@ export default function StudentProfile() {
       console.error('Erro ao excluir aluno:', error);
     }
     setOpenDeleteDialog(false);
+  };
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    if (name.startsWith('endereco.')) {
+      const enderecoField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        endereco: {
+          ...prev.endereco,
+          [enderecoField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   if (loading) {
@@ -1055,16 +1131,26 @@ export default function StudentProfile() {
             <Typography variant="h5" gutterBottom>
               {student.nome}
             </Typography>
-            {hasDeletePermission && currentTab === 0 && (
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteClick}
+                color="primary"
+                startIcon={<EditIcon />}
+                onClick={handleEditClick}
               >
-                Excluir Aluno
+                Editar Aluno
               </Button>
-            )}
+              {hasDeletePermission && currentTab === 0 && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteClick}
+                >
+                  Excluir Aluno
+                </Button>
+              )}
+            </Box>
           </Box>
           <Divider sx={{ my: 2 }} />
           
@@ -1267,6 +1353,170 @@ export default function StudentProfile() {
                 variant="contained"
               >
                 Excluir
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog de Edição do Aluno */}
+          <Dialog
+            open={openEditDialog}
+            onClose={() => setOpenEditDialog(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Editar Aluno</DialogTitle>
+            <DialogContent>
+              <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  label="Nome"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="Telefone"
+                  name="telefone"
+                  value={formData.telefone}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="Data de Nascimento"
+                  name="dataNascimento"
+                  type="date"
+                  value={formData.dataNascimento}
+                  onChange={handleChange}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                />
+
+                <Divider textAlign="left">Informações Familiares</Divider>
+                
+                <TextField
+                  fullWidth
+                  label="Nome do Pai"
+                  name="nomePai"
+                  value={formData.nomePai}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Nome da Mãe"
+                  name="nomeMae"
+                  value={formData.nomeMae}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Responsável Financeiro"
+                  name="responsavelFinanceiro"
+                  value={formData.responsavelFinanceiro}
+                  onChange={handleChange}
+                />
+
+                <Divider textAlign="left">Endereço</Divider>
+
+                <TextField
+                  fullWidth
+                  label="Logradouro"
+                  name="endereco.logradouro"
+                  value={formData.endereco.logradouro}
+                  onChange={handleChange}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <TextField
+                      fullWidth
+                      label="Número"
+                      name="endereco.numero"
+                      value={formData.endereco.numero}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={8}>
+                    <TextField
+                      fullWidth
+                      label="Complemento"
+                      name="endereco.complemento"
+                      value={formData.endereco.complemento}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                </Grid>
+                <TextField
+                  fullWidth
+                  label="Bairro"
+                  name="endereco.bairro"
+                  value={formData.endereco.bairro}
+                  onChange={handleChange}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Cidade"
+                      name="endereco.cidade"
+                      value={formData.endereco.cidade}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={2}>
+                    <TextField
+                      fullWidth
+                      label="Estado"
+                      name="endereco.estado"
+                      value={formData.endereco.estado}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <TextField
+                      fullWidth
+                      label="CEP"
+                      name="endereco.cep"
+                      value={formData.endereco.cep}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                </Grid>
+
+                <Divider textAlign="left">Observações</Divider>
+
+                <TextField
+                  fullWidth
+                  label="Observações"
+                  name="observacoes"
+                  value={formData.observacoes}
+                  onChange={handleChange}
+                  multiline
+                  rows={4}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenEditDialog(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleEditSubmit}
+                variant="contained"
+                disabled={!formData.nome || !formData.email || !formData.telefone}
+              >
+                Salvar
               </Button>
             </DialogActions>
           </Dialog>
