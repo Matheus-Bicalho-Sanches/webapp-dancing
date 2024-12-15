@@ -79,7 +79,8 @@ function MatriculasTab({ studentId }) {
     planoId: '',
     valor: 0,
     dataInicio: dayjs().format('YYYY-MM-DD'),
-    dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD')
+    dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+    status: 'ativa'
   });
 
   // Verificar se o usuário tem permissão de master
@@ -130,7 +131,8 @@ function MatriculasTab({ studentId }) {
       planoId: matricula.planoId,
       valor: matricula.valor,
       dataInicio: matricula.dataInicio,
-      dataTermino: matricula.dataTermino
+      dataTermino: matricula.dataTermino,
+      status: matricula.status
     });
     setOpenDialog(true);
   };
@@ -178,7 +180,7 @@ function MatriculasTab({ studentId }) {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      dataTermino: dayjs(dataInicio).add(1, 'year').format('YYYY-MM-DD')
+      dataTermino: name === 'dataInicio' ? dayjs(dataInicio).add(1, 'year').format('YYYY-MM-DD') : prev.dataTermino
     }));
   };
 
@@ -192,7 +194,7 @@ function MatriculasTab({ studentId }) {
         valor: formData.valor,
         dataInicio: formData.dataInicio,
         dataTermino: formData.dataTermino,
-        status: 'ativa',
+        status: formData.status,
         updatedAt: serverTimestamp()
       };
 
@@ -253,9 +255,35 @@ function MatriculasTab({ studentId }) {
   };
 
   const getStatusColor = (status, dataTermino) => {
-    if (status === 'cancelada') return 'error';
-    if (dayjs(dataTermino) < dayjs()) return 'warning';
-    return 'success';
+    if (status === 'rescindida' || status === 'baixada') return 'default';
+    if (status === 'ativa') {
+      if (dayjs(dataTermino).isBefore(dayjs(), 'day')) return 'error';
+      return 'success';
+    }
+    return 'error';
+  };
+
+  const getStatusLabel = (status, dataTermino) => {
+    if (status === 'rescindida') return 'rescindida';
+    if (status === 'baixada') return 'baixada';
+    if (status === 'ativa') {
+      if (dayjs(dataTermino).isBefore(dayjs(), 'day')) return 'vencida';
+      return 'ativa';
+    }
+    return status;
+  };
+
+  const getAvailableStatuses = (currentStatus, dataTermino) => {
+    if (currentStatus === 'ativa') {
+      if (dayjs(dataTermino).isBefore(dayjs(), 'day')) {
+        return ['ativa', 'baixada'];
+      }
+      return ['ativa', 'rescindida'];
+    }
+    if (getStatusLabel(currentStatus, dataTermino) === 'vencida') {
+      return ['ativa', 'baixada'];
+    }
+    return [currentStatus];
   };
 
   return (
@@ -270,7 +298,8 @@ function MatriculasTab({ studentId }) {
               planoId: '',
               valor: 0,
               dataInicio: dayjs().format('YYYY-MM-DD'),
-              dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD')
+              dataTermino: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+              status: 'ativa'
             });
             setOpenDialog(true);
           }}
@@ -308,7 +337,7 @@ function MatriculasTab({ studentId }) {
                   <TableCell>{dayjs(matricula.dataTermino).format('DD/MM/YYYY')}</TableCell>
                   <TableCell>
                     <Chip
-                      label={matricula.status}
+                      label={getStatusLabel(matricula.status, matricula.dataTermino)}
                       color={getStatusColor(matricula.status, matricula.dataTermino)}
                       size="small"
                     />
@@ -403,11 +432,29 @@ function MatriculasTab({ studentId }) {
               label="Data de Término"
               type="date"
               value={formData.dataTermino}
-              disabled
+              onChange={(e) => setFormData(prev => ({ ...prev, dataTermino: e.target.value }))}
+              name="dataTermino"
               InputLabelProps={{
                 shrink: true,
               }}
             />
+
+            {editingMatricula && (
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={formData.status}
+                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                  label="Status"
+                >
+                  {getAvailableStatuses(editingMatricula.status, editingMatricula.dataTermino).map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
