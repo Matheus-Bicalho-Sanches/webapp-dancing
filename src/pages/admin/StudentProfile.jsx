@@ -36,16 +36,11 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
-
-// Função para calcular idade
-const calculateAge = (birthDate) => {
-  if (!birthDate) return null;
-  return dayjs().diff(dayjs(birthDate), 'year');
-};
+import { calculateAge } from '../../utils/dateUtils';
 
 // Componente TabPanel para renderizar o conteúdo de cada aba
 function TabPanel(props) {
@@ -290,6 +285,218 @@ function MatriculasTab({ studentId }) {
           <Button 
             onClick={handleSubmit}
             variant="contained"
+          >
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// Componente da aba de Pagamentos
+function PaymentsTab({ studentId }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    descricao: '',
+    tipo: '',
+    valor: '',
+    dataVencimento: dayjs().format('YYYY-MM-DD')
+  });
+
+  useEffect(() => {
+    loadPayments();
+  }, [studentId]);
+
+  const loadPayments = async () => {
+    try {
+      setLoading(true);
+      const paymentsQuery = query(
+        collection(db, 'pagamentos'),
+        where('alunoId', '==', studentId),
+        orderBy('dataVencimento', 'desc')
+      );
+      const querySnapshot = await getDocs(paymentsQuery);
+      const paymentsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPayments(paymentsData);
+    } catch (error) {
+      console.error('Erro ao carregar pagamentos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const paymentData = {
+        alunoId: studentId,
+        descricao: formData.descricao,
+        tipo: formData.tipo,
+        valor: parseFloat(formData.valor),
+        dataVencimento: formData.dataVencimento,
+        status: 'pendente',
+        createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'pagamentos'), paymentData);
+      setOpenDialog(false);
+      loadPayments();
+      setFormData({
+        descricao: '',
+        tipo: '',
+        valor: '',
+        dataVencimento: dayjs().format('YYYY-MM-DD')
+      });
+    } catch (error) {
+      console.error('Erro ao criar pagamento:', error);
+    }
+  };
+
+  const tiposPagamento = [
+    'Mensalidade',
+    'Aula individual',
+    'Cantina',
+    'Eventos',
+    'Aula experimental',
+    'Outros'
+  ];
+
+  const getStatusColor = (status, dataVencimento) => {
+    if (status === 'pago') return 'success';
+    if (dayjs(dataVencimento) < dayjs()) return 'error';
+    return 'warning';
+  };
+
+  return (
+    <Box>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenDialog(true)}
+        >
+          Novo Pagamento
+        </Button>
+      </Box>
+
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Descrição</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Valor</TableCell>
+                <TableCell>Vencimento</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell>{payment.descricao}</TableCell>
+                  <TableCell>{payment.tipo}</TableCell>
+                  <TableCell>
+                    {payment.valor.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    })}
+                  </TableCell>
+                  <TableCell>{dayjs(payment.dataVencimento).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={payment.status}
+                      color={getStatusColor(payment.status, payment.dataVencimento)}
+                      size="small"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {payments.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhum pagamento encontrado
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Dialog de Novo Pagamento */}
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Novo Pagamento</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Descrição"
+              value={formData.descricao}
+              onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
+              required
+            />
+
+            <FormControl fullWidth required>
+              <InputLabel>Tipo de Pagamento</InputLabel>
+              <Select
+                value={formData.tipo}
+                onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
+                label="Tipo de Pagamento"
+              >
+                {tiposPagamento.map((tipo) => (
+                  <MenuItem key={tipo} value={tipo}>
+                    {tipo}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              fullWidth
+              label="Valor"
+              type="number"
+              value={formData.valor}
+              onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+              }}
+              required
+            />
+
+            <TextField
+              fullWidth
+              label="Data de Vencimento"
+              type="date"
+              value={formData.dataVencimento}
+              onChange={(e) => setFormData(prev => ({ ...prev, dataVencimento: e.target.value }))}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              required
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={!formData.descricao || !formData.tipo || !formData.valor || !formData.dataVencimento}
           >
             Confirmar
           </Button>
@@ -559,9 +766,7 @@ export default function StudentProfile() {
           </TabPanel>
 
           <TabPanel value={currentTab} index={3}>
-            <Typography variant="body1">
-              Informações sobre pagamentos serão exibidas aqui.
-            </Typography>
+            <PaymentsTab studentId={id} />
           </TabPanel>
 
           <TabPanel value={currentTab} index={4}>

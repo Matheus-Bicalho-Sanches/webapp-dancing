@@ -8,6 +8,14 @@
         { "fieldPath": "horario", "order": "ASCENDING" },
         { "fieldPath": "professorId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "pagamentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "alunoId", "order": "ASCENDING" },
+        { "fieldPath": "dataVencimento", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

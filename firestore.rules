@@ -12,9 +12,21 @@ service cloud.firestore {
       return userDoc != null && userDoc.data.userType == 'master';
     }
     
+    // Função auxiliar para verificar se o usuário é administrativo
+    function isAdministrativeUser(userId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(userId));
+      return userDoc != null && userDoc.data.userType == 'administrative';
+    }
+    
     // Função auxiliar para verificar se o usuário atual é master
     function isCurrentUserMaster() {
       return isAuthenticated() && isMasterUser(request.auth.uid);
+    }
+
+    // Função auxiliar para verificar se o usuário atual é master ou administrativo
+    function isCurrentUserMasterOrAdmin() {
+      return isAuthenticated() && 
+        (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid));
     }
     
     // Regras para a coleção users
@@ -32,7 +44,21 @@ service cloud.firestore {
     // Regras para a coleção alunos
     match /alunos/{alunoId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isCurrentUserMaster();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
+    // Regras para a coleção matriculas
+    match /matriculas/{matriculaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+    }
+    
+    // Regras para a coleção pagamentos
+    match /pagamentos/{pagamentoId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção planos
