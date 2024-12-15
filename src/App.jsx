@@ -9,6 +9,7 @@ import Students from './pages/admin/Students';
 import StudentProfile from './pages/admin/StudentProfile';
 import Enrollment from './pages/admin/Enrollment';
 import CheckMaster from './pages/admin/CheckMaster';
+import Tasks from './pages/admin/Tasks';
 import Schedule from './pages/public/Schedule';
 import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
@@ -69,6 +70,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Enrollment />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/tarefas" 
+            element={
+              <PrivateRoute>
+                <Tasks />
               </PrivateRoute>
             } 
           />
