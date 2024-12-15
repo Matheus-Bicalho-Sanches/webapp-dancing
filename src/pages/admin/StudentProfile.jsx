@@ -39,7 +39,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
@@ -153,7 +153,49 @@ function MatriculasTab({ studentId }) {
         createdAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'matriculas'), matriculaData);
+      // Criar a matrícula
+      const matriculaRef = await addDoc(collection(db, 'matriculas'), matriculaData);
+
+      // Se o valor da matrícula for maior que 0, criar os 12 pagamentos mensais
+      if (formData.valor > 0) {
+        const valorMensal = formData.valor / 12;
+        const batch = writeBatch(db);
+
+        // Pegar o dia do mês da data de início
+        const dataInicio = dayjs(formData.dataInicio);
+        const diaVencimento = dataInicio.date();
+
+        // Criar 12 pagamentos
+        for (let i = 0; i < 12; i++) {
+          // Primeiro, tentamos adicionar os meses à data inicial
+          let dataVencimento = dataInicio.add(i, 'month');
+          
+          // Verificar se o mês tem menos dias que o dia de vencimento original
+          const ultimoDiaDoMes = dataVencimento.endOf('month').date();
+          if (diaVencimento > ultimoDiaDoMes) {
+            // Se o dia original não existe neste mês, usar o último dia do mês
+            dataVencimento = dataVencimento.endOf('month');
+          }
+
+          const pagamentoData = {
+            alunoId: studentId,
+            matriculaId: matriculaRef.id,
+            descricao: `${planoSelecionado.nome} - Parcela ${i + 1}/12`,
+            tipo: 'Mensalidade',
+            valor: valorMensal,
+            dataVencimento: dataVencimento.format('YYYY-MM-DD'),
+            status: 'pendente',
+            createdAt: serverTimestamp()
+          };
+
+          const pagamentoRef = doc(collection(db, 'pagamentos'));
+          batch.set(pagamentoRef, pagamentoData);
+        }
+
+        // Executar todas as operações em batch
+        await batch.commit();
+      }
+
       setOpenDialog(false);
       loadMatriculas();
     } catch (error) {
