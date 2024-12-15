@@ -33,7 +33,8 @@ import {
   InputLabel,
   Select,
   InputAdornment,
-  IconButton
+  IconButton,
+  Checkbox
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -439,6 +440,7 @@ function PaymentsTab({ studentId }) {
   const [openReceiveDialog, setOpenReceiveDialog] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [receivingPayment, setReceivingPayment] = useState(null);
+  const [selectedPayments, setSelectedPayments] = useState([]);
   const [formData, setFormData] = useState({
     descricao: '',
     tipo: '',
@@ -472,6 +474,7 @@ function PaymentsTab({ studentId }) {
         ...doc.data()
       }));
       setPayments(paymentsData);
+      setSelectedPayments([]); // Reset selected payments when loading new ones
     } catch (error) {
       console.error('Erro ao carregar pagamentos:', error);
     } finally {
@@ -513,15 +516,34 @@ function PaymentsTab({ studentId }) {
 
   const handleReceiveSubmit = async () => {
     try {
-      await updateDoc(doc(db, 'pagamentos', receivingPayment.id), {
-        status: 'pago',
-        valorRecebido: parseFloat(receiveFormData.valor),
-        meioPagamento: receiveFormData.meioPagamento,
-        dataRecebimento: receiveFormData.dataRecebimento,
-        updatedAt: serverTimestamp()
-      });
+      if (receivingPayment) {
+        // Single payment receive
+        await updateDoc(doc(db, 'pagamentos', receivingPayment.id), {
+          status: 'pago',
+          valorRecebido: parseFloat(receiveFormData.valor),
+          meioPagamento: receiveFormData.meioPagamento,
+          dataRecebimento: receiveFormData.dataRecebimento,
+          updatedAt: serverTimestamp()
+        });
+      } else if (selectedPayments.length > 0) {
+        // Multiple payments receive
+        const batch = writeBatch(db);
+        selectedPayments.forEach(paymentId => {
+          const payment = payments.find(p => p.id === paymentId);
+          const paymentRef = doc(db, 'pagamentos', paymentId);
+          batch.update(paymentRef, {
+            status: 'pago',
+            valorRecebido: payment.valor,
+            meioPagamento: receiveFormData.meioPagamento,
+            dataRecebimento: receiveFormData.dataRecebimento,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+      }
       setOpenReceiveDialog(false);
       setReceivingPayment(null);
+      setSelectedPayments([]);
       loadPayments();
     } catch (error) {
       console.error('Erro ao receber pagamento:', error);
@@ -561,6 +583,31 @@ function PaymentsTab({ studentId }) {
     }
   };
 
+  const handleCheckboxChange = (paymentId) => {
+    setSelectedPayments(prev => {
+      if (prev.includes(paymentId)) {
+        return prev.filter(id => id !== paymentId);
+      } else {
+        return [...prev, paymentId];
+      }
+    });
+  };
+
+  const handleReceiveSelectedClick = () => {
+    const totalValue = selectedPayments.reduce((sum, paymentId) => {
+      const payment = payments.find(p => p.id === paymentId);
+      return sum + payment.valor;
+    }, 0);
+
+    setReceivingPayment(null);
+    setReceiveFormData({
+      valor: totalValue.toString(),
+      meioPagamento: '',
+      dataRecebimento: dayjs().format('YYYY-MM-DD')
+    });
+    setOpenReceiveDialog(true);
+  };
+
   const tiposPagamento = [
     'Mensalidade',
     'Aula individual',
@@ -592,7 +639,16 @@ function PaymentsTab({ studentId }) {
 
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+        <Button
+          variant="contained"
+          color="success"
+          disabled={selectedPayments.length === 0}
+          onClick={handleReceiveSelectedClick}
+          startIcon={<AttachMoneyIcon />}
+        >
+          Receber Selecionados ({selectedPayments.length})
+        </Button>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -618,6 +674,7 @@ function PaymentsTab({ studentId }) {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox"></TableCell>
                 <TableCell>Descrição</TableCell>
                 <TableCell>Tipo</TableCell>
                 <TableCell>Valor</TableCell>
@@ -630,6 +687,14 @@ function PaymentsTab({ studentId }) {
             <TableBody>
               {payments.map((payment) => (
                 <TableRow key={payment.id}>
+                  <TableCell padding="checkbox">
+                    {payment.status !== 'pago' && (
+                      <Checkbox
+                        checked={selectedPayments.includes(payment.id)}
+                        onChange={() => handleCheckboxChange(payment.id)}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>{payment.descricao}</TableCell>
                   <TableCell>{payment.tipo}</TableCell>
                   <TableCell>
@@ -692,7 +757,7 @@ function PaymentsTab({ studentId }) {
               ))}
               {payments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={8} align="center">
                     Nenhum pagamento encontrado
                   </TableCell>
                 </TableRow>
