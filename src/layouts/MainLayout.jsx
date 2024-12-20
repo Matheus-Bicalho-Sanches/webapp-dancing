@@ -48,6 +48,11 @@ export default function MainLayout({ children, title }) {
       path: '/admin/matriculas'
     },
     {
+      text: 'Turmas',
+      icon: <GroupIcon />,
+      path: '/admin/turmas'
+    },
+    {
       text: 'Frequência',
       icon: <CalendarMonthIcon />,
       path: '/admin/frequencia'

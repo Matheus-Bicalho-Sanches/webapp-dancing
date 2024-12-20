@@ -8,6 +8,7 @@ import Users from './pages/admin/Users';
 import Students from './pages/admin/Students';
 import StudentProfile from './pages/admin/StudentProfile';
 import Enrollment from './pages/admin/Enrollment';
+import Classes from './pages/admin/Classes';
 import CheckMaster from './pages/admin/CheckMaster';
 import Tasks from './pages/admin/Tasks';
 import Schedule from './pages/public/Schedule';
@@ -73,6 +74,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Enrollment />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/turmas" 
+            element={
+              <PrivateRoute>
+                <Classes />
               </PrivateRoute>
             } 
           />

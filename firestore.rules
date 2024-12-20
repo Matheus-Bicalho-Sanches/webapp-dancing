@@ -109,5 +109,12 @@ service cloud.firestore {
       allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
+
+    // Regras para a coleção turmasData
+    match /turmasData/{turmaId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
   }
 } 
