@@ -25,8 +25,19 @@ import {
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  Timestamp,
+  orderBy,
+  limit,
+  startAfter,
+  endBefore
+} from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import dayjs from 'dayjs';
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
@@ -45,23 +56,105 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // TODO: Implementar busca de dados reais
-      // Por enquanto, usando dados mockados
-      const mockData = {
-        totalStudents: 145,
-        studentsVariation: 12,
-        latePayments: 8,
-        expiredEnrollments: 5,
-        studentsWithIssues: [
-          { id: 1, name: 'João Silva', issue: 'Pagamento atrasado', daysLate: 5 },
-          { id: 2, name: 'Maria Santos', issue: 'Matrícula vencida', daysLate: 10 },
-          { id: 3, name: 'Pedro Oliveira', issue: 'Pagamento atrasado', daysLate: 3 },
-        ]
-      };
+      // 1. Buscar total de alunos atual
+      const studentsRef = collection(db, 'alunos');
+      const studentsSnapshot = await getDocs(studentsRef);
+      const totalStudents = studentsSnapshot.size;
+
+      // 2. Buscar total de alunos do mês anterior para calcular variação
+      const lastMonthDate = dayjs().subtract(1, 'month').toDate();
+      const studentsLastMonthQuery = query(
+        studentsRef,
+        where('createdAt', '<=', lastMonthDate)
+      );
+      const studentsLastMonthSnapshot = await getDocs(studentsLastMonthQuery);
+      const totalStudentsLastMonth = studentsLastMonthSnapshot.size;
       
-      setMetrics(mockData);
+      // Calcular variação percentual
+      const variation = totalStudentsLastMonth > 0 
+        ? ((totalStudents - totalStudentsLastMonth) / totalStudentsLastMonth) * 100 
+        : 0;
+
+      // 3. Buscar alunos com pagamentos atrasados
+      const now = new Date();
+      const paymentsRef = collection(db, 'pagamentos');
+      const latePaymentsQuery = query(
+        paymentsRef,
+        where('status', '==', 'pendente'),
+        where('dataVencimento', '<', now)
+      );
+      const latePaymentsSnapshot = await getDocs(latePaymentsQuery);
+      const latePayments = latePaymentsSnapshot.size;
+
+      // 4. Buscar matrículas vencidas
+      const matriculasRef = collection(db, 'matriculas');
+      const expiredEnrollmentsQuery = query(
+        matriculasRef,
+        where('dataTermino', '<', now),
+        where('status', '==', 'ativa')
+      );
+      const expiredEnrollmentsSnapshot = await getDocs(expiredEnrollmentsQuery);
+      const expiredEnrollments = expiredEnrollmentsSnapshot.size;
+
+      // 5. Buscar detalhes dos alunos com pendências
+      const studentsWithIssues = [];
+      
+      // 5.1 Processar pagamentos atrasados
+      for (const doc of latePaymentsSnapshot.docs) {
+        const paymentData = doc.data();
+        const studentDoc = await getDocs(query(
+          studentsRef,
+          where('id', '==', paymentData.alunoId)
+        ));
+        
+        if (!studentDoc.empty) {
+          const studentData = studentDoc.docs[0].data();
+          const daysLate = dayjs().diff(dayjs(paymentData.dataVencimento.toDate()), 'day');
+          
+          studentsWithIssues.push({
+            id: doc.id,
+            name: studentData.nome,
+            issue: 'Pagamento atrasado',
+            daysLate
+          });
+        }
+      }
+
+      // 5.2 Processar matrículas vencidas
+      for (const doc of expiredEnrollmentsSnapshot.docs) {
+        const enrollmentData = doc.data();
+        const studentDoc = await getDocs(query(
+          studentsRef,
+          where('id', '==', enrollmentData.alunoId)
+        ));
+        
+        if (!studentDoc.empty) {
+          const studentData = studentDoc.docs[0].data();
+          const daysLate = dayjs().diff(dayjs(enrollmentData.dataTermino.toDate()), 'day');
+          
+          studentsWithIssues.push({
+            id: doc.id,
+            name: studentData.nome,
+            issue: 'Matrícula vencida',
+            daysLate
+          });
+        }
+      }
+
+      // Ordenar por dias de atraso
+      studentsWithIssues.sort((a, b) => b.daysLate - a.daysLate);
+
+      setMetrics({
+        totalStudents,
+        studentsVariation: parseFloat(variation.toFixed(1)),
+        latePayments,
+        expiredEnrollments,
+        studentsWithIssues
+      });
+
     } catch (error) {
       console.error('Erro ao buscar dados do dashboard:', error);
+      // Em caso de erro, manter os dados anteriores
     } finally {
       setLoading(false);
     }
@@ -104,6 +197,11 @@ export default function Dashboard() {
       </CardContent>
     </Card>
   );
+
+  const handleViewDetails = (studentId) => {
+    // Navegar para a página de detalhes do aluno
+    window.location.href = `/admin/alunos/${studentId}`;
+  };
 
   if (loading) {
     return (
@@ -174,7 +272,7 @@ export default function Dashboard() {
                       <Button 
                         variant="outlined" 
                         size="small"
-                        onClick={() => {/* TODO: Implementar ação */}}
+                        onClick={() => handleViewDetails(student.id)}
                       >
                         Ver Detalhes
                       </Button>
@@ -183,6 +281,14 @@ export default function Dashboard() {
                   <Divider />
                 </React.Fragment>
               ))}
+              {metrics.studentsWithIssues.length === 0 && (
+                <ListItem>
+                  <ListItemText
+                    primary="Nenhuma pendência encontrada"
+                    secondary="Todos os alunos estão em dia"
+                  />
+                </ListItem>
+              )}
             </List>
           </Paper>
         </Grid>
