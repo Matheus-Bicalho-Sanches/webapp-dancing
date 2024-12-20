@@ -540,13 +540,41 @@ function PaymentsTab({ studentId }) {
     setOpenDialog(true);
   };
 
-  const handleDeleteClick = async (paymentId) => {
+  const handleDelete = async (paymentId) => {
     if (window.confirm('Tem certeza que deseja excluir este pagamento?')) {
       try {
-        await deleteDoc(doc(db, 'pagamentos', paymentId));
+        // Primeiro, buscar movimentações relacionadas a este pagamento
+        const movimentacoesRef = collection(db, 'movimentacoes');
+        const q = query(movimentacoesRef, where('pagamentoId', '==', paymentId));
+        const querySnapshot = await getDocs(q);
+
+        // Criar um batch para excluir tanto o pagamento quanto as movimentações
+        const batch = writeBatch(db);
+
+        // Adicionar exclusão do pagamento ao batch
+        batch.delete(doc(db, 'pagamentos', paymentId));
+
+        // Adicionar exclusão das movimentações ao batch
+        querySnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+
+        // Executar todas as exclusões em uma única transação
+        await batch.commit();
+
         loadPayments();
+        setSnackbar({
+          open: true,
+          message: 'Pagamento excluído com sucesso!',
+          severity: 'success'
+        });
       } catch (error) {
         console.error('Erro ao excluir pagamento:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir pagamento. Por favor, tente novamente.',
+          severity: 'error'
+        });
       }
     }
   };
@@ -837,7 +865,7 @@ function PaymentsTab({ studentId }) {
                     {hasDeletePermission && (
                       <IconButton
                         color="error"
-                        onClick={() => handleDeleteClick(payment.id)}
+                        onClick={() => handleDelete(payment.id)}
                         size="small"
                       >
                         <DeleteIcon />
