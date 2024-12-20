@@ -22,6 +22,8 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import GroupIcon from '@mui/icons-material/Group';
 import SchoolIcon from '@mui/icons-material/School';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 const drawerWidth = 240;
 
@@ -59,6 +61,16 @@ export default function MainLayout({ children, title }) {
       text: 'Tarefas',
       icon: <AssignmentIcon />,
       path: '/admin/tarefas'
+    },
+    {
+      text: 'Controle de Caixa',
+      icon: <AccountBalanceWalletIcon />,
+      path: '/admin/caixa'
+    },
+    {
+      text: 'Relatórios',
+      icon: <AssessmentIcon />,
+      path: '/admin/relatorios'
     },
     {
       text: 'Usuários',

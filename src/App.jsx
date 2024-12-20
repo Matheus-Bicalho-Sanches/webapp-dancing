@@ -13,39 +13,26 @@ import Tasks from './pages/admin/Tasks';
 import Schedule from './pages/public/Schedule';
 import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
+import CashControl from './pages/admin/CashControl';
+import Reports from './pages/admin/Reports';
+import Attendance from './pages/admin/Attendance';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
         <Routes>
-          {/* Rotas Públicas */}
+          {/* Rotas públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/agendar" element={<Schedule />} />
-          <Route path="/payment-failure" element={<PaymentFailure />} />
-          
-          {/* Rotas Administrativas */}
+          <Route path="/pagamento-falhou" element={<PaymentFailure />} />
+
+          {/* Rotas administrativas */}
           <Route 
             path="/admin/dashboard" 
             element={
               <PrivateRoute>
                 <Dashboard />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/admin/aulas" 
-            element={
-              <PrivateRoute>
-                <IndividualClasses />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/admin/usuarios" 
-            element={
-              <PrivateRoute>
-                <Users />
               </PrivateRoute>
             } 
           />
@@ -66,6 +53,22 @@ function App() {
             } 
           />
           <Route 
+            path="/admin/usuarios" 
+            element={
+              <PrivateRoute>
+                <Users />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/aulas" 
+            element={
+              <PrivateRoute>
+                <IndividualClasses />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
             path="/admin/matriculas" 
             element={
               <PrivateRoute>
@@ -78,6 +81,30 @@ function App() {
             element={
               <PrivateRoute>
                 <Tasks />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/caixa" 
+            element={
+              <PrivateRoute>
+                <CashControl />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/relatorios" 
+            element={
+              <PrivateRoute>
+                <Reports />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/frequencia" 
+            element={
+              <PrivateRoute>
+                <Attendance />
               </PrivateRoute>
             } 
           />
