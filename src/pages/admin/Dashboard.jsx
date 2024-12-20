@@ -113,9 +113,11 @@ export default function Dashboard() {
           
           studentsWithIssues.push({
             id: doc.id,
+            studentId: paymentData.alunoId,
             name: studentData.nome,
             issue: 'Pagamento atrasado',
-            daysLate
+            daysLate,
+            type: 'payment'
           });
         }
       }
@@ -134,9 +136,11 @@ export default function Dashboard() {
           
           studentsWithIssues.push({
             id: doc.id,
+            studentId: enrollmentData.alunoId,
             name: studentData.nome,
             issue: 'Matrícula vencida',
-            daysLate
+            daysLate,
+            type: 'enrollment'
           });
         }
       }
@@ -198,9 +202,15 @@ export default function Dashboard() {
     </Card>
   );
 
-  const handleViewDetails = (studentId) => {
-    // Navegar para a página de detalhes do aluno
-    window.location.href = `/admin/alunos/${studentId}`;
+  const handleViewDetails = (student) => {
+    // Navegar para a página correta baseado no tipo de pendência
+    if (student.type === 'payment') {
+      // Se for pagamento atrasado, vai para a página de pagamentos do aluno
+      window.location.href = `/admin/alunos/${student.studentId}?tab=pagamentos`;
+    } else if (student.type === 'enrollment') {
+      // Se for matrícula vencida, vai para a página de matrículas do aluno
+      window.location.href = `/admin/alunos/${student.studentId}?tab=matriculas`;
+    }
   };
 
   if (loading) {
@@ -272,7 +282,7 @@ export default function Dashboard() {
                       <Button 
                         variant="outlined" 
                         size="small"
-                        onClick={() => handleViewDetails(student.id)}
+                        onClick={() => handleViewDetails(student)}
                       >
                         Ver Detalhes
                       </Button>

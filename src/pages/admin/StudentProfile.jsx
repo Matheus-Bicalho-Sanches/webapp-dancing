@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import {
   Box,
@@ -974,6 +974,7 @@ function PaymentsTab({ studentId }) {
 export default function StudentProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1006,6 +1007,39 @@ export default function StudentProfile() {
   useEffect(() => {
     loadStudent();
   }, [id]);
+
+  useEffect(() => {
+    // Definir a aba correta baseado no parâmetro da URL
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      switch (tabParam.toLowerCase()) {
+        case 'matriculas':
+          setCurrentTab(1);
+          break;
+        case 'horarios':
+          setCurrentTab(2);
+          break;
+        case 'pagamentos':
+          setCurrentTab(3);
+          break;
+        case 'frequencia':
+          setCurrentTab(4);
+          break;
+        case 'observacoes':
+          setCurrentTab(5);
+          break;
+        default:
+          setCurrentTab(0);
+      }
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+    // Atualizar a URL quando mudar de aba
+    const tabNames = ['info', 'matriculas', 'horarios', 'pagamentos', 'frequencia', 'observacoes'];
+    navigate(`/admin/alunos/${id}?tab=${tabNames[newValue]}`, { replace: true });
+  };
 
   const loadStudent = async () => {
     try {
@@ -1045,10 +1079,6 @@ export default function StudentProfile() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue);
   };
 
   const handleDeleteClick = () => {
@@ -1404,7 +1434,7 @@ export default function StudentProfile() {
                   }}
                 />
 
-                <Divider textAlign="left">Informações Familiares</Divider>
+                <Divider textAlign="left">Informa��ões Familiares</Divider>
                 
                 <TextField
                   fullWidth
