@@ -41,22 +41,17 @@ import {
   updateDoc,
   deleteDoc,
   doc,
-  serverTimestamp
+  serverTimestamp,
+  getDocs,
+  where
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 
-const RESPONSAVEIS = [
-  'Maria Silva',
-  'João Santos',
-  'Ana Oliveira',
-  'Carlos Lima',
-  'Patricia Souza'
-];
-
 export default function Tasks() {
   const { currentUser } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -70,6 +65,31 @@ export default function Tasks() {
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
+
+  // Carregar usuários
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, orderBy('email'));
+        const querySnapshot = await getDocs(q);
+        const usersData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsers(usersData);
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar lista de usuários.',
+          severity: 'error'
+        });
+      }
+    };
+
+    loadUsers();
+  }, []);
 
   useEffect(() => {
     // Configurar listener para atualizações em tempo real
@@ -204,7 +224,7 @@ export default function Tasks() {
     <MainLayout title="Tarefas">
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5">
+          <Typography variant="h5" sx={{ color: '#000' }}>
             Gerenciamento de Tarefas
           </Typography>
           <Button
@@ -231,7 +251,9 @@ export default function Tasks() {
               {tasks.map((task) => (
                 <TableRow key={task.id}>
                   <TableCell>{task.descricao}</TableCell>
-                  <TableCell>{task.responsavel}</TableCell>
+                  <TableCell>
+                    {users.find(user => user.id === task.responsavel)?.email || task.responsavel}
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
@@ -298,9 +320,9 @@ export default function Tasks() {
                   onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
                   label="Responsável"
                 >
-                  {RESPONSAVEIS.map((responsavel) => (
-                    <MenuItem key={responsavel} value={responsavel}>
-                      {responsavel}
+                  {users.map((user) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.email}
                     </MenuItem>
                   ))}
                 </Select>
