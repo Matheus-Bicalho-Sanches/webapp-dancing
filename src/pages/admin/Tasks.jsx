@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainLayout from '../../layouts/MainLayout';
 import {
   Box,
@@ -21,7 +21,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip
+  Chip,
+  CircularProgress,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,45 +32,19 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
-
-// Dados de exemplo
-const SAMPLE_TASKS = [
-  {
-    id: 1,
-    descricao: 'Organizar apresentação de fim de ano',
-    responsavel: 'Maria Silva',
-    prazoLimite: '2024-12-10',
-    observacoes: 'Preparar coreografia e músicas'
-  },
-  {
-    id: 2,
-    descricao: 'Manutenção dos equipamentos',
-    responsavel: 'João Santos',
-    prazoLimite: '2024-03-15',
-    observacoes: 'Verificar patins e equipamentos de segurança'
-  },
-  {
-    id: 3,
-    descricao: 'Reunião com pais',
-    responsavel: 'Ana Oliveira',
-    prazoLimite: '2024-04-01',
-    observacoes: 'Discutir progresso dos alunos e próximos eventos'
-  },
-  {
-    id: 4,
-    descricao: 'Atualizar planilha de frequência',
-    responsavel: 'Carlos Lima',
-    prazoLimite: '2024-03-05',
-    observacoes: 'Incluir novos alunos e verificar faltas'
-  },
-  {
-    id: 5,
-    descricao: 'Preparar festival de inverno',
-    responsavel: 'Maria Silva',
-    prazoLimite: '2024-07-15',
-    observacoes: 'Definir tema e programação'
-  }
-];
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp
+} from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 
 const RESPONSAVEIS = [
   'Maria Silva',
@@ -78,15 +55,45 @@ const RESPONSAVEIS = [
 ];
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState(SAMPLE_TASKS);
+  const { currentUser } = useAuth();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formData, setFormData] = useState({
     descricao: '',
     responsavel: '',
     prazoLimite: dayjs().format('YYYY-MM-DD'),
     observacoes: ''
   });
+
+  // Verificar se o usuário tem permissão de master
+  const hasDeletePermission = currentUser?.userType === 'master';
+
+  useEffect(() => {
+    // Configurar listener para atualizações em tempo real
+    const q = query(collection(db, 'tarefas'), orderBy('prazoLimite', 'asc'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTasks(tasksData);
+      setLoading(false);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
+        severity: 'error'
+      });
+      setLoading(false);
+    });
+
+    // Cleanup subscription
+    return () => unsubscribe();
+  }, []);
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -95,7 +102,7 @@ export default function Tasks() {
         descricao: task.descricao,
         responsavel: task.responsavel,
         prazoLimite: task.prazoLimite,
-        observacoes: task.observacoes
+        observacoes: task.observacoes || ''
       });
     } else {
       setEditingTask(null);
@@ -114,28 +121,62 @@ export default function Tasks() {
     setEditingTask(null);
   };
 
-  const handleSubmit = () => {
-    if (editingTask) {
-      // Editar tarefa existente
-      setTasks(tasks.map(task => 
-        task.id === editingTask.id 
-          ? { ...task, ...formData }
-          : task
-      ));
-    } else {
-      // Adicionar nova tarefa
-      const newTask = {
-        id: Math.max(...tasks.map(t => t.id)) + 1,
-        ...formData
+  const handleSubmit = async () => {
+    try {
+      const taskData = {
+        ...formData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
       };
-      setTasks([...tasks, newTask]);
+
+      if (editingTask) {
+        // Atualizar tarefa existente
+        await updateDoc(doc(db, 'tarefas', editingTask.id), taskData);
+        setSnackbar({
+          open: true,
+          message: 'Tarefa atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        // Adicionar nova tarefa
+        taskData.createdAt = serverTimestamp();
+        taskData.createdBy = currentUser.uid;
+        await addDoc(collection(db, 'tarefas'), taskData);
+        setSnackbar({
+          open: true,
+          message: 'Tarefa criada com sucesso!',
+          severity: 'success'
+        });
+      }
+
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa. Por favor, tente novamente.',
+        severity: 'error'
+      });
     }
-    handleCloseDialog();
   };
 
-  const handleDelete = (taskId) => {
+  const handleDelete = async (taskId) => {
     if (window.confirm('Tem certeza que deseja excluir esta tarefa?')) {
-      setTasks(tasks.filter(task => task.id !== taskId));
+      try {
+        await deleteDoc(doc(db, 'tarefas', taskId));
+        setSnackbar({
+          open: true,
+          message: 'Tarefa excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
     }
   };
 
@@ -148,6 +189,16 @@ export default function Tasks() {
     if (diasRestantes <= 7) return 'warning';
     return 'success';
   };
+
+  if (loading) {
+    return (
+      <MainLayout title="Tarefas">
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+          <CircularProgress />
+        </Box>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="Tarefas">
@@ -197,16 +248,25 @@ export default function Tasks() {
                     >
                       <EditIcon />
                     </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(task.id)}
-                      size="small"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    {hasDeletePermission && (
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDelete(task.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
+              {tasks.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhuma tarefa encontrada
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -281,6 +341,22 @@ export default function Tasks() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Snackbar para feedback */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+            severity={snackbar.severity}
+            variant="filled"
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </MainLayout>
   );

@@ -95,5 +95,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
+
+    // Regras para a coleção tarefas
+    match /tarefas/{tarefaId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
   }
 } 
