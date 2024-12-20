@@ -12,6 +12,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PersonIcon from '@mui/icons-material/Person';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 const Sidebar = () => {
   const menuItems = [
@@ -19,6 +20,7 @@ const Sidebar = () => {
     { text: 'Alunos', icon: <PeopleIcon />, path: '/alunos' },
     { text: 'Frequência', icon: <CalendarTodayIcon />, path: '/frequencia' },
     { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/aulas-individuais' },
+    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/tarefas' },
   ];
 
   return (
