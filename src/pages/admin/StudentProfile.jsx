@@ -40,7 +40,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
@@ -561,23 +561,46 @@ function PaymentsTab({ studentId }) {
     setOpenReceiveDialog(true);
   };
 
+  const createCashMovement = async (payment, receiveData) => {
+    return addDoc(collection(db, 'movimentacoes'), {
+      data: Timestamp.fromDate(dayjs(receiveData.dataRecebimento).toDate()),
+      tipo: 'entrada',
+      descricao: `Pagamento de ${payment.descricao}`,
+      valor: parseFloat(receiveData.valor || payment.valor),
+      categoria: 'Mensalidade',
+      formaPagamento: receiveData.meioPagamento,
+      alunoId: studentId,
+      pagamentoId: payment.id,
+      createdAt: serverTimestamp(),
+      createdBy: currentUser.uid,
+      updatedAt: serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+  };
+
   const handleReceiveSubmit = async () => {
     try {
       if (receivingPayment) {
         // Single payment receive
-        await updateDoc(doc(db, 'pagamentos', receivingPayment.id), {
+        const paymentUpdate = {
           status: 'pago',
           valorRecebido: parseFloat(receiveFormData.valor),
           meioPagamento: receiveFormData.meioPagamento,
           dataRecebimento: receiveFormData.dataRecebimento,
           updatedAt: serverTimestamp()
-        });
+        };
+
+        await updateDoc(doc(db, 'pagamentos', receivingPayment.id), paymentUpdate);
+        await createCashMovement(receivingPayment, receiveFormData);
+
       } else if (selectedPayments.length > 0) {
-        // Multiple payments receive
         const batch = writeBatch(db);
+        const movimentacoesPromises = [];
+
         selectedPayments.forEach(paymentId => {
           const payment = payments.find(p => p.id === paymentId);
           const paymentRef = doc(db, 'pagamentos', paymentId);
+          
           batch.update(paymentRef, {
             status: 'pago',
             valorRecebido: payment.valor,
@@ -585,15 +608,36 @@ function PaymentsTab({ studentId }) {
             dataRecebimento: receiveFormData.dataRecebimento,
             updatedAt: serverTimestamp()
           });
+
+          movimentacoesPromises.push(
+            createCashMovement(payment, {
+              ...receiveFormData,
+              valor: payment.valor
+            })
+          );
         });
+
         await batch.commit();
+        await Promise.all(movimentacoesPromises);
       }
+
       setOpenReceiveDialog(false);
       setReceivingPayment(null);
       setSelectedPayments([]);
       loadPayments();
+      
+      setSnackbar({
+        open: true,
+        message: 'Pagamento(s) recebido(s) com sucesso!',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Erro ao receber pagamento:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao receber pagamento. Por favor, tente novamente.',
+        severity: 'error'
+      });
     }
   };
 
@@ -1434,7 +1478,7 @@ export default function StudentProfile() {
                   }}
                 />
 
-                <Divider textAlign="left">Informa��ões Familiares</Divider>
+                <Divider textAlign="left">Informações Familiares</Divider>
                 
                 <TextField
                   fullWidth
