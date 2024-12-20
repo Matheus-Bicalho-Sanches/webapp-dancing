@@ -24,7 +24,9 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -48,6 +50,27 @@ import {
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 
+// Componente TabPanel para renderizar o conteúdo de cada aba
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`task-tabpanel-${index}`}
+      aria-labelledby={`task-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
 export default function Tasks() {
   const { currentUser } = useAuth();
   const [tasks, setTasks] = useState([]);
@@ -55,6 +78,7 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [currentTab, setCurrentTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formData, setFormData] = useState({
     descricao: '',
@@ -93,7 +117,11 @@ export default function Tasks() {
 
   useEffect(() => {
     // Configurar listener para atualizações em tempo real
-    const q = query(collection(db, 'tarefas'), orderBy('prazoLimite', 'asc'));
+    const q = query(
+      collection(db, 'tarefas'), 
+      where('tipo', '==', 'nao_recorrente'),
+      orderBy('prazoLimite', 'asc')
+    );
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const tasksData = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -114,6 +142,10 @@ export default function Tasks() {
     // Cleanup subscription
     return () => unsubscribe();
   }, []);
+
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+  };
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -145,6 +177,7 @@ export default function Tasks() {
     try {
       const taskData = {
         ...formData,
+        tipo: 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
@@ -220,78 +253,114 @@ export default function Tasks() {
     );
   }
 
+  const renderTasksTable = () => (
+    <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+        >
+          Nova Tarefa
+        </Button>
+      </Box>
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Descrição</TableCell>
+              <TableCell>Responsável</TableCell>
+              <TableCell>Prazo</TableCell>
+              <TableCell>Observações</TableCell>
+              <TableCell align="right">Ações</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tasks.map((task) => (
+              <TableRow key={task.id}>
+                <TableCell>{task.descricao}</TableCell>
+                <TableCell>
+                  {users.find(user => user.id === task.responsavel)?.email || task.responsavel}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
+                    color={getStatusColor(task.prazoLimite)}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>{task.observacoes}</TableCell>
+                <TableCell align="right">
+                  <IconButton
+                    color="primary"
+                    onClick={() => handleOpenDialog(task)}
+                    size="small"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                  {hasDeletePermission && (
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDelete(task.id)}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            {tasks.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  Nenhuma tarefa encontrada
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </>
+  );
+
   return (
     <MainLayout title="Tarefas">
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" sx={{ color: '#000' }}>
-            Gerenciamento de Tarefas
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nova Tarefa
-          </Button>
+        <Typography variant="h5" sx={{ color: '#000', mb: 3 }}>
+          Gerenciamento de Tarefas
+        </Typography>
+
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={currentTab} onChange={handleTabChange}>
+            <Tab label="Não recorrentes" />
+            <Tab label="Diárias" />
+            <Tab label="Semanais" />
+            <Tab label="Mensais" />
+          </Tabs>
         </Box>
 
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Descrição</TableCell>
-                <TableCell>Responsável</TableCell>
-                <TableCell>Prazo</TableCell>
-                <TableCell>Observações</TableCell>
-                <TableCell align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell>{task.descricao}</TableCell>
-                  <TableCell>
-                    {users.find(user => user.id === task.responsavel)?.email || task.responsavel}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
-                      color={getStatusColor(task.prazoLimite)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{task.observacoes}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDialog(task)}
-                      size="small"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    {hasDeletePermission && (
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDelete(task.id)}
-                        size="small"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {tasks.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    Nenhuma tarefa encontrada
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <TabPanel value={currentTab} index={0}>
+          {renderTasksTable()}
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={1}>
+          <Typography>
+            Funcionalidade de tarefas diárias será implementada em breve.
+          </Typography>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={2}>
+          <Typography>
+            Funcionalidade de tarefas semanais será implementada em breve.
+          </Typography>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={3}>
+          <Typography>
+            Funcionalidade de tarefas mensais será implementada em breve.
+          </Typography>
+        </TabPanel>
 
         {/* Dialog para adicionar/editar tarefa */}
         <Dialog
