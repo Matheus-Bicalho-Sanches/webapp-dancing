@@ -19,19 +19,27 @@ import {
   DialogActions,
   TextField,
   Snackbar,
-  Alert
+  Alert,
+  IconButton,
+  DialogContentText
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Products() {
+  const { currentUser } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [newProduct, setNewProduct] = useState({
     nome: '',
@@ -79,6 +87,36 @@ export default function Products() {
     });
   };
 
+  const handleOpenEditDialog = (product) => {
+    setSelectedProduct({
+      ...product,
+      valorCompra: product.valorCompra?.toString().replace('.', ',') || '',
+      valorVenda: product.valorVenda?.toString().replace('.', ',') || '',
+      valorVendaFunc: product.valorVendaFunc?.toString().replace('.', ',') || '',
+      vencimento: product.vencimento ? formatDateForInput(product.vencimento) : ''
+    });
+    setOpenEditDialog(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setOpenEditDialog(false);
+    setSelectedProduct(null);
+  };
+
+  const handleOpenDeleteDialog = () => {
+    setOpenDeleteDialog(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setOpenDeleteDialog(false);
+  };
+
+  const formatDateForInput = (date) => {
+    if (!date) return '';
+    const d = date.toDate ? date.toDate() : new Date(date);
+    return d.toISOString().split('T')[0];
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     let processedValue = value;
@@ -99,10 +137,17 @@ export default function Products() {
       processedValue = value.replace(/[^\d]/g, '');
     }
     
-    setNewProduct(prev => ({
-      ...prev,
-      [name]: processedValue
-    }));
+    if (selectedProduct) {
+      setSelectedProduct(prev => ({
+        ...prev,
+        [name]: processedValue
+      }));
+    } else {
+      setNewProduct(prev => ({
+        ...prev,
+        [name]: processedValue
+      }));
+    }
   };
 
   const handleCreateProduct = async () => {
@@ -149,6 +194,72 @@ export default function Products() {
       setSnackbar({
         open: true,
         message: 'Erro ao criar produto. Tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    try {
+      if (!selectedProduct.nome || !selectedProduct.valorVenda || !selectedProduct.estoque) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, preencha todos os campos obrigatórios',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const convertToNumber = (value) => {
+        if (!value) return 0;
+        const numberStr = value.replace('R$', '').trim().replace(',', '.');
+        return Number(numberStr) || 0;
+      };
+
+      const productData = {
+        nome: selectedProduct.nome,
+        valorCompra: convertToNumber(selectedProduct.valorCompra),
+        valorVenda: convertToNumber(selectedProduct.valorVenda),
+        valorVendaFunc: convertToNumber(selectedProduct.valorVendaFunc),
+        estoque: Number(selectedProduct.estoque) || 0,
+        vencimento: selectedProduct.vencimento ? new Date(selectedProduct.vencimento) : null,
+        updatedAt: serverTimestamp()
+      };
+
+      await updateDoc(doc(db, 'produtos', selectedProduct.id), productData);
+      
+      setSnackbar({
+        open: true,
+        message: 'Produto atualizado com sucesso!',
+        severity: 'success'
+      });
+      handleCloseEditDialog();
+    } catch (error) {
+      console.error('Erro ao atualizar produto:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar produto. Tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    try {
+      await deleteDoc(doc(db, 'produtos', selectedProduct.id));
+      
+      setSnackbar({
+        open: true,
+        message: 'Produto excluído com sucesso!',
+        severity: 'success'
+      });
+      handleCloseDeleteDialog();
+      handleCloseEditDialog();
+    } catch (error) {
+      console.error('Erro ao excluir produto:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao excluir produto. Tente novamente.',
         severity: 'error'
       });
     }
@@ -214,20 +325,6 @@ export default function Products() {
             >
               Criar Produto
             </Button>
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              sx={{
-                borderColor: '#1976d2',
-                color: '#1976d2',
-                '&:hover': {
-                  borderColor: '#115293',
-                  backgroundColor: 'rgba(25, 118, 210, 0.04)'
-                }
-              }}
-            >
-              Editar Estoque
-            </Button>
           </Stack>
         </Box>
 
@@ -241,6 +338,7 @@ export default function Products() {
                 <TableCell align="right">Valor Venda Func.</TableCell>
                 <TableCell align="right">Estoque</TableCell>
                 <TableCell>Vencimento</TableCell>
+                <TableCell align="center">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -252,11 +350,19 @@ export default function Products() {
                   <TableCell align="right">{formatCurrency(product.valorVendaFunc)}</TableCell>
                   <TableCell align="right">{product.estoque || 0}</TableCell>
                   <TableCell>{formatDate(product.vencimento)}</TableCell>
+                  <TableCell align="center">
+                    <IconButton 
+                      onClick={() => handleOpenEditDialog(product)}
+                      sx={{ color: '#1976d2' }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
               {products.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     Nenhum produto cadastrado
                   </TableCell>
                 </TableRow>
@@ -338,6 +444,108 @@ export default function Products() {
             <Button onClick={handleCloseDialog}>Cancelar</Button>
             <Button onClick={handleCreateProduct} variant="contained">
               Criar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Diálogo para editar produto */}
+        <Dialog open={openEditDialog} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Editar Produto</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+              <TextField
+                label="Nome do Produto"
+                name="nome"
+                value={selectedProduct?.nome || ''}
+                onChange={handleInputChange}
+                fullWidth
+                required
+              />
+              <TextField
+                label="Valor de Compra"
+                name="valorCompra"
+                value={selectedProduct?.valorCompra || ''}
+                onChange={handleInputChange}
+                fullWidth
+                type="text"
+                InputProps={{
+                  startAdornment: 'R$ '
+                }}
+              />
+              <TextField
+                label="Valor de Venda"
+                name="valorVenda"
+                value={selectedProduct?.valorVenda || ''}
+                onChange={handleInputChange}
+                fullWidth
+                required
+                type="text"
+                InputProps={{
+                  startAdornment: 'R$ '
+                }}
+              />
+              <TextField
+                label="Valor Venda Funcionário"
+                name="valorVendaFunc"
+                value={selectedProduct?.valorVendaFunc || ''}
+                onChange={handleInputChange}
+                fullWidth
+                type="text"
+                InputProps={{
+                  startAdornment: 'R$ '
+                }}
+              />
+              <TextField
+                label="Estoque"
+                name="estoque"
+                value={selectedProduct?.estoque || ''}
+                onChange={handleInputChange}
+                fullWidth
+                required
+                type="number"
+              />
+              <TextField
+                label="Data de Vencimento"
+                name="vencimento"
+                value={selectedProduct?.vencimento || ''}
+                onChange={handleInputChange}
+                fullWidth
+                type="date"
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            {currentUser?.userType === 'master' && (
+              <Button 
+                onClick={handleOpenDeleteDialog}
+                color="error"
+                startIcon={<DeleteIcon />}
+              >
+                Excluir
+              </Button>
+            )}
+            <Button onClick={handleCloseEditDialog}>Cancelar</Button>
+            <Button onClick={handleUpdateProduct} variant="contained">
+              Salvar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Diálogo de confirmação de exclusão */}
+        <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
+          <DialogTitle>Confirmar Exclusão</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDeleteDialog}>Cancelar</Button>
+            <Button onClick={handleDeleteProduct} color="error" variant="contained">
+              Excluir
             </Button>
           </DialogActions>
         </Dialog>
