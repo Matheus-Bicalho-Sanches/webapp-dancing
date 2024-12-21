@@ -17,9 +17,13 @@ import {
   Select,
   MenuItem,
   TextField,
-  Stack
+  Stack,
+  Button
 } from '@mui/material';
-import { FilterList as FilterListIcon } from '@mui/icons-material';
+import { 
+  FilterList as FilterListIcon,
+  Print as PrintIcon
+} from '@mui/icons-material';
 import { collection, query, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
@@ -257,6 +261,106 @@ export default function FinancialReport() {
     </Paper>
   );
 
+  const handlePrint = () => {
+    // Criar uma nova janela para impressão
+    const printWindow = window.open('', '_blank');
+    const filteredData = filteredPayments;
+    
+    // Estilos para impressão
+    const styles = `
+      <style>
+        body { font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .header { margin-bottom: 20px; }
+        .filters { margin-bottom: 20px; }
+        .status { 
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+        }
+        .status-pago { background-color: #e8f5e9; color: #2e7d32; }
+        .status-pendente { background-color: #fff3e0; color: #e65100; }
+        .status-atrasado { background-color: #ffebee; color: #c62828; }
+        @media print {
+          button { display: none; }
+        }
+      </style>
+    `;
+
+    // Criar o conteúdo do relatório
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório Financeiro</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="header">
+            <h2>Relatório Financeiro</h2>
+            <p>Data de geração: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+          </div>
+          <div class="filters">
+            <p><strong>Filtros aplicados:</strong></p>
+            <p>Período: ${filters.periodo === 'hoje' ? 'Hoje' : 'Personalizado'}</p>
+            ${filters.periodo === 'personalizado' ? 
+              `<p>Data Inicial: ${dayjs(filters.dataInicio).format('DD/MM/YYYY')}</p>
+               <p>Data Final: ${dayjs(filters.dataFim).format('DD/MM/YYYY')}</p>` : ''}
+            <p>Status: ${filters.status === 'todos' ? 'Todos' : filters.status}</p>
+            <p>Tipo: ${filters.tipo === 'todos' ? 'Todos' : filters.tipo}</p>
+            <p>Forma de Pagamento: ${filters.meioPagamento === 'todos' ? 'Todos' : filters.meioPagamento}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                <th>Descrição</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Vencimento</th>
+                <th>Recebimento</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(payment => `
+                <tr>
+                  <td>${payment.alunoNome}</td>
+                  <td>${payment.descricao}</td>
+                  <td>${payment.tipo}</td>
+                  <td style="text-align: right">${payment.valor.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                  })}</td>
+                  <td>${dayjs(payment.dataVencimento).format('DD/MM/YYYY')}</td>
+                  <td>${payment.dataRecebimento ? 
+                    `${dayjs(payment.dataRecebimento).format('DD/MM/YYYY')}<br>
+                     <small>${payment.meioPagamento}</small>` : 
+                    '-'}</td>
+                  <td>
+                    <span class="status status-${getStatusLabel(payment.status, payment.dataVencimento).toLowerCase()}">
+                      ${getStatusLabel(payment.status, payment.dataVencimento)}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    // Escrever o conteúdo na nova janela e imprimir
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+      // printWindow.close(); // Opcional: fechar a janela após imprimir
+    };
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -267,6 +371,20 @@ export default function FinancialReport() {
 
   return (
     <>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FilterListIcon />
+          Filtros
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={handlePrint}
+          sx={{ ml: 2 }}
+        >
+          Imprimir Relatório
+        </Button>
+      </Box>
       {renderFilters()}
       <TableContainer component={Paper}>
         <Table>

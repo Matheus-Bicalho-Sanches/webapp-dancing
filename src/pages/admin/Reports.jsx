@@ -34,7 +34,8 @@ import {
   CalendarMonth as CalendarMonthIcon,
   Assignment as AssignmentIcon,
   Close as CloseIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -293,6 +294,102 @@ export default function Reports() {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
+  const handlePrintEnrollments = () => {
+    // Criar uma nova janela para impressão
+    const printWindow = window.open('', '_blank');
+    
+    // Estilos para impressão
+    const styles = `
+      <style>
+        body { font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .header { margin-bottom: 20px; }
+        .filters { margin-bottom: 20px; }
+        .status { 
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+        }
+        .status-ativa { background-color: #e8f5e9; color: #2e7d32; }
+        .status-vencida { background-color: #ffebee; color: #c62828; }
+        .status-baixada { background-color: #f5f5f5; color: #757575; }
+        .status-inativa { background-color: #f5f5f5; color: #757575; }
+        @media print {
+          button { display: none; }
+        }
+      </style>
+    `;
+
+    // Criar o conteúdo do relatório
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório de Matrículas</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="header">
+            <h2>Relatório de Matrículas</h2>
+            <p>Data de geração: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+          </div>
+          <div class="filters">
+            <p><strong>Filtros aplicados:</strong></p>
+            <p>Status: ${filters.status === 'todos' ? 'Todos' : filters.status}</p>
+            <p>Período: ${filters.periodo === 'todos' ? 'Todos' : filters.periodo}</p>
+            ${filters.periodo === 'personalizado' ? 
+              `<p>Data Inicial: ${dayjs(filters.dataInicio).format('DD/MM/YYYY')}</p>
+               <p>Data Final: ${dayjs(filters.dataFim).format('DD/MM/YYYY')}</p>` : ''}
+            <p>Plano: ${filters.plano === 'todos' ? 'Todos' : filters.plano}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID do Aluno</th>
+                <th>Nome do Aluno</th>
+                <th>Telefone</th>
+                <th>Plano</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th>Período</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredData.map(row => `
+                <tr>
+                  <td>${row.alunoId}</td>
+                  <td>${row.nomeAluno}</td>
+                  <td>${row.telefone}</td>
+                  <td>${row.plano}</td>
+                  <td style="text-align: right">${row.valor.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                  })}</td>
+                  <td>
+                    <span class="status status-${getStatusLabel(row.status, row.dataTermino).toLowerCase()}">
+                      ${getStatusLabel(row.status, row.dataTermino)}
+                    </span>
+                  </td>
+                  <td>${dayjs(row.dataInicio).format('DD/MM/YYYY')} até ${dayjs(row.dataTermino).format('DD/MM/YYYY')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    // Escrever o conteúdo na nova janela e imprimir
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+      // printWindow.close(); // Opcional: fechar a janela após imprimir
+    };
+  };
+
   const renderFilters = () => (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Stack spacing={2}>
@@ -411,6 +508,20 @@ export default function Reports() {
 
     return (
       <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FilterListIcon />
+            Filtros
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={handlePrintEnrollments}
+            sx={{ ml: 2 }}
+          >
+            Imprimir Relatório
+          </Button>
+        </Box>
         {renderFilters()}
         <TableContainer component={Paper}>
           <Table>

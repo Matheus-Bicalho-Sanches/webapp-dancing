@@ -17,6 +17,7 @@ import PrivateRoute from './components/PrivateRoute';
 import CashControl from './pages/admin/CashControl';
 import Reports from './pages/admin/Reports';
 import Attendance from './pages/admin/Attendance';
+import Products from './pages/admin/Products';
 
 function App() {
   return (
@@ -125,6 +126,11 @@ function App() {
               </PrivateRoute>
             } 
           />
+          <Route path="/admin/produtos" element={
+            <PrivateRoute>
+              <Products />
+            </PrivateRoute>
+          } />
           
           {/* Redirecionamentos */}
           <Route path="/" element={<Navigate to="/agendar" />} />
