@@ -29,7 +29,7 @@ export default function FinancialReport() {
   const [loading, setLoading] = useState(true);
   const [filteredPayments, setFilteredPayments] = useState([]);
   const [filters, setFilters] = useState({
-    periodo: 'todos',
+    periodo: 'hoje',
     dataInicio: dayjs().subtract(30, 'days').format('YYYY-MM-DD'),
     dataFim: dayjs().format('YYYY-MM-DD'),
     status: 'todos',
@@ -59,6 +59,11 @@ export default function FinancialReport() {
         const alunoRef = doc(db, 'alunos', payment.alunoId);
         const alunoSnap = await getDoc(alunoRef);
         
+        console.log('Pagamento encontrado:', {
+          tipo: payment.tipo,
+          meioPagamento: payment.meioPagamento
+        });
+        
         return {
           id: docSnapshot.id,
           ...payment,
@@ -67,6 +72,12 @@ export default function FinancialReport() {
       });
       
       const pagamentosData = await Promise.all(pagamentosPromises);
+      
+      const tiposUnicos = [...new Set(pagamentosData.map(p => p.tipo))];
+      const meiosPagamentoUnicos = [...new Set(pagamentosData.map(p => p.meioPagamento))];
+      console.log('Tipos únicos encontrados:', tiposUnicos);
+      console.log('Meios de pagamento únicos encontrados:', meiosPagamentoUnicos);
+      
       setPayments(pagamentosData);
       
     } catch (error) {
@@ -88,14 +99,10 @@ export default function FinancialReport() {
         const dataVencimento = dayjs(payment.dataVencimento);
         switch (filters.periodo) {
           case 'personalizado':
-            return dataVencimento.isAfter(dataInicio) && dataVencimento.isBefore(dataFim);
-          case 'atrasados':
-            return dataVencimento.isBefore(dayjs()) && payment.status !== 'pago';
+            return dataVencimento.isAfter(dataInicio.startOf('day')) && 
+                   dataVencimento.isBefore(dataFim.endOf('day'));
           case 'hoje':
             return dataVencimento.isSame(dayjs(), 'day');
-          case 'proximos7dias':
-            return dataVencimento.isAfter(dayjs()) && 
-                   dataVencimento.isBefore(dayjs().add(7, 'days'));
           default:
             return true;
         }
@@ -112,9 +119,13 @@ export default function FinancialReport() {
       });
     }
 
-    // Filtro de tipo
+    // Filtro de tipo com log para debug
     if (filters.tipo !== 'todos') {
-      filtered = filtered.filter(payment => payment.tipo === filters.tipo);
+      console.log('Filtrando por tipo:', filters.tipo);
+      filtered = filtered.filter(payment => {
+        console.log('Comparando com:', payment.tipo);
+        return payment.tipo === filters.tipo;
+      });
     }
 
     // Filtro de meio de pagamento
@@ -157,10 +168,7 @@ export default function FinancialReport() {
                 label="Período"
                 onChange={(e) => handleFilterChange('periodo', e.target.value)}
               >
-                <MenuItem value="todos">Todos</MenuItem>
                 <MenuItem value="hoje">Hoje</MenuItem>
-                <MenuItem value="proximos7dias">Próximos 7 dias</MenuItem>
-                <MenuItem value="atrasados">Atrasados</MenuItem>
                 <MenuItem value="personalizado">Personalizado</MenuItem>
               </Select>
             </FormControl>
@@ -218,9 +226,12 @@ export default function FinancialReport() {
                 onChange={(e) => handleFilterChange('tipo', e.target.value)}
               >
                 <MenuItem value="todos">Todos</MenuItem>
-                <MenuItem value="mensalidade">Mensalidade</MenuItem>
-                <MenuItem value="matricula">Matrícula</MenuItem>
-                <MenuItem value="outro">Outro</MenuItem>
+                <MenuItem value="Mensalidade">Mensalidade</MenuItem>
+                <MenuItem value="Aula individual">Aula individual</MenuItem>
+                <MenuItem value="Cantina">Cantina</MenuItem>
+                <MenuItem value="Eventos">Eventos</MenuItem>
+                <MenuItem value="Aula experimental">Aula experimental</MenuItem>
+                <MenuItem value="Outros">Outros</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -234,10 +245,10 @@ export default function FinancialReport() {
                 onChange={(e) => handleFilterChange('meioPagamento', e.target.value)}
               >
                 <MenuItem value="todos">Todos</MenuItem>
-                <MenuItem value="pix">PIX</MenuItem>
-                <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                <MenuItem value="cartao">Cartão</MenuItem>
-                <MenuItem value="transferencia">Transferência</MenuItem>
+                <MenuItem value="Dinheiro">Dinheiro</MenuItem>
+                <MenuItem value="PIX">PIX</MenuItem>
+                <MenuItem value="Crédito">Crédito</MenuItem>
+                <MenuItem value="Débito">Débito</MenuItem>
               </Select>
             </FormControl>
           </Grid>
