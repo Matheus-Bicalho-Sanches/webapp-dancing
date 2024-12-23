@@ -1,35 +1,60 @@
 import React, { useState } from 'react';
-import { Box, Typography, Paper, TextField, Button, CircularProgress, Alert } from '@mui/material';
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Container,
+  Alert,
+  CircularProgress,
+  Snackbar
+} from '@mui/material';
 import MainLayout from '../../layouts/MainLayout';
 
 const Stripe = () => {
-  const [amount, setAmount] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [payerData, setPayerData] = useState({
     name: '',
     email: '',
     cpf: ''
   });
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
 
-  const handleInputChange = (field) => (event) => {
-    setPayerData({
-      ...payerData,
-      [field]: event.target.value
-    });
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setPayerData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const handlePayment = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const handleAmountChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setAmount(value);
+  };
 
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
       const orderData = {
         amount: parseFloat(amount),
         payer: {
           name: payerData.name,
           email: payerData.email,
-          tax_id: payerData.cpf.replace(/[^0-9]/g, ''), // Remove todos os caracteres não numéricos
+          tax_id: payerData.cpf.replace(/[^0-9]/g, ''),
         },
         items: [{
           name: 'Pagamento Dancing Patinação',
@@ -38,12 +63,9 @@ const Stripe = () => {
         }]
       };
 
-      console.log('Enviando dados:', orderData);
-
-      // Corrigindo a URL da API
       const apiUrl = process.env.NODE_ENV === 'production'
-        ? 'https://dancing-webapp.com.br/stripe/create-session'
-        : 'http://localhost:3001/stripe/create-session';
+        ? '/api/stripe/create-session'
+        : 'http://localhost:3001/api/stripe/create-session';
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -53,19 +75,31 @@ const Stripe = () => {
         body: JSON.stringify(orderData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao criar sessão de pagamento');
-      }
-
       const data = await response.json();
 
-      // Redireciona para a página de checkout do Stripe
-      window.location.href = data.url;
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Erro ao criar sessão de pagamento');
+      }
 
+      // Mostra mensagem de sucesso antes de redirecionar
+      setSnackbar({
+        open: true,
+        message: 'Redirecionando para a página de pagamento...',
+        severity: 'success'
+      });
+
+      // Pequeno delay antes de redirecionar
+      setTimeout(() => {
+        window.location.href = data.url;
+      }, 1500);
     } catch (err) {
-      console.error('Erro ao processar pagamento:', err);
-      setError(err.message || 'Erro ao processar pagamento. Por favor, tente novamente.');
+      console.error('Erro:', err);
+      setError(err.message);
+      setSnackbar({
+        open: true,
+        message: err.message,
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -73,73 +107,96 @@ const Stripe = () => {
 
   return (
     <MainLayout>
-      <Box p={3}>
-        <Typography variant="h4" gutterBottom>
-          Pagamento via Stripe
-        </Typography>
-        <Paper elevation={3} sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+      <Container maxWidth="sm">
+        <Box sx={{ mt: 4, mb: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Pagamento com Stripe
+          </Typography>
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
 
-          <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <form onSubmit={handleSubmit}>
             <TextField
-              label="Nome Completo"
-              value={payerData.name}
-              onChange={handleInputChange('name')}
-              required
               fullWidth
+              label="Nome Completo"
+              name="name"
+              value={payerData.name}
+              onChange={handleInputChange}
+              required
+              margin="normal"
             />
 
             <TextField
+              fullWidth
               label="E-mail"
+              name="email"
               type="email"
               value={payerData.email}
-              onChange={handleInputChange('email')}
+              onChange={handleInputChange}
               required
-              fullWidth
+              margin="normal"
             />
 
             <TextField
-              label="CPF"
-              value={payerData.cpf}
-              onChange={handleInputChange('cpf')}
-              required
               fullWidth
-              inputProps={{
-                maxLength: 14,
-                pattern: '\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}'
-              }}
+              label="CPF"
+              name="cpf"
+              value={payerData.cpf}
+              onChange={handleInputChange}
+              required
+              margin="normal"
+              inputProps={{ maxLength: 11 }}
               helperText="Digite apenas números"
             />
 
             <TextField
-              label="Valor (R$)"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
               fullWidth
-              inputProps={{
-                min: 0,
-                step: 0.01
-              }}
+              label="Valor (R$)"
+              value={amount}
+              onChange={handleAmountChange}
+              required
+              margin="normal"
+              type="number"
+              inputProps={{ min: "1", step: "1" }}
             />
 
             <Button
+              type="submit"
               variant="contained"
-              onClick={handlePayment}
-              disabled={loading || !amount || !payerData.name || !payerData.email || !payerData.cpf}
+              color="primary"
               fullWidth
               size="large"
+              disabled={loading}
+              sx={{ mt: 2 }}
             >
-              {loading ? <CircularProgress size={24} /> : 'Pagar com Stripe'}
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                'PAGAR COM STRIPE'
+              )}
             </Button>
-          </Box>
-        </Paper>
-      </Box>
+          </form>
+        </Box>
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity}
+            sx={{ width: '100%' }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Container>
     </MainLayout>
   );
 };

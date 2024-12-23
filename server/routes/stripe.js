@@ -10,8 +10,11 @@ const CANCEL_URL = IS_PRODUCTION
   ? 'https://dancing-webapp.com.br/admin/stripe/cancel'
   : 'http://localhost:3001/admin/stripe/cancel';
 
+// Middleware para processar o corpo da requisição como raw para o webhook
+const rawBodyMiddleware = express.raw({ type: 'application/json' });
+
 // Rota para criar uma sessão de checkout
-router.post('/create-session', async (req, res) => {
+router.post('/create-session', express.json(), async (req, res) => {
   try {
     const { amount, payer, items } = req.body;
 
@@ -22,25 +25,32 @@ router.post('/create-session', async (req, res) => {
     // Cria a sessão de checkout
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'brl',
-          product_data: {
-            name: items[0].name,
-            description: `Pagamento para ${payer.name}`,
+      line_items: [
+        {
+          price_data: {
+            currency: 'brl',
+            unit_amount: Math.round(amount * 100), // Valor em centavos
+            product_data: {
+              name: items[0].name || 'Pagamento Dancing Patinação',
+              description: `Pagamento para ${payer.name}`,
+            },
           },
-          unit_amount: Math.round(amount * 100), // Valor em centavos
+          quantity: 1,
         },
-        quantity: 1,
-      }],
-      customer_email: payer.email,
-      client_reference_id: `ORDER_${Date.now()}`,
+      ],
       mode: 'payment',
-      success_url: SUCCESS_URL,
+      success_url: `${SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: CANCEL_URL,
+      customer_email: payer.email,
       metadata: {
         customer_name: payer.name,
         customer_tax_id: payer.tax_id,
+      },
+      payment_intent_data: {
+        metadata: {
+          customer_name: payer.name,
+          customer_tax_id: payer.tax_id,
+        },
       },
     });
 
@@ -55,7 +65,7 @@ router.post('/create-session', async (req, res) => {
 });
 
 // Webhook para receber notificações do Stripe
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', rawBodyMiddleware, async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 

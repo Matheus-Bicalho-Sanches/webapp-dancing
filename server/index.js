@@ -28,8 +28,14 @@ app.use(cors({
   credentials: true
 }));
 
-// Configuração para aceitar JSON
-app.use(express.json({ limit: '10mb' }));
+// Configuração para aceitar JSON - exceto para o webhook do Stripe
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/stripe/webhook' || req.originalUrl === '/stripe/webhook') {
+    next();
+  } else {
+    express.json({ limit: '10mb' })(req, res, next);
+  }
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rotas do PagSeguro - Mapeando tanto /api/pagseguro quanto /pagseguro

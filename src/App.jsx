@@ -20,6 +20,8 @@ import Products from './pages/admin/Products';
 import MercadoLivre from './pages/admin/MercadoLivre';
 import PagSeguro from './pages/admin/PagSeguro';
 import Stripe from './pages/admin/Stripe';
+import MainLayout from './components/MainLayout';
+import { Box, Alert } from '@mui/material';
 
 function App() {
   return (
@@ -144,7 +146,31 @@ function App() {
           } />
           <Route path="/admin/stripe" element={
             <PrivateRoute>
-              <Stripe />
+              <MainLayout>
+                <Stripe />
+              </MainLayout>
+            </PrivateRoute>
+          } />
+          <Route path="/admin/stripe/success" element={
+            <PrivateRoute>
+              <MainLayout>
+                <Box p={3}>
+                  <Alert severity="success">
+                    Pagamento realizado com sucesso!
+                  </Alert>
+                </Box>
+              </MainLayout>
+            </PrivateRoute>
+          } />
+          <Route path="/admin/stripe/cancel" element={
+            <PrivateRoute>
+              <MainLayout>
+                <Box p={3}>
+                  <Alert severity="warning">
+                    Pagamento cancelado.
+                  </Alert>
+                </Box>
+              </MainLayout>
             </PrivateRoute>
           } />
           
