@@ -12,12 +12,13 @@ import Classes from './pages/admin/Classes';
 import CheckMaster from './pages/admin/CheckMaster';
 import Tasks from './pages/admin/Tasks';
 import Schedule from './pages/public/Schedule';
-import PaymentFailure from './pages/public/PaymentFailure';
 import PrivateRoute from './components/PrivateRoute';
 import CashControl from './pages/admin/CashControl';
 import Reports from './pages/admin/Reports';
 import Attendance from './pages/admin/Attendance';
 import Products from './pages/admin/Products';
+import MercadoLivre from './pages/admin/MercadoLivre';
+import PagSeguro from './pages/admin/PagSeguro';
 
 function App() {
   return (
@@ -27,7 +28,6 @@ function App() {
           {/* Rotas públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/agendar" element={<Schedule />} />
-          <Route path="/pagamento-falhou" element={<PaymentFailure />} />
 
           {/* Rotas administrativas */}
           <Route 
@@ -129,6 +129,16 @@ function App() {
           <Route path="/admin/produtos" element={
             <PrivateRoute>
               <Products />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/mercado-livre" element={
+            <PrivateRoute>
+              <MercadoLivre />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/pag-seguro" element={
+            <PrivateRoute>
+              <PagSeguro />
             </PrivateRoute>
           } />
           

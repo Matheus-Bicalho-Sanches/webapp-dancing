@@ -73,7 +73,6 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [viewBooking, setViewBooking] = useState(null);
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
   const [values, setValues] = useState([]);
-  const [preferenceId, setPreferenceId] = useState(null);
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
@@ -429,57 +428,6 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     }
   };
 
-  // Função para criar preferência de pagamento
-  const createPreference = async () => {
-    try {
-      setSaving(true);
-      const quantity = selectedSlots.length;
-      const valuePerClass = getValuePerClass(quantity);
-      
-      const response = await fetch('/api/mercadopago/create-preference', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          items: [{
-            id: "AULA-PATINACAO",
-            title: "Aula de Patinação",
-            description: `${quantity} aula(s) individual(is) de patinação`,
-            quantity: quantity,
-            currency_id: "BRL",
-            unit_price: valuePerClass
-          }],
-          payer: {
-            email: agendamentoForm.email,
-            name: agendamentoForm.nomeAluno
-          }
-        })
-      });
-
-      const data = await response.json();
-      console.log('Resposta da criação de preferência:', data);
-      
-      if (data.success) {
-        // Em produção, sempre usar init_point
-        const redirectUrl = data.init_point;
-          
-        if (redirectUrl) {
-          window.location.href = redirectUrl;
-        } else {
-          throw new Error('URL de redirecionamento não encontrada');
-        }
-      } else {
-        throw new Error('Erro ao criar preferência de pagamento');
-      }
-    } catch (error) {
-      console.error('Erro ao criar preferência:', error);
-      showNotification('Erro ao criar preferência de pagamento', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Atualizar handleSaveAgendamento para criar a preferência
   const handleSaveAgendamento = async () => {
     try {
@@ -498,7 +446,20 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       setSaving(true);
 
       if (isPublic) {
-        await createPreference();
+        // Preparar dados do agendamento
+        const agendamentoData = {
+          ...agendamentoForm,
+          horarios: Object.values(selectedTeachers).map(slot => ({
+            data: slot.date,
+            horario: slot.horario,
+            professorId: slot.professorId,
+            professorNome: slot.professorNome
+          }))
+        };
+
+        // Chamar a função saveAgendamento passada como prop
+        await saveAgendamento(agendamentoData);
+        handleCloseAgendamento();
       } else {
         // Preparar dados do agendamento
         const agendamentoData = {
@@ -800,7 +761,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
             <TextField
               fullWidth
-              label="Observações"
+              label="Observaç��es"
               name="observacoes"
               value={agendamentoForm.observacoes}
               onChange={handleAgendamentoChange}
@@ -874,7 +835,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               {isPublic ? (
                 <Button 
                   variant="contained"
-                  onClick={createPreference}
+                  onClick={handleSaveAgendamento}
                   disabled={
                     !agendamentoForm.nomeAluno || 
                     !agendamentoForm.email || 
@@ -883,7 +844,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                   }
                   fullWidth
                 >
-                  {saving ? 'Processando...' : 'Prosseguir para Pagamento'}
+                  {saving ? 'Processando...' : 'Agendar Aulas'}
                 </Button>
               ) : (
                 <Button 

@@ -1,19 +1,7 @@
-import { Box, Paper, Typography, Container, AppBar, Toolbar, Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Paper, Typography, Container, AppBar, Toolbar } from '@mui/material';
 import ScheduleTab from '../../components/tabs/ScheduleTab';
-import { useState } from 'react';
 
 export default function Schedule() {
-  const [openDialog, setOpenDialog] = useState(false);
-  const [paymentData, setPaymentData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setPaymentData(null);
-    setError(null);
-  };
-
   return (
     <Box sx={{ 
       display: 'flex',

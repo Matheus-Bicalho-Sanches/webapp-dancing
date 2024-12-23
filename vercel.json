@@ -1,21 +1,5 @@
 {
   "version": 2,
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "functions": {
-    "api/mercadopago/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "env": {
     "NEXT_PUBLIC_API_URL": "https://dancing-webapp.com.br"
   }

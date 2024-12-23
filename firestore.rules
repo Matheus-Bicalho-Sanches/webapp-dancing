@@ -28,7 +28,7 @@ service cloud.firestore {
       return isAuthenticated() && 
         (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid));
     }
-    
+
     // Regras para a coleção users
     match /users/{userId} {
       // Permitir leitura para usuários autenticados
@@ -122,6 +122,20 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
+
+    // Novas regras para a coleção products (específica para a cantina)
+    match /products/{productId} {
+      // Leitura permitida para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Escrita permitida para master ou administrativo
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      
+      // Atualização de estoque permitida para master ou administrativo
+      allow update: if isAuthenticated() && 
+        isCurrentUserMasterOrAdmin() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']);
     }
   }
 } 

@@ -8,17 +8,16 @@ import {
   Box,
   Typography
 } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import PeopleIcon from '@mui/icons-material/People';
-import SchoolIcon from '@mui/icons-material/School';
-import GroupsIcon from '@mui/icons-material/Groups';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import PersonIcon from '@mui/icons-material/Person';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
+import {
+  Home as HomeIcon,
+  Person as PersonIcon,
+  School as SchoolIcon,
+  Assignment as AssignmentIcon,
+  AttachMoney as AttachMoneyIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Store as StoreIcon,
+  Payment as PaymentIcon
+} from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -26,17 +25,19 @@ const Sidebar = () => {
   const location = useLocation();
   
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin/dashboard' },
-    { text: 'Alunos', icon: <PeopleIcon />, path: '/admin/alunos' },
+    { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard' },
+    { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos' },
     { text: 'Matrículas', icon: <SchoolIcon />, path: '/admin/matriculas' },
-    { text: 'Turmas', icon: <GroupsIcon />, path: '/admin/turmas' },
-    { text: 'Frequência', icon: <CalendarTodayIcon />, path: '/admin/frequencia' },
+    { text: 'Turmas', icon: <SchoolIcon />, path: '/admin/turmas' },
+    { text: 'Frequência', icon: <AssignmentIcon />, path: '/admin/frequencia' },
     { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas' },
     { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas' },
-    { text: 'Controle de Caixa', icon: <AccountBalanceWalletIcon />, path: '/admin/caixa' },
-    { text: 'Relatórios', icon: <AssessmentIcon />, path: '/admin/relatorios' },
-    { text: 'Usuários', icon: <PeopleAltIcon />, path: '/admin/usuarios' },
-    { text: 'Produtos', icon: <Inventory2Icon />, path: '/admin/produtos' }
+    { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
+    { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
+    { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
+    { text: 'Produtos', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
+    { text: 'Mercado Livre', icon: <StoreIcon />, path: '/admin/mercado-livre' },
+    { text: 'PagSeguro', icon: <PaymentIcon />, path: '/admin/pag-seguro' }
   ];
 
   return (
