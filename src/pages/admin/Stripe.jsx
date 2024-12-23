@@ -40,10 +40,10 @@ const Stripe = () => {
 
       console.log('Enviando dados:', orderData);
 
-      // TODO: Implementar integração com Stripe
+      // Corrigindo a URL da API
       const apiUrl = process.env.NODE_ENV === 'production'
-        ? 'https://dancing-webapp.com.br/api/stripe/create-session'
-        : 'http://localhost:3001/api/stripe/create-session';
+        ? 'https://dancing-webapp.com.br/stripe/create-session'
+        : 'http://localhost:3001/stripe/create-session';
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -53,11 +53,12 @@ const Stripe = () => {
         body: JSON.stringify(orderData),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao criar sessão de pagamento');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao criar sessão de pagamento');
       }
+
+      const data = await response.json();
 
       // Redireciona para a página de checkout do Stripe
       window.location.href = data.url;
