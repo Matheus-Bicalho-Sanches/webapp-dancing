@@ -1,22 +1,24 @@
 {
   "version": 2,
-  "buildCommand": "npm install && cd server && npm install && cd .. && npm run build",
-  "outputDirectory": "dist",
-  "routes": [
+  "framework": "vite",
+  "functions": {
+    "server/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
     {
-      "src": "/pagseguro/(.*)",
-      "dest": "/server/index.js"
+      "source": "/pagseguro/:path*",
+      "destination": "/server/index.js"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/server/index.js"
+      "source": "/api/:path*",
+      "destination": "/server/index.js"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 } 
