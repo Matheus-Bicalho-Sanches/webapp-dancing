@@ -107,18 +107,23 @@ const Stripe = () => {
 
   return (
     <MainLayout>
-      <Container maxWidth="sm">
-        <Box sx={{ mt: 4, mb: 4 }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Pagamento com Stripe
-          </Typography>
+      <Box sx={{ mt: 4, mb: 4, ml: 4 }}>
+        <Typography 
+          variant="h4" 
+          component="h1" 
+          gutterBottom
+          sx={{ color: '#000000', fontWeight: 500 }}
+        >
+          Pagamento com Stripe
+        </Typography>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, maxWidth: 400 }}>
+            {error}
+          </Alert>
+        )}
 
+        <Box sx={{ maxWidth: 400 }}>
           <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
@@ -196,7 +201,7 @@ const Stripe = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
-      </Container>
+      </Box>
     </MainLayout>
   );
 };
