@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 const pagseguroRoutes = require('./routes/pagseguro');
 
@@ -35,6 +36,12 @@ app.use(cors({
 // Configuração para aceitar JSON e aumentar limite
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Servir arquivos estáticos do React em produção
+if (IS_PRODUCTION) {
+  // Assumindo que o build do React está na pasta '../build'
+  app.use(express.static(path.join(__dirname, '../build')));
+}
 
 // Configuração do Mercado Pago com token direto
 const ACCESS_TOKEN = 'APP_USR-6064176381936791-120321-0e372e38e8a20e3838985ede57497984-659207396';
@@ -167,8 +174,15 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Servidor funcionando!' });
 });
 
-// Adicione esta linha junto com as outras rotas
+// Suas rotas da API vêm primeiro
 app.use('/pagseguro', pagseguroRoutes);
+
+// Em produção, todas as outras rotas não encontradas vão para o index.html do React
+if (IS_PRODUCTION) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../build', 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
