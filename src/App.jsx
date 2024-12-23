@@ -20,7 +20,7 @@ import Products from './pages/admin/Products';
 import MercadoLivre from './pages/admin/MercadoLivre';
 import PagSeguro from './pages/admin/PagSeguro';
 import Stripe from './pages/admin/Stripe';
-import MainLayout from './components/MainLayout';
+import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
 
 function App() {

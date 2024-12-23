@@ -1,5 +1,12 @@
 const express = require('express');
 const router = express.Router();
+
+// Verifica se a chave do Stripe está definida
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('STRIPE_SECRET_KEY não está definida!');
+  throw new Error('STRIPE_SECRET_KEY não está definida!');
+}
+
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -21,6 +28,12 @@ router.post('/create-session', express.json(), async (req, res) => {
     if (!amount || !payer || !items) {
       return res.status(400).json({ error: 'Dados incompletos' });
     }
+
+    console.log('Criando sessão com os dados:', {
+      amount,
+      payer: { ...payer, tax_id: '***' }, // Log seguro do CPF
+      items
+    });
 
     // Cria a sessão de checkout
     const session = await stripe.checkout.sessions.create({
@@ -54,6 +67,11 @@ router.post('/create-session', express.json(), async (req, res) => {
       },
     });
 
+    console.log('Sessão criada com sucesso:', {
+      sessionId: session.id,
+      url: session.url
+    });
+
     res.json({ url: session.url });
   } catch (error) {
     console.error('Erro ao criar sessão:', error);
@@ -68,6 +86,11 @@ router.post('/create-session', express.json(), async (req, res) => {
 router.post('/webhook', rawBodyMiddleware, async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET não está definida!');
+    return res.status(500).send('Webhook Secret não configurado');
+  }
 
   let event;
 
