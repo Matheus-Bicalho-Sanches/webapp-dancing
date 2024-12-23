@@ -19,6 +19,10 @@
       "dest": "server/index.js"
     },
     {
+      "src": "/api/pagseguro/(.*)",
+      "dest": "server/index.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "server/index.js"
     },

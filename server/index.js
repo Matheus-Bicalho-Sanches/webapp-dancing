@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { MercadoPagoConfig, Preference } = require('mercadopago');
 const pagseguroRoutes = require('./routes/pagseguro');
 
 const app = express();
@@ -31,7 +30,8 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rotas do PagSeguro
+// Rotas do PagSeguro - Mapeando tanto /api/pagseguro quanto /pagseguro
+app.use('/api/pagseguro', pagseguroRoutes);
 app.use('/pagseguro', pagseguroRoutes);
 
 // Rota de teste
