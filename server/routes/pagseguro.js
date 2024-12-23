@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Suas credenciais do PagSeguro (você precisará configurar isso no .env)
+// Suas credenciais do PagSeguro
 const PAGSEGURO_TOKEN = process.env.PAGSEGURO_TOKEN;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -121,10 +121,6 @@ router.post('/webhook', async (req, res) => {
     const status = statusMap[transaction.status] || 'Status desconhecido';
     console.log(`Status da transação ${transaction.code}: ${status}`);
 
-    // Aqui você implementaria a lógica para atualizar o status no seu banco de dados
-    // Por exemplo:
-    // await updateOrderStatus(transaction.reference, status);
-
     res.status(200).send('OK');
   } catch (error) {
     console.error('Erro ao processar notificação:', error);
@@ -135,5 +131,4 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-module.exports = router; 
 module.exports = router; 

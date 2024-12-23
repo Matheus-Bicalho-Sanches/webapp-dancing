@@ -1,19 +1,33 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
+  "builds": [
     {
-      "source": "/pagseguro/:path*",
-      "destination": "/api/index.js"
+      "src": "server/index.js",
+      "use": "@vercel/node"
     },
     {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/pagseguro/(.*)",
+      "dest": "server/index.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "/"
+      "src": "/api/(.*)",
+      "dest": "server/index.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 } 
