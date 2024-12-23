@@ -59,6 +59,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     nomeAluno: '',
     email: '',
     telefone: '',
+    cpf: '',
     observacoes: ''
   });
   const [saving, setSaving] = useState(false);
@@ -326,6 +327,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       nomeAluno: '',
       email: '',
       telefone: '',
+      cpf: '',
       observacoes: ''
     });
   };
@@ -339,9 +341,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   };
 
   const showNotification = (message, severity) => {
-    // Você pode implementar isso usando um Snackbar do MUI
-    // ou qualquer outro componente de notificação
-    console.log(`${severity}: ${message}`);
+    setNotification({
+      open: true,
+      message,
+      severity
+    });
   };
 
   const renderAgendamentoButton = () => {
@@ -432,7 +436,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const handleSaveAgendamento = async () => {
     try {
       // Validar dados básicos
-      if (!agendamentoForm.nomeAluno || !agendamentoForm.email || !agendamentoForm.telefone) {
+      if (!agendamentoForm.nomeAluno || !agendamentoForm.email || !agendamentoForm.telefone || !agendamentoForm.cpf) {
         showNotification('Por favor, preencha todos os campos obrigatórios.', 'error');
         return;
       }
@@ -457,11 +461,42 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           }))
         };
 
-        // Chamar a função saveAgendamento passada como prop
-        await saveAgendamento(agendamentoData);
-        handleCloseAgendamento();
+        // Criar sessão de pagamento no Stripe
+        try {
+          const response = await fetch('/api/stripe/create-session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              amount: selectedSlots.length * getValuePerClass(selectedSlots.length),
+              payer: {
+                name: agendamentoForm.nomeAluno,
+                email: agendamentoForm.email,
+                tax_id: agendamentoForm.cpf.replace(/[^0-9]/g, ''),
+              },
+              items: [{
+                name: `${selectedSlots.length} aula(s) de patinação`,
+                quantity: 1,
+                amount: selectedSlots.length * getValuePerClass(selectedSlots.length)
+              }]
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || data.details || 'Erro ao criar sessão de pagamento');
+          }
+
+          // Redirecionar para a página de pagamento do Stripe
+          window.location.href = data.url;
+        } catch (error) {
+          console.error('Erro ao criar sessão de pagamento:', error);
+          showNotification('Erro ao processar pagamento. Por favor, tente novamente.', 'error');
+        }
       } else {
-        // Preparar dados do agendamento
+        // Lógica existente para agendamento administrativo
         const agendamentoData = {
           ...agendamentoForm,
           horarios: Object.values(selectedTeachers).map(slot => ({
@@ -472,7 +507,6 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           }))
         };
 
-        // Chamar a função saveAgendamento passada como prop
         await saveAgendamento(agendamentoData);
         handleCloseAgendamento();
       }
@@ -722,113 +756,76 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Horários selecionados:
+            </Typography>
+            <Box sx={{ mb: 3 }}>
+              {Object.values(selectedTeachers).map((slot, index) => (
+                <Typography key={index} color="text.secondary">
+                  • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                </Typography>
+              ))}
+            </Box>
+
+            <Typography variant="subtitle1" gutterBottom>
+              Valor total: R$ {selectedSlots.length * getValuePerClass(selectedSlots.length)}
+            </Typography>
+
             <TextField
               fullWidth
-              label="Nome do Aluno"
+              label="Nome Completo"
               name="nomeAluno"
               value={agendamentoForm.nomeAluno}
               onChange={handleAgendamentoChange}
               required
-              error={!agendamentoForm.nomeAluno}
-              helperText={!agendamentoForm.nomeAluno ? "Nome é obrigatório" : ""}
-              sx={{ mb: 2 }}
+              margin="normal"
             />
 
             <TextField
               fullWidth
-              label="Email"
+              label="E-mail"
               name="email"
               type="email"
               value={agendamentoForm.email}
               onChange={handleAgendamentoChange}
               required
-              error={!agendamentoForm.email}
-              helperText={!agendamentoForm.email ? "Email é obrigatório" : ""}
-              sx={{ mb: 2 }}
+              margin="normal"
             />
 
             <TextField
               fullWidth
-              label="Telefone/WhatsApp"
+              label="WhatsApp"
               name="telefone"
               value={agendamentoForm.telefone}
               onChange={handleAgendamentoChange}
               required
-              error={!agendamentoForm.telefone}
-              helperText={!agendamentoForm.telefone ? "Telefone é obrigatório" : ""}
-              sx={{ mb: 2 }}
+              margin="normal"
+              inputProps={{ maxLength: 11 }}
+              helperText="Digite apenas números"
             />
 
             <TextField
               fullWidth
-              label="Observaç��es"
+              label="CPF"
+              name="cpf"
+              value={agendamentoForm.cpf || ''}
+              onChange={handleAgendamentoChange}
+              required
+              margin="normal"
+              inputProps={{ maxLength: 11 }}
+              helperText="Digite apenas números"
+            />
+
+            <TextField
+              fullWidth
+              label="Observações"
               name="observacoes"
               value={agendamentoForm.observacoes}
               onChange={handleAgendamentoChange}
               multiline
               rows={4}
-              sx={{ mb: 2 }}
+              margin="normal"
             />
-
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Horários Selecionados:
-            </Typography>
-            <List>
-              {Object.values(selectedTeachers).map((slot, index) => (
-                <ListItem key={index} sx={{ py: 1 }}>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Chip 
-                          label={dayjs(slot.date).format('DD/MM/YYYY')}
-                          size="small"
-                          color="primary"
-                        />
-                        <Chip 
-                          label={slot.horario}
-                          size="small"
-                          color="secondary"
-                        />
-                      </Box>
-                    }
-                    secondary={`Professor: ${slot.professorNome}`}
-                  />
-                </ListItem>
-              ))}
-            </List>
-
-            {selectedSlots.length > 0 && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Resumo do Valor:
-                </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Quantidade de aulas:</Typography>
-                  <Typography>{selectedSlots.length}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Valor por aula:</Typography>
-                  <Typography>
-                    {getValuePerClass(selectedSlots.length).toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    })}
-                  </Typography>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    Valor Total:
-                  </Typography>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    {calculateTotal().toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    })}
-                  </Typography>
-                </Box>
-              </Box>
-            )}
 
             {/* Botões de ação */}
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -839,12 +836,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                   disabled={
                     !agendamentoForm.nomeAluno || 
                     !agendamentoForm.email || 
-                    !agendamentoForm.telefone || 
+                    !agendamentoForm.telefone ||
+                    !agendamentoForm.cpf || 
                     saving
                   }
                   fullWidth
                 >
-                  {saving ? 'Processando...' : 'Agendar Aulas'}
+                  {saving ? 'Processando...' : 'Prosseguir para pagamento'}
                 </Button>
               ) : (
                 <Button 
