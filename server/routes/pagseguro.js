@@ -9,7 +9,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // URL base da API do PagSeguro
 const API_URL = IS_PRODUCTION
   ? 'https://ws.pagseguro.uol.com.br/v2'
-  : 'https://ws.sandbox.pagbank.com.br/v2';
+  : 'https://ws.sandbox.pagseguro.uol.com.br/v2';
 
 // Rota para criar uma ordem de pagamento
 router.post('/create-order', async (req, res) => {
@@ -31,7 +31,9 @@ router.post('/create-order', async (req, res) => {
       senderName: payer.name,
       senderEmail: payer.email,
       senderCPF: payer.tax_id,
-      redirectURL: 'http://localhost:3000/admin/pag-seguro',
+      redirectURL: IS_PRODUCTION 
+        ? 'https://dancing-webapp.com.br/admin/pag-seguro'
+        : 'http://localhost:3000/admin/pag-seguro',
       shippingAddressRequired: 'false',
       shippingCost: '0.00',
       enableRecover: 'false',
@@ -69,7 +71,7 @@ router.post('/create-order', async (req, res) => {
     // Retorna a URL de pagamento para o frontend
     const checkoutUrl = IS_PRODUCTION
       ? `https://pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`
-      : `https://sandbox.pagbank.com.br/checkout/v2/payment.html?code=${checkoutCode}`;
+      : `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
 
     res.json({
       payment_url: checkoutUrl,
