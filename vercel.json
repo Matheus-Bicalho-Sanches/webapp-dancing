@@ -1,20 +1,14 @@
 {
   "version": 2,
   "framework": "vite",
-  "functions": {
-    "server/index.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "rewrites": [
     {
       "source": "/pagseguro/:path*",
-      "destination": "/server/index.js"
+      "destination": "/api/index.js"
     },
     {
       "source": "/api/:path*",
-      "destination": "/server/index.js"
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",
