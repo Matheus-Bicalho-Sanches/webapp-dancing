@@ -1,6 +1,32 @@
 {
   "version": 2,
-  "env": {
-    "NEXT_PUBLIC_API_URL": "https://dancing-webapp.com.br"
-  }
+  "builds": [
+    {
+      "src": "server/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "dist/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/pagseguro/(.*)",
+      "dest": "server/index.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "server/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/dist/$1"
+    },
+    {
+      "src": "/[^.]+",
+      "dest": "/dist/index.html",
+      "status": 200
+    }
+  ]
 } 

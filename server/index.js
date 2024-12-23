@@ -7,6 +7,12 @@ const pagseguroRoutes = require('./routes/pagseguro');
 
 // Definição do ambiente
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+console.log('Variáveis de ambiente:', {
+  NODE_ENV: process.env.NODE_ENV,
+  IS_PRODUCTION,
+  PWD: process.env.PWD,
+  __dirname
+});
 
 const app = express();
 
@@ -39,8 +45,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Servir arquivos estáticos do React em produção
 if (IS_PRODUCTION) {
-  // Assumindo que o build do React está na pasta '../build'
-  app.use(express.static(path.join(__dirname, '../build')));
+  const buildPath = path.join(__dirname, '../build');
+  console.log('Servindo arquivos estáticos de:', buildPath);
+  console.log('Pasta build existe:', require('fs').existsSync(buildPath));
+  app.use(express.static(buildPath));
 }
 
 // Configuração do Mercado Pago com token direto
@@ -179,8 +187,12 @@ app.use('/pagseguro', pagseguroRoutes);
 
 // Em produção, todas as outras rotas não encontradas vão para o index.html do React
 if (IS_PRODUCTION) {
+  const indexPath = path.join(__dirname, '../build', 'index.html');
+  console.log('Arquivo index.html existe:', require('fs').existsSync(indexPath));
+  
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../build', 'index.html'));
+    console.log('Requisição recebida para:', req.path);
+    res.sendFile(indexPath);
   });
 }
 
