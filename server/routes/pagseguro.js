@@ -6,10 +6,10 @@ const axios = require('axios');
 const PAGSEGURO_TOKEN = process.env.PAGSEGURO_TOKEN;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// URL base da API do PagSeguro
+// URL base da API do PagSeguro (v4.1)
 const API_URL = IS_PRODUCTION
-  ? 'https://ws.pagseguro.uol.com.br/v2'
-  : 'https://ws.sandbox.pagseguro.uol.com.br/v2';
+  ? 'https://api.pagseguro.com'
+  : 'https://sandbox.api.pagseguro.com';
 
 // Rota para criar uma ordem de pagamento
 router.post('/create-order', async (req, res) => {
@@ -20,62 +20,92 @@ router.post('/create-order', async (req, res) => {
       return res.status(400).json({ error: 'Dados incompletos' });
     }
 
-    // Monta o payload para o PagSeguro
-    const payload = {
-      currency: 'BRL',
-      itemId1: '1',
-      itemDescription1: items[0].name,
-      itemAmount1: amount.toFixed(2),
-      itemQuantity1: '1',
-      reference: `ORDER_${Date.now()}`,
-      senderName: payer.name,
-      senderEmail: payer.email,
-      senderCPF: payer.tax_id,
-      redirectURL: IS_PRODUCTION 
-        ? 'https://dancing-webapp.com.br/admin/pag-seguro'
-        : 'http://localhost:3000/admin/pag-seguro',
-      shippingAddressRequired: 'false',
-      shippingCost: '0.00',
-      enableRecover: 'false',
-      acceptPaymentMethodGroup: 'CREDIT_CARD,DEBIT_CARD,PIX',
-      excludePaymentMethodGroup: 'BOLETO,DEPOSIT,BALANCE'
+    // 1. Primeiro criamos o pedido
+    const orderPayload = {
+      reference_id: `ORDER_${Date.now()}`,
+      customer: {
+        name: payer.name,
+        email: payer.email,
+        tax_id: payer.tax_id
+      },
+      items: [{
+        reference_id: `ITEM_${Date.now()}`,
+        name: items[0].name,
+        quantity: 1,
+        unit_amount: Math.round(amount * 100) // Valor em centavos
+      }],
+      notification_urls: [
+        IS_PRODUCTION 
+          ? 'https://dancing-webapp.com.br/api/pagseguro/webhook'
+          : 'http://localhost:3001/api/pagseguro/webhook'
+      ]
     };
 
-    // Adiciona notificationURL apenas em produção
-    if (IS_PRODUCTION) {
-      payload.notificationURL = 'https://dancing-webapp.com.br/api/pagseguro/webhook';
-    }
+    console.log('Criando pedido:', orderPayload);
 
-    console.log('Enviando payload:', payload);
-
-    // Faz a requisição para o PagSeguro
-    const response = await axios.post(
-      `${API_URL}/checkout?email=matheus.bs@up-gestora.com.br&token=${PAGSEGURO_TOKEN}`,
-      new URLSearchParams(payload),
+    // Cria o pedido
+    const orderResponse = await axios.post(
+      `${API_URL}/orders`,
+      orderPayload,
       {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${PAGSEGURO_TOKEN}`,
+          'x-idempotency-key': `ORDER_${Date.now()}`
         }
       }
     );
 
-    console.log('Resposta do PagSeguro:', response.data);
+    console.log('Pedido criado:', orderResponse.data);
 
-    // Extrai o código do checkout da resposta XML
-    const checkoutCode = response.data.match(/<code>(.*?)<\/code>/)?.[1];
+    // 2. Depois criamos a cobrança para este pedido
+    const chargePayload = {
+      reference_id: `CHARGE_${Date.now()}`,
+      description: 'Pagamento Dancing Patinação',
+      amount: {
+        value: Math.round(amount * 100), // Valor em centavos
+        currency: 'BRL'
+      },
+      payment_method: {
+        type: 'CREDIT_CARD',
+        installments: 1,
+        capture: true,
+        card: {
+          security_code: "123",
+          holder: {
+            name: payer.name
+          },
+          store: false
+        },
+        soft_descriptor: 'Dancing'
+      }
+    };
 
-    if (!checkoutCode) {
-      throw new Error('Código de checkout não encontrado na resposta');
+    console.log('Criando cobrança:', chargePayload);
+
+    // Cria a cobrança
+    const chargeResponse = await axios.post(
+      `${API_URL}/orders/${orderResponse.data.id}/charges`,
+      chargePayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${PAGSEGURO_TOKEN}`,
+          'x-idempotency-key': `CHARGE_${Date.now()}`
+        }
+      }
+    );
+
+    console.log('Cobrança criada:', chargeResponse.data);
+
+    // Retorna a URL de pagamento
+    if (!chargeResponse.data.payment_method?.payment_url) {
+      throw new Error('URL de pagamento não encontrada na resposta');
     }
 
-    // Retorna a URL de pagamento para o frontend
-    const checkoutUrl = IS_PRODUCTION
-      ? `https://pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`
-      : `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
-
     res.json({
-      payment_url: checkoutUrl,
-      order_id: checkoutCode
+      payment_url: chargeResponse.data.payment_method.payment_url,
+      order_id: orderResponse.data.id
     });
 
   } catch (error) {
@@ -93,33 +123,30 @@ router.post('/webhook', async (req, res) => {
     const { notificationCode, notificationType } = req.body;
     console.log('Notificação recebida:', { notificationCode, notificationType });
 
-    if (notificationType !== 'transaction') {
-      return res.status(200).send('OK');
-    }
-
     // Consulta os detalhes da transação
     const response = await axios.get(
-      `${API_URL}/transactions/notifications/${notificationCode}?email=matheus.bs@up-gestora.com.br&token=${PAGSEGURO_TOKEN}`
+      `${API_URL}/orders/${notificationCode}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${PAGSEGURO_TOKEN}`
+        }
+      }
     );
 
-    const transaction = response.data;
-    console.log('Detalhes da transação:', transaction);
+    const order = response.data;
+    console.log('Detalhes do pedido:', order);
 
-    // Mapeia os status do PagSeguro
+    // Mapeia os status do PagBank
     const statusMap = {
-      '1': 'Aguardando pagamento',
-      '2': 'Em análise',
-      '3': 'Paga',
-      '4': 'Disponível',
-      '5': 'Em disputa',
-      '6': 'Devolvida',
-      '7': 'Cancelada',
-      '8': 'Debitado',
-      '9': 'Retenção temporária'
+      'AUTHORIZED': 'Autorizado',
+      'PAID': 'Pago',
+      'DECLINED': 'Recusado',
+      'CANCELED': 'Cancelado',
+      'PENDING': 'Pendente'
     };
 
-    const status = statusMap[transaction.status] || 'Status desconhecido';
-    console.log(`Status da transação ${transaction.code}: ${status}`);
+    const status = statusMap[order.status] || 'Status desconhecido';
+    console.log(`Status do pedido ${order.id}: ${status}`);
 
     res.status(200).send('OK');
   } catch (error) {

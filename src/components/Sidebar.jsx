@@ -16,7 +16,8 @@ import {
   AttachMoney as AttachMoneyIcon,
   ShoppingCart as ShoppingCartIcon,
   Store as StoreIcon,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  CreditCard as CreditCardIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -37,7 +38,8 @@ const Sidebar = () => {
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
     { text: 'Produtos', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
     { text: 'Mercado Livre', icon: <StoreIcon />, path: '/admin/mercado-livre' },
-    { text: 'PagSeguro', icon: <PaymentIcon />, path: '/admin/pag-seguro' }
+    { text: 'PagSeguro', icon: <PaymentIcon />, path: '/admin/pag-seguro' },
+    { text: 'Stripe', icon: <CreditCardIcon />, path: '/admin/stripe' }
   ];
 
   return (
