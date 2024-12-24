@@ -458,42 +458,50 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           professorNome: slot.professorNome
         }));
 
+        // Calcular valor total
+        const valorPorAula = getValuePerClass(selectedSlots.length);
+        const valorTotal = selectedSlots.length * valorPorAula;
+
         // Criar sessão de pagamento no Stripe
         try {
           const response = await fetch('/api/stripe/create-session', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              amount: selectedSlots.length * getValuePerClass(selectedSlots.length),
+              amount: valorTotal,
               payer: {
                 name: agendamentoForm.nomeAluno,
                 email: agendamentoForm.email,
                 tax_id: agendamentoForm.cpf.replace(/[^0-9]/g, ''),
                 phone: agendamentoForm.telefone.replace(/[^0-9]/g, ''),
-                observacoes: agendamentoForm.observacoes
+                observacoes: agendamentoForm.observacoes || ''
               },
               items: [{
                 name: `${selectedSlots.length} aula(s) de patinação`,
-                quantity: 1,
-                amount: selectedSlots.length * getValuePerClass(selectedSlots.length)
+                quantity: 1
               }],
               horarios
-            }),
+            })
           });
 
-          const data = await response.json();
-
           if (!response.ok) {
-            throw new Error(data.error || data.details || 'Erro ao criar sessão de pagamento');
+            const errorData = await response.json();
+            throw new Error(errorData.error || errorData.details || 'Erro ao criar sessão de pagamento');
           }
 
-          // Redirecionar para a página de pagamento do Stripe
-          window.location.href = data.url;
+          const data = await response.json();
+          
+          if (data.url) {
+            window.location.href = data.url;
+          } else {
+            throw new Error('URL de pagamento não recebida');
+          }
         } catch (error) {
           console.error('Erro ao criar sessão de pagamento:', error);
           showNotification('Erro ao processar pagamento. Por favor, tente novamente.', 'error');
+          setSaving(false);
         }
       } else {
         // Lógica existente para agendamento administrativo

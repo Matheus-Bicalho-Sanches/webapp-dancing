@@ -89,19 +89,17 @@ router.post('/create-session', express.json(), async (req, res) => {
     // Cria a sessão de checkout
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'brl',
-            unit_amount: Math.round(amount * 100), // Valor em centavos
-            product_data: {
-              name: items[0].name || 'Pagamento Dancing Patinação',
-              description: `Pagamento para ${payer.name}`,
-            },
-          },
-          quantity: 1,
+      line_items: [{
+        price_data: {
+          currency: 'brl',
+          unit_amount: Math.round(amount * 100), // Converter para centavos
+          product_data: {
+            name: `${items[0].name || 'Aulas de Patinação'}`,
+            description: `Pagamento para ${payer.name}`
+          }
         },
-      ],
+        quantity: 1
+      }],
       mode: 'payment',
       success_url: `${SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: CANCEL_URL,
@@ -112,13 +110,7 @@ router.post('/create-session', express.json(), async (req, res) => {
         customer_phone: payer.phone,
         observacoes: payer.observacoes || '',
         horarios: JSON.stringify(horarios)
-      },
-      payment_intent_data: {
-        metadata: {
-          customer_name: payer.name,
-          customer_tax_id: payer.tax_id,
-        },
-      },
+      }
     });
 
     console.log('Sessão criada com sucesso:', {
@@ -126,10 +118,10 @@ router.post('/create-session', express.json(), async (req, res) => {
       url: session.url
     });
 
-    res.json({ url: session.url });
+    return res.status(200).json({ url: session.url });
   } catch (error) {
     console.error('Erro ao criar sessão:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Erro ao criar sessão de pagamento',
       details: error.message
     });
