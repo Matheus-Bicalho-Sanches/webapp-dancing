@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const admin = require('firebase-admin');
+const db = admin.firestore();
 
 // Verifica se a chave do Stripe está definida
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -20,19 +22,68 @@ const CANCEL_URL = IS_PRODUCTION
 // Middleware para processar o corpo da requisição como raw para o webhook
 const rawBodyMiddleware = express.raw({ type: 'application/json' });
 
+// Função para salvar o agendamento no Firebase
+const saveAgendamento = async (sessionId, paymentIntent) => {
+  try {
+    // Recuperar a sessão do Stripe para obter os metadados
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['metadata', 'customer_details']
+    });
+
+    // Recuperar os horários selecionados do metadata
+    const horariosSelecionados = JSON.parse(session.metadata.horarios || '[]');
+
+    // Criar o documento principal do agendamento
+    const agendamentoRef = await db.collection('agendamentos').add({
+      nomeAluno: session.metadata.customer_name,
+      email: session.customer_details.email,
+      telefone: session.metadata.customer_phone,
+      cpf: session.metadata.customer_tax_id,
+      observacoes: session.metadata.observacoes || '',
+      status: 'confirmado',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentIntentId: paymentIntent.id,
+      stripeSessionId: sessionId,
+      valorTotal: session.amount_total / 100 // Converter de centavos para reais
+    });
+
+    // Adicionar os horários como subcoleção
+    const batch = db.batch();
+    horariosSelecionados.forEach(horario => {
+      const horarioRef = agendamentoRef.collection('horarios').doc();
+      batch.set(horarioRef, {
+        data: horario.date,
+        horario: horario.horario,
+        professorId: horario.professorId,
+        professorNome: horario.professorNome,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+    console.log('Agendamento salvo com sucesso:', agendamentoRef.id);
+    return agendamentoRef.id;
+  } catch (error) {
+    console.error('Erro ao salvar agendamento:', error);
+    throw error;
+  }
+};
+
 // Rota para criar uma sessão de checkout
 router.post('/create-session', express.json(), async (req, res) => {
   try {
-    const { amount, payer, items } = req.body;
+    const { amount, payer, items, horarios } = req.body;
 
-    if (!amount || !payer || !items) {
+    if (!amount || !payer || !items || !horarios) {
       return res.status(400).json({ error: 'Dados incompletos' });
     }
 
     console.log('Criando sessão com os dados:', {
       amount,
       payer: { ...payer, tax_id: '***' }, // Log seguro do CPF
-      items
+      items,
+      horarios
     });
 
     // Cria a sessão de checkout
@@ -58,6 +109,9 @@ router.post('/create-session', express.json(), async (req, res) => {
       metadata: {
         customer_name: payer.name,
         customer_tax_id: payer.tax_id,
+        customer_phone: payer.phone,
+        observacoes: payer.observacoes || '',
+        horarios: JSON.stringify(horarios)
       },
       payment_intent_data: {
         metadata: {
@@ -102,25 +156,41 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
   }
 
   // Processa o evento
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      console.log('Pagamento bem-sucedido:', session);
-      // TODO: Atualizar o status do pagamento no banco de dados
-      break;
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      console.log('PaymentIntent bem-sucedido:', paymentIntent);
-      break;
-    case 'payment_intent.payment_failed':
-      const failedPayment = event.data.object;
-      console.log('Pagamento falhou:', failedPayment);
-      break;
-    default:
-      console.log(`Evento não tratado: ${event.type}`);
-  }
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        console.log('Checkout session completed:', session);
+        
+        // Buscar o payment intent associado
+        const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
+        
+        // Salvar o agendamento no Firebase
+        await saveAgendamento(session.id, paymentIntent);
+        break;
+      }
 
-  res.json({ received: true });
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        console.log('PaymentIntent bem-sucedido:', paymentIntent);
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const failedPayment = event.data.object;
+        console.log('Pagamento falhou:', failedPayment);
+        break;
+      }
+
+      default:
+        console.log(`Evento não tratado: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Erro ao processar webhook:', error);
+    res.status(500).json({ error: 'Erro ao processar webhook' });
+  }
 });
 
 module.exports = router; 

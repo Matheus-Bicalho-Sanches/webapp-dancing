@@ -451,15 +451,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
       if (isPublic) {
         // Preparar dados do agendamento
-        const agendamentoData = {
-          ...agendamentoForm,
-          horarios: Object.values(selectedTeachers).map(slot => ({
-            data: slot.date,
-            horario: slot.horario,
-            professorId: slot.professorId,
-            professorNome: slot.professorNome
-          }))
-        };
+        const horarios = Object.values(selectedTeachers).map(slot => ({
+          date: slot.date,
+          horario: slot.horario,
+          professorId: slot.professorId,
+          professorNome: slot.professorNome
+        }));
 
         // Criar sessão de pagamento no Stripe
         try {
@@ -474,12 +471,15 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 name: agendamentoForm.nomeAluno,
                 email: agendamentoForm.email,
                 tax_id: agendamentoForm.cpf.replace(/[^0-9]/g, ''),
+                phone: agendamentoForm.telefone.replace(/[^0-9]/g, ''),
+                observacoes: agendamentoForm.observacoes
               },
               items: [{
                 name: `${selectedSlots.length} aula(s) de patinação`,
                 quantity: 1,
                 amount: selectedSlots.length * getValuePerClass(selectedSlots.length)
-              }]
+              }],
+              horarios
             }),
           });
 
