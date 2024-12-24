@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const pagseguroRoutes = require('./routes/pagseguro');
 const stripeRoutes = require('./routes/stripe');
 
@@ -38,18 +39,26 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rotas do PagSeguro - Mapeando tanto /api/pagseguro quanto /pagseguro
-app.use('/api/pagseguro', pagseguroRoutes);
-app.use('/pagseguro', pagseguroRoutes);
+// Servir arquivos estáticos
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../dist')));
+}
 
-// Rotas do Stripe - Mapeando tanto /api/stripe quanto /stripe
-app.use('/stripe', stripeRoutes);
+// Rotas da API
+app.use('/api/pagseguro', pagseguroRoutes);
 app.use('/api/stripe', stripeRoutes);
 
 // Rota de teste
 app.get('/api/test', (req, res) => {
   res.json({ message: 'API funcionando!' });
 });
+
+// Rota para todas as outras requisições em produção
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
 
 // Inicia o servidor se não estiver em produção
 if (process.env.NODE_ENV !== 'production') {
