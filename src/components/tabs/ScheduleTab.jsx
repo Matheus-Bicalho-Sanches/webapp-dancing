@@ -464,7 +464,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
         // Criar sessão de pagamento no Stripe
         try {
-          const response = await fetch('/api/stripe/create-session', {
+          const response = await fetch('/stripe/create-session', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

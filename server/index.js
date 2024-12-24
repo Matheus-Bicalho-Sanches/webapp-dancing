@@ -43,8 +43,8 @@ app.use('/api/pagseguro', pagseguroRoutes);
 app.use('/pagseguro', pagseguroRoutes);
 
 // Rotas do Stripe - Mapeando tanto /api/stripe quanto /stripe
-app.use('/api/stripe', stripeRoutes);
 app.use('/stripe', stripeRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 // Rota de teste
 app.get('/api/test', (req, res) => {

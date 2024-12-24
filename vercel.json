@@ -15,27 +15,16 @@
   ],
   "routes": [
     {
-      "src": "/api/stripe/(.*)",
-      "dest": "server/index.js"
-    },
-    {
       "src": "/stripe/(.*)",
       "dest": "server/index.js"
     },
     {
-      "src": "/api/pagseguro/(.*)",
-      "dest": "server/index.js"
-    },
-    {
-      "src": "/pagseguro/(.*)",
+      "src": "/api/stripe/(.*)",
       "dest": "server/index.js"
     },
     {
       "src": "/api/(.*)",
       "dest": "server/index.js"
-    },
-    {
-      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
