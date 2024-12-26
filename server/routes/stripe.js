@@ -11,6 +11,38 @@ if (!process.env.STRIPE_SECRET_KEY) {
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Rota de teste para verificar a configuração do Stripe
+router.get('/test-config', async (req, res) => {
+  try {
+    // Tenta buscar as configurações da conta
+    const account = await stripe.accounts.retrieve();
+    console.log('Configuração do Stripe OK:', {
+      accountId: account.id,
+      country: account.country,
+      defaultCurrency: account.default_currency,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ? 'Configurado' : 'Não configurado'
+    });
+    
+    return res.json({
+      status: 'success',
+      message: 'Configuração do Stripe está correta',
+      accountDetails: {
+        accountId: account.id,
+        country: account.country,
+        defaultCurrency: account.default_currency,
+        webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ? 'Configurado' : 'Não configurado'
+      }
+    });
+  } catch (error) {
+    console.error('Erro na configuração do Stripe:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro na configuração do Stripe',
+      error: error.message
+    });
+  }
+});
+
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SUCCESS_URL = IS_PRODUCTION
   ? 'https://dancing-webapp.com.br/admin/stripe/success'
@@ -137,6 +169,11 @@ router.post('/create-session', async (req, res) => {
 
 // Webhook para receber notificações do Stripe
 router.post('/webhook', rawBodyMiddleware, async (req, res) => {
+  console.log('Webhook recebido:', {
+    headers: req.headers,
+    body: typeof req.body === 'string' ? 'Raw body (string)' : 'Parsed body'
+  });
+
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -149,8 +186,12 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log('Evento do webhook construído com sucesso:', event.type);
   } catch (err) {
-    console.error('Erro no webhook:', err.message);
+    console.error('Erro no webhook:', err.message, {
+      signature: sig ? 'Presente' : 'Ausente',
+      bodyLength: req.body ? req.body.length : 0
+    });
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -163,6 +204,7 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
         
         // Buscar o payment intent associado
         const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
+        console.log('PaymentIntent recuperado:', paymentIntent.id);
         
         // Salvar o agendamento no Firebase
         await saveAgendamento(session.id, paymentIntent);
@@ -171,13 +213,13 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
 
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object;
-        console.log('PaymentIntent bem-sucedido:', paymentIntent);
+        console.log('PaymentIntent bem-sucedido:', paymentIntent.id);
         break;
       }
 
       case 'payment_intent.payment_failed': {
         const failedPayment = event.data.object;
-        console.log('Pagamento falhou:', failedPayment);
+        console.log('Pagamento falhou:', failedPayment.id);
         break;
       }
 
@@ -185,10 +227,10 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
         console.log(`Evento não tratado: ${event.type}`);
     }
 
-    res.json({ received: true });
+    res.json({ received: true, type: event.type });
   } catch (error) {
     console.error('Erro ao processar webhook:', error);
-    res.status(500).json({ error: 'Erro ao processar webhook' });
+    res.status(500).json({ error: 'Erro ao processar webhook', details: error.message });
   }
 });
 
