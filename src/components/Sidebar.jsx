@@ -37,8 +37,6 @@ const Sidebar = () => {
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
     { text: 'Produtos', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
-    { text: 'Mercado Livre', icon: <StoreIcon />, path: '/admin/mercado-livre' },
-    { text: 'PagSeguro', icon: <PaymentIcon />, path: '/admin/pag-seguro' },
     { text: 'Stripe', icon: <CreditCardIcon />, path: '/admin/stripe' }
   ];
 

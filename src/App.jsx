@@ -18,7 +18,6 @@ import Reports from './pages/admin/Reports';
 import Attendance from './pages/admin/Attendance';
 import Products from './pages/admin/Products';
 import MercadoLivre from './pages/admin/MercadoLivre';
-import PagSeguro from './pages/admin/PagSeguro';
 import Stripe from './pages/admin/Stripe';
 import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
@@ -137,11 +136,6 @@ function App() {
           <Route path="/admin/mercado-livre" element={
             <PrivateRoute>
               <MercadoLivre />
-            </PrivateRoute>
-          } />
-          <Route path="/admin/pag-seguro" element={
-            <PrivateRoute>
-              <PagSeguro />
             </PrivateRoute>
           } />
           <Route path="/admin/stripe" element={
