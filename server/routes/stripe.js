@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
-const db = admin.firestore();
+const { db } = require('../config/firebase');
 
 // Verifica se a chave do Stripe está definida
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -23,6 +22,16 @@ router.get('/test-config', async (req, res) => {
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ? 'Configurado' : 'Não configurado'
     });
     
+    // Testa a conexão com o Firestore
+    try {
+      await db.collection('test').doc('test').set({ test: true });
+      await db.collection('test').doc('test').delete();
+      console.log('Conexão com o Firestore OK');
+    } catch (dbError) {
+      console.error('Erro ao testar conexão com Firestore:', dbError);
+      throw new Error('Erro na conexão com o Firestore: ' + dbError.message);
+    }
+    
     return res.json({
       status: 'success',
       message: 'Configuração do Stripe está correta',
@@ -34,10 +43,10 @@ router.get('/test-config', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro na configuração do Stripe:', error);
+    console.error('Erro na configuração:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Erro na configuração do Stripe',
+      message: 'Erro na configuração',
       error: error.message
     });
   }
@@ -62,23 +71,31 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
       expand: ['metadata', 'customer_details']
     });
 
+    console.log('Dados da sessão recuperados:', {
+      sessionId,
+      paymentIntentId: paymentIntent.id,
+      customerEmail: session.customer_details?.email
+    });
+
     // Recuperar os horários selecionados do metadata
     const horariosSelecionados = JSON.parse(session.metadata.horarios || '[]');
 
     // Criar o documento principal do agendamento
     const agendamentoRef = await db.collection('agendamentos').add({
       nomeAluno: session.metadata.customer_name,
-      email: session.customer_details.email,
+      email: session.customer_details?.email,
       telefone: session.metadata.customer_phone,
       cpf: session.metadata.customer_tax_id,
       observacoes: session.metadata.observacoes || '',
       status: 'confirmado',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
       paymentIntentId: paymentIntent.id,
       stripeSessionId: sessionId,
       valorTotal: session.amount_total / 100 // Converter de centavos para reais
     });
+
+    console.log('Documento principal do agendamento criado:', agendamentoRef.id);
 
     // Adicionar os horários como subcoleção
     const batch = db.batch();
@@ -89,7 +106,7 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
         horario: horario.horario,
         professorId: horario.professorId,
         professorNome: horario.professorNome,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: new Date()
       });
     });
 
