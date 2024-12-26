@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const pagseguroRoutes = require('./routes/pagseguro');
 const stripeRoutes = require('./routes/stripe');
 
 const app = express();
@@ -10,10 +9,8 @@ const app = express();
 // Configuração do CORS
 const allowedOrigins = [
   'https://dancing-webapp.com.br',
-  'https://www.mercadopago.com.br',
   'https://checkout.stripe.com',
-  'http://localhost:3000',
-  'http://localhost:3001'
+  'http://localhost:3000'
 ];
 
 app.use(cors({
@@ -21,6 +18,7 @@ app.use(cors({
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('Origem bloqueada:', origin);
       callback(new Error('Bloqueado pelo CORS'), false);
     }
   },
@@ -31,13 +29,14 @@ app.use(cors({
 
 // Configuração para aceitar JSON - exceto para o webhook do Stripe
 app.use((req, res, next) => {
-  if (req.originalUrl === '/api/stripe/webhook' || req.originalUrl === '/stripe/webhook') {
+  if (req.originalUrl === '/api/stripe/webhook') {
     next();
   } else {
-    express.json({ limit: '10mb' })(req, res, next);
+    express.json()(req, res, next);
   }
 });
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use(express.urlencoded({ extended: true }));
 
 // Servir arquivos estáticos
 if (process.env.NODE_ENV === 'production') {
@@ -45,7 +44,6 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Rotas da API
-app.use('/api/pagseguro', pagseguroRoutes);
 app.use('/api/stripe', stripeRoutes);
 
 // Rota de teste

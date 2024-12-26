@@ -60,25 +60,31 @@ const Stripe = () => {
           name: 'Pagamento Dancing Patinação',
           quantity: 1,
           amount: parseFloat(amount)
-        }]
+        }],
+        horarios: [] // Campo necessário mesmo que vazio
       };
 
-      const apiUrl = process.env.NODE_ENV === 'production'
-        ? '/api/stripe/create-session'
-        : 'http://localhost:3001/api/stripe/create-session';
+      console.log('Enviando dados:', orderData);
 
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/stripe/create-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(orderData),
+        credentials: 'include'
       });
 
+      console.log('Status da resposta:', response.status);
       const data = await response.json();
+      console.log('Dados da resposta:', data);
 
       if (!response.ok) {
         throw new Error(data.error || data.details || 'Erro ao criar sessão de pagamento');
+      }
+
+      if (!data.url) {
+        throw new Error('URL de redirecionamento não encontrada na resposta');
       }
 
       // Mostra mensagem de sucesso antes de redirecionar
@@ -93,7 +99,7 @@ const Stripe = () => {
         window.location.href = data.url;
       }, 1500);
     } catch (err) {
-      console.error('Erro:', err);
+      console.error('Erro detalhado:', err);
       setError(err.message);
       setSnackbar({
         open: true,

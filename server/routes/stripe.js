@@ -14,10 +14,10 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SUCCESS_URL = IS_PRODUCTION
   ? 'https://dancing-webapp.com.br/admin/stripe/success'
-  : 'http://localhost:3001/admin/stripe/success';
+  : 'http://localhost:3000/admin/stripe/success';
 const CANCEL_URL = IS_PRODUCTION
   ? 'https://dancing-webapp.com.br/admin/stripe/cancel'
-  : 'http://localhost:3001/admin/stripe/cancel';
+  : 'http://localhost:3000/admin/stripe/cancel';
 
 // Middleware para processar o corpo da requisição como raw para o webhook
 const rawBodyMiddleware = express.raw({ type: 'application/json' });
@@ -71,19 +71,23 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
 };
 
 // Rota para criar uma sessão de checkout
-router.post('/create-session', express.json(), async (req, res) => {
+router.post('/create-session', async (req, res) => {
   try {
-    const { amount, payer, items, horarios } = req.body;
+    console.log('Recebendo requisição:', req.body);
+    const { amount, payer, items } = req.body;
 
-    if (!amount || !payer || !items || !horarios) {
-      return res.status(400).json({ error: 'Dados incompletos' });
+    if (!amount || !payer || !items) {
+      console.error('Dados incompletos:', { amount, payer, items });
+      return res.status(400).json({ 
+        error: 'Dados incompletos',
+        details: 'Todos os campos são obrigatórios'
+      });
     }
 
     console.log('Criando sessão com os dados:', {
       amount,
       payer: { ...payer, tax_id: '***' }, // Log seguro do CPF
-      items,
-      horarios
+      items
     });
 
     // Cria a sessão de checkout
@@ -94,7 +98,7 @@ router.post('/create-session', express.json(), async (req, res) => {
           currency: 'brl',
           unit_amount: Math.round(amount * 100), // Converter para centavos
           product_data: {
-            name: `${items[0].name || 'Aulas de Patinação'}`,
+            name: items[0].name || 'Aulas de Patinação',
             description: `Pagamento para ${payer.name}`
           }
         },
@@ -107,9 +111,9 @@ router.post('/create-session', express.json(), async (req, res) => {
       metadata: {
         customer_name: payer.name,
         customer_tax_id: payer.tax_id,
-        customer_phone: payer.phone,
+        customer_phone: payer.phone || '',
         observacoes: payer.observacoes || '',
-        horarios: JSON.stringify(horarios)
+        horarios: req.body.horarios ? JSON.stringify(req.body.horarios) : '[]'
       }
     });
 
@@ -118,7 +122,10 @@ router.post('/create-session', express.json(), async (req, res) => {
       url: session.url
     });
 
-    return res.status(200).json({ url: session.url });
+    return res.status(200).json({ 
+      url: session.url,
+      sessionId: session.id
+    });
   } catch (error) {
     console.error('Erro ao criar sessão:', error);
     return res.status(500).json({
