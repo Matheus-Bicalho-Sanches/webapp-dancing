@@ -54,11 +54,11 @@ router.get('/test-config', async (req, res) => {
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SUCCESS_URL = IS_PRODUCTION
-  ? 'https://dancing-webapp.com.br/admin/stripe/success'
-  : 'http://localhost:3000/admin/stripe/success';
+  ? 'https://dancing-webapp.com.br/agendar?success=true'
+  : 'http://localhost:3000/agendar?success=true';
 const CANCEL_URL = IS_PRODUCTION
-  ? 'https://dancing-webapp.com.br/admin/stripe/cancel'
-  : 'http://localhost:3000/admin/stripe/cancel';
+  ? 'https://dancing-webapp.com.br/agendar'
+  : 'http://localhost:3000/agendar';
 
 // Middleware para processar o corpo da requisição como raw para o webhook
 const rawBodyMiddleware = express.raw({ type: 'application/json' });
@@ -197,6 +197,9 @@ router.post('/create-session', async (req, res) => {
       });
     }
 
+    // Create a unique session ID for tracking
+    const sessionUniqueId = Math.random().toString(36).substring(2, 15);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -213,13 +216,14 @@ router.post('/create-session', async (req, res) => {
           quantity: 1
         }
       ],
-      success_url: SUCCESS_URL,
+      success_url: `${SUCCESS_URL}&session_id=${sessionUniqueId}`,
       cancel_url: CANCEL_URL,
       metadata: {
         customer_name,
         customer_phone,
         observacoes,
-        horarios: JSON.stringify(horarios)
+        horarios: JSON.stringify(horarios),
+        sessionUniqueId
       }
     });
 
@@ -294,6 +298,44 @@ router.post('/webhook', rawBodyMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Erro ao processar webhook:', error);
     res.status(500).json({ error: 'Erro ao processar webhook', details: error.message });
+  }
+});
+
+// Rota para buscar detalhes do agendamento após o pagamento
+router.get('/appointment-details/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Buscar o agendamento pelo sessionUniqueId nos metadados
+    const agendamentosSnapshot = await db.collection('agendamentos')
+      .where('stripeSessionId', '==', sessionId)
+      .limit(1)
+      .get();
+
+    if (agendamentosSnapshot.empty) {
+      return res.status(404).json({ error: 'Agendamento não encontrado' });
+    }
+
+    const agendamento = agendamentosSnapshot.docs[0].data();
+    
+    // Buscar os horários associados
+    const horariosSnapshot = await db.collection('horarios')
+      .where('nomeAluno', '==', agendamento.nomeAluno)
+      .where('status', '==', 'confirmado')
+      .get();
+
+    const horarios = horariosSnapshot.docs.map(doc => doc.data());
+
+    return res.json({
+      success: true,
+      agendamento: {
+        ...agendamento,
+        horarios
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar detalhes do agendamento:', error);
+    return res.status(500).json({ error: 'Erro ao buscar detalhes do agendamento' });
   }
 });
 
