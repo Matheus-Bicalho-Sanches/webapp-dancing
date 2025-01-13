@@ -1,7 +1,47 @@
+import { useEffect, useState } from 'react';
 import { Box, Paper, Typography, Container, AppBar, Toolbar } from '@mui/material';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import ScheduleTab from '../../components/tabs/ScheduleTab';
+import ScheduleSuccessDialog from '../../components/ScheduleSuccessDialog';
+import axios from 'axios';
 
 export default function Schedule() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const [appointmentDetails, setAppointmentDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const sessionId = searchParams.get('session_id');
+
+    if (success === 'true' && sessionId) {
+      setSuccessDialogOpen(true);
+      setLoading(true);
+      
+      axios.get(`/api/stripe/appointment-details/${sessionId}`)
+        .then(response => {
+          setAppointmentDetails(response.data.agendamento);
+          setError(null);
+        })
+        .catch(err => {
+          console.error('Erro ao buscar detalhes do agendamento:', err);
+          setError('Não foi possível carregar os detalhes do agendamento. Por favor, entre em contato com o suporte.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [searchParams]);
+
+  const handleCloseDialog = () => {
+    setSuccessDialogOpen(false);
+    // Remove query parameters
+    navigate('/agendar', { replace: true });
+  };
+
   return (
     <Box sx={{ 
       display: 'flex',
@@ -45,6 +85,14 @@ export default function Schedule() {
           <ScheduleTab isPublic={true} />
         </Box>
       </Container>
+
+      <ScheduleSuccessDialog
+        open={successDialogOpen}
+        onClose={handleCloseDialog}
+        appointmentDetails={appointmentDetails}
+        loading={loading}
+        error={error}
+      />
     </Box>
   );
 }
