@@ -4,7 +4,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    commonjsOptions: {
+      esmExternals: true,
+      transformMixedEsModules: true
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['axios', 'react', 'react-dom', 'react-router-dom']
+        }
+      }
+    }
+  },
+  optimizeDeps: {
+    include: ['axios']
   },
   server: {
     port: 3000,
