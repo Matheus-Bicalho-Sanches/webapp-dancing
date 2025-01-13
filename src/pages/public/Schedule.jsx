@@ -5,6 +5,13 @@ import ScheduleTab from '../../components/tabs/ScheduleTab';
 import ScheduleSuccessDialog from '../../components/ScheduleSuccessDialog';
 import axios from 'axios';
 
+// Create axios instance with base URL
+const api = axios.create({
+  baseURL: process.env.NODE_ENV === 'production'
+    ? 'https://dancing-webapp.com.br'
+    : 'http://localhost:5173'
+});
+
 export default function Schedule() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -21,7 +28,7 @@ export default function Schedule() {
       setSuccessDialogOpen(true);
       setLoading(true);
       
-      axios.get(`/api/stripe/appointment-details/${sessionId}`)
+      api.get(`/api/stripe/appointment-details/${sessionId}`)
         .then(response => {
           setAppointmentDetails(response.data.agendamento);
           setError(null);
