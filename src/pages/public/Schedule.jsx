@@ -7,7 +7,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: process.env.NODE_ENV === 'production'
+  baseURL: import.meta.env.PROD 
     ? 'https://dancing-webapp.com.br'
     : 'http://localhost:5173'
 });

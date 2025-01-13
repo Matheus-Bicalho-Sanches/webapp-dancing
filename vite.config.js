@@ -4,15 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',
-    rollupOptions: {
-      external: ['axios'],
-      output: {
-        globals: {
-          axios: 'axios'
-        }
-      }
-    }
+    outDir: 'dist'
   },
   server: {
     port: 3000,
