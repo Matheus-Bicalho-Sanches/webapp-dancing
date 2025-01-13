@@ -89,11 +89,11 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
       const scheduleRef = db.collection('teacherSchedules')
         .doc(horario.professorId)
         .collection('slots')
-        .doc(`${horario.date}_${horario.horario}`);
+        .doc(`${horario.data}_${horario.horario}`);
       
       const scheduleDoc = await scheduleRef.get();
-      if (scheduleDoc.exists && scheduleDoc.data().isBooked) {
-        unavailableSlots.push(`${horario.date} ${horario.horario}`);
+      if (scheduleDoc.exists && scheduleDoc.data().status === 'confirmado') {
+        unavailableSlots.push(`${horario.data} ${horario.horario}`);
       }
     }
 
@@ -107,8 +107,6 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
       nomeAluno: session.metadata.customer_name,
       email: session.customer_details?.email,
       telefone: session.metadata.customer_phone,
-      cpf: session.metadata.customer_tax_id,
-      observacoes: session.metadata.observacoes || '',
       status: 'confirmado',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -122,29 +120,35 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
     // Adicionar os horários como subcoleção e bloquear os slots dos professores
     horariosSelecionados.forEach(horario => {
       // Adicionar horário na subcoleção do agendamento
-      const horarioRef = agendamentoRef.collection('horarios').doc();
+      const horarioRef = db.collection('horarios').doc();
       batch.set(horarioRef, {
-        data: horario.date,
+        data: horario.data,
         horario: horario.horario,
         professorId: horario.professorId,
         professorNome: horario.professorNome,
-        createdAt: new Date()
+        nomeAluno: session.metadata.customer_name,
+        observacoes: session.metadata.observacoes || '',
+        status: 'confirmado',
+        telefone: session.metadata.customer_phone
       });
 
       // Bloquear o slot no calendário do professor
       const teacherSlotRef = db.collection('teacherSchedules')
         .doc(horario.professorId)
         .collection('slots')
-        .doc(`${horario.date}_${horario.horario}`);
+        .doc(`${horario.data}_${horario.horario}`);
 
       batch.set(teacherSlotRef, {
-        isBooked: true,
+        status: 'confirmado',
         agendamentoId: agendamentoRef.id,
-        studentName: session.metadata.customer_name,
-        studentEmail: session.customer_details?.email,
+        nomeAluno: session.metadata.customer_name,
+        email: session.customer_details?.email,
+        telefone: session.metadata.customer_phone,
         bookedAt: new Date(),
-        date: horario.date,
-        time: horario.horario
+        data: horario.data,
+        horario: horario.horario,
+        professorId: horario.professorId,
+        professorNome: horario.professorNome
       });
     });
 
@@ -164,9 +168,8 @@ router.post('/create-session', async (req, res) => {
       amount, 
       customer_name,
       customer_phone,
-      customer_tax_id,
       observacoes,
-      horarios  // Array of { date, horario, professorId, professorNome }
+      horarios  // Array of { data, horario, professorId, professorNome }
     } = req.body;
 
     if (!horarios || !Array.isArray(horarios) || horarios.length === 0) {
@@ -179,11 +182,11 @@ router.post('/create-session', async (req, res) => {
       const scheduleRef = await db.collection('teacherSchedules')
         .doc(horario.professorId)
         .collection('slots')
-        .doc(`${horario.date}_${horario.horario}`)
+        .doc(`${horario.data}_${horario.horario}`)
         .get();
 
-      if (scheduleRef.exists && scheduleRef.data().isBooked) {
-        unavailableSlots.push(`${horario.date} ${horario.horario}`);
+      if (scheduleRef.exists && scheduleRef.data().status === 'confirmado') {
+        unavailableSlots.push(`${horario.data} ${horario.horario}`);
       }
     }
 
@@ -215,7 +218,6 @@ router.post('/create-session', async (req, res) => {
       metadata: {
         customer_name,
         customer_phone,
-        customer_tax_id,
         observacoes,
         horarios: JSON.stringify(horarios)
       }
