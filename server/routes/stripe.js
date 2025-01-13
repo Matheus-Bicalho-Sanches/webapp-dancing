@@ -80,6 +80,28 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
     // Recuperar os horários selecionados do metadata
     const horariosSelecionados = JSON.parse(session.metadata.horarios || '[]');
 
+    // Verificar se os horários ainda estão disponíveis
+    const batch = db.batch();
+    const unavailableSlots = [];
+
+    // Verificar disponibilidade de cada horário
+    for (const horario of horariosSelecionados) {
+      const scheduleRef = db.collection('teacherSchedules')
+        .doc(horario.professorId)
+        .collection('slots')
+        .doc(`${horario.date}_${horario.horario}`);
+      
+      const scheduleDoc = await scheduleRef.get();
+      if (scheduleDoc.exists && scheduleDoc.data().isBooked) {
+        unavailableSlots.push(`${horario.date} ${horario.horario}`);
+      }
+    }
+
+    // Se algum horário estiver indisponível, lançar erro
+    if (unavailableSlots.length > 0) {
+      throw new Error(`Os seguintes horários não estão mais disponíveis: ${unavailableSlots.join(', ')}`);
+    }
+
     // Criar o documento principal do agendamento
     const agendamentoRef = await db.collection('agendamentos').add({
       nomeAluno: session.metadata.customer_name,
@@ -97,9 +119,9 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
 
     console.log('Documento principal do agendamento criado:', agendamentoRef.id);
 
-    // Adicionar os horários como subcoleção
-    const batch = db.batch();
+    // Adicionar os horários como subcoleção e bloquear os slots dos professores
     horariosSelecionados.forEach(horario => {
+      // Adicionar horário na subcoleção do agendamento
       const horarioRef = agendamentoRef.collection('horarios').doc();
       batch.set(horarioRef, {
         data: horario.date,
@@ -107,6 +129,22 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
         professorId: horario.professorId,
         professorNome: horario.professorNome,
         createdAt: new Date()
+      });
+
+      // Bloquear o slot no calendário do professor
+      const teacherSlotRef = db.collection('teacherSchedules')
+        .doc(horario.professorId)
+        .collection('slots')
+        .doc(`${horario.date}_${horario.horario}`);
+
+      batch.set(teacherSlotRef, {
+        isBooked: true,
+        agendamentoId: agendamentoRef.id,
+        studentName: session.metadata.customer_name,
+        studentEmail: session.customer_details?.email,
+        bookedAt: new Date(),
+        date: horario.date,
+        time: horario.horario
       });
     });
 
@@ -122,65 +160,71 @@ const saveAgendamento = async (sessionId, paymentIntent) => {
 // Rota para criar uma sessão de checkout
 router.post('/create-session', async (req, res) => {
   try {
-    console.log('Recebendo requisição:', req.body);
-    const { amount, payer, items } = req.body;
+    const { 
+      amount, 
+      customer_name,
+      customer_phone,
+      customer_tax_id,
+      observacoes,
+      horarios  // Array of { date, horario, professorId, professorNome }
+    } = req.body;
 
-    if (!amount || !payer || !items) {
-      console.error('Dados incompletos:', { amount, payer, items });
+    if (!horarios || !Array.isArray(horarios) || horarios.length === 0) {
+      return res.status(400).json({ error: 'Horários não fornecidos' });
+    }
+
+    // Verificar disponibilidade dos horários antes de criar a sessão
+    const unavailableSlots = [];
+    for (const horario of horarios) {
+      const scheduleRef = await db.collection('teacherSchedules')
+        .doc(horario.professorId)
+        .collection('slots')
+        .doc(`${horario.date}_${horario.horario}`)
+        .get();
+
+      if (scheduleRef.exists && scheduleRef.data().isBooked) {
+        unavailableSlots.push(`${horario.date} ${horario.horario}`);
+      }
+    }
+
+    if (unavailableSlots.length > 0) {
       return res.status(400).json({ 
-        error: 'Dados incompletos',
-        details: 'Todos os campos são obrigatórios'
+        error: 'Horários indisponíveis',
+        unavailableSlots 
       });
     }
 
-    console.log('Criando sessão com os dados:', {
-      amount,
-      payer: { ...payer, tax_id: '***' }, // Log seguro do CPF
-      items
-    });
-
-    // Cria a sessão de checkout
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'brl',
-          unit_amount: Math.round(amount * 100), // Converter para centavos
-          product_data: {
-            name: items[0].name || 'Aulas de Patinação',
-            description: `Pagamento para ${payer.name}`
-          }
-        },
-        quantity: 1
-      }],
       mode: 'payment',
-      success_url: `${SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      line_items: [
+        {
+          price_data: {
+            currency: 'BRL',
+            product_data: {
+              name: 'Aula Particular',
+              description: `${horarios.length} aula(s) agendada(s)`
+            },
+            unit_amount: amount * 100 // Convert to centavos
+          },
+          quantity: 1
+        }
+      ],
+      success_url: SUCCESS_URL,
       cancel_url: CANCEL_URL,
-      customer_email: payer.email,
       metadata: {
-        customer_name: payer.name,
-        customer_tax_id: payer.tax_id,
-        customer_phone: payer.phone || '',
-        observacoes: payer.observacoes || '',
-        horarios: req.body.horarios ? JSON.stringify(req.body.horarios) : '[]'
+        customer_name,
+        customer_phone,
+        customer_tax_id,
+        observacoes,
+        horarios: JSON.stringify(horarios)
       }
     });
 
-    console.log('Sessão criada com sucesso:', {
-      sessionId: session.id,
-      url: session.url
-    });
-
-    return res.status(200).json({ 
-      url: session.url,
-      sessionId: session.id
-    });
+    return res.json({ url: session.url });
   } catch (error) {
     console.error('Erro ao criar sessão:', error);
-    return res.status(500).json({
-      error: 'Erro ao criar sessão de pagamento',
-      details: error.message
-    });
+    return res.status(500).json({ error: 'Não foi possível criar sessão do Stripe' });
   }
 });
 
