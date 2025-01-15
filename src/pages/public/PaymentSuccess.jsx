@@ -24,13 +24,16 @@ export default function PaymentSuccess() {
         .get(`/api/stripe/appointment-details/${sessionId}`)
         .then((response) => {
           console.log("Appointment details:", response.data);
-          // handle success, block date/time, etc.
+          setAppointment(response.data);
+          setLoading(false);
         })
         .catch((error) => {
           console.error("Erro ao buscar detalhes do agendamento:", error);
+          setError(error.message || 'Erro ao buscar detalhes do agendamento');
+          setLoading(false);
         });
     }
-  }, [sessionId]);
+  }, [searchParams]);
 
   if (loading) {
     return (
