@@ -18,7 +18,10 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['axios']
+    include: ['axios'],
+    esbuildOptions: {
+      target: 'es2020'
+    }
   },
   server: {
     port: 3000,
