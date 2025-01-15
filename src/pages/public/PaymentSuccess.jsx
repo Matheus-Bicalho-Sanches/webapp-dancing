@@ -29,20 +29,24 @@ export default function PaymentSuccess() {
       const response = await fetch(`/api/stripe/payment-status/${sessionId}`);
       const paymentData = await response.json();
       
-      if (paymentData.status === 'succeeded') {
-        // Then get appointment details
+      if (paymentData.status === 'succeeded' || paymentData.status === 'paid') {
+        // Use the correct endpoint path
         const appointmentResponse = await fetch(`/api/stripe/appointments/${sessionId}`);
+        
         if (!appointmentResponse.ok) {
+          console.error('Appointment response:', await appointmentResponse.text());
           throw new Error('Erro ao buscar detalhes do agendamento');
         }
+        
         const appointmentData = await appointmentResponse.json();
+        console.log('Appointment data received:', appointmentData);
         setAppointment(appointmentData);
       } else {
         setError('Pagamento pendente ou não confirmado');
       }
     } catch (error) {
       console.error('Error verifying payment:', error);
-      setError('Erro ao verificar status do pagamento');
+      setError(`Erro ao verificar status do pagamento: ${error.message}`);
     } finally {
       setLoading(false);
     }
