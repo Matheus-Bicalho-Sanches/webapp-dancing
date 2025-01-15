@@ -8,6 +8,7 @@ import {
   Alert
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import axios from 'axios';
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
@@ -19,43 +20,17 @@ export default function PaymentSuccess() {
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
     if (sessionId) {
-      verifyPayment(sessionId);
+      axios
+        .get(`/api/stripe/appointment-details/${sessionId}`)
+        .then((response) => {
+          console.log("Appointment details:", response.data);
+          // handle success, block date/time, etc.
+        })
+        .catch((error) => {
+          console.error("Erro ao buscar detalhes do agendamento:", error);
+        });
     }
-  }, [searchParams]);
-
-  const verifyPayment = async (sessionId) => {
-    try {
-      console.log('Verifying payment for session:', sessionId);
-      
-      // First verify payment status
-      const response = await fetch(`/api/stripe/payment-status/${sessionId}`);
-      const paymentData = await response.json();
-      
-      console.log('Payment status:', paymentData);
-      
-      if (paymentData.status === 'succeeded' || paymentData.status === 'paid') {
-        // Use the correct endpoint path
-        const appointmentResponse = await fetch(`/api/stripe/appointments/${sessionId}`);
-        
-        if (!appointmentResponse.ok) {
-          const errorText = await appointmentResponse.text();
-          console.error('Appointment response error:', errorText);
-          throw new Error('Erro ao buscar detalhes do agendamento');
-        }
-        
-        const appointmentData = await appointmentResponse.json();
-        console.log('Appointment data received:', appointmentData);
-        setAppointment(appointmentData);
-      } else {
-        setError('Pagamento pendente ou não confirmado');
-      }
-    } catch (error) {
-      console.error('Error verifying payment:', error);
-      setError(`Erro ao verificar status do pagamento: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [sessionId]);
 
   if (loading) {
     return (
