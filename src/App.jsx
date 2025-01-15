@@ -20,6 +20,8 @@ import Products from './pages/admin/Products';
 import Stripe from './pages/admin/Stripe';
 import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
+import AppointmentBooking from './pages/public/AppointmentBooking';
+import PaymentSuccess from './pages/public/PaymentSuccess';
 
 function App() {
   return (
@@ -165,6 +167,8 @@ function App() {
           {/* Redirecionamentos */}
           <Route path="/" element={<Navigate to="/agendar" />} />
           <Route path="/admin" element={<Navigate to="/admin/dashboard" />} />
+          <Route path="/schedule" element={<AppointmentBooking />} />
+          <Route path="/success" element={<PaymentSuccess />} />
         </Routes>
       </AuthProvider>
     </Router>
