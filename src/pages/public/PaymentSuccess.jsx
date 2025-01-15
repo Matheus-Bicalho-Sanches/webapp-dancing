@@ -25,16 +25,21 @@ export default function PaymentSuccess() {
 
   const verifyPayment = async (sessionId) => {
     try {
+      console.log('Verifying payment for session:', sessionId);
+      
       // First verify payment status
       const response = await fetch(`/api/stripe/payment-status/${sessionId}`);
       const paymentData = await response.json();
+      
+      console.log('Payment status:', paymentData);
       
       if (paymentData.status === 'succeeded' || paymentData.status === 'paid') {
         // Use the correct endpoint path
         const appointmentResponse = await fetch(`/api/stripe/appointments/${sessionId}`);
         
         if (!appointmentResponse.ok) {
-          console.error('Appointment response:', await appointmentResponse.text());
+          const errorText = await appointmentResponse.text();
+          console.error('Appointment response error:', errorText);
           throw new Error('Erro ao buscar detalhes do agendamento');
         }
         
