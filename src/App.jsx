@@ -22,6 +22,7 @@ import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
 import AppointmentBooking from './pages/public/AppointmentBooking';
 import PaymentSuccess from './pages/public/PaymentSuccess';
+import CRM from './pages/private/CRM';
 
 function App() {
   return (
@@ -94,6 +95,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Tasks />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/crm" 
+            element={
+              <PrivateRoute>
+                <CRM />
               </PrivateRoute>
             } 
           />
