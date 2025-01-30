@@ -23,6 +23,7 @@ import { Box, Alert } from '@mui/material';
 import AppointmentBooking from './pages/public/AppointmentBooking';
 import PaymentSuccess from './pages/public/PaymentSuccess';
 import CRM from './pages/private/CRM';
+import ConfigTest from './components/ConfigTest';
 
 function App() {
   return (
@@ -32,6 +33,11 @@ function App() {
           {/* Rotas públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/agendar" element={<Schedule />} />
+          <Route path="/config-test" element={
+            <MainLayout>
+              <ConfigTest />
+            </MainLayout>
+          } />
 
           {/* Rotas administrativas */}
           <Route 
