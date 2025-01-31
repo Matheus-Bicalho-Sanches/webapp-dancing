@@ -617,7 +617,7 @@ export default function Tasks() {
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YYYY HH:mm') : '-'}
+                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
                 </TableCell>
                 <TableCell>
                   <Chip
@@ -629,7 +629,17 @@ export default function Tasks() {
                 <TableCell>
                   {users.find(user => user.id === task.responsavel)?.name || task.responsavel}
                 </TableCell>
-                <TableCell>{task.observacoes}</TableCell>
+                <TableCell>
+                  <Typography
+                    component="div"
+                    sx={{
+                      whiteSpace: 'pre-line',
+                      wordBreak: 'break-word'
+                    }}
+                  >
+                    {task.observacoes}
+                  </Typography>
+                </TableCell>
                 <TableCell>
                   <Select
                     value={task.status || 'Pendente'}
