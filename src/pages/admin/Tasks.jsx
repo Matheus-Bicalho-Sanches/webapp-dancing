@@ -605,9 +605,19 @@ export default function Tasks() {
           <TableBody>
             {filterTasks(tasks).map((task) => (
               <TableRow key={task.id}>
-                <TableCell sx={{ width: '30%' }}>{task.descricao}</TableCell>
+                <TableCell sx={{ width: '30%' }}>
+                  <Typography
+                    component="div"
+                    sx={{
+                      whiteSpace: 'pre-line',
+                      wordBreak: 'break-word'
+                    }}
+                  >
+                    {task.descricao}
+                  </Typography>
+                </TableCell>
                 <TableCell>
-                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
+                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YYYY HH:mm') : '-'}
                 </TableCell>
                 <TableCell>
                   <Chip
@@ -616,65 +626,23 @@ export default function Tasks() {
                     size="small"
                   />
                 </TableCell>
-                <TableCell sx={{ width: '10%' }}>
+                <TableCell>
                   {users.find(user => user.id === task.responsavel)?.name || task.responsavel}
                 </TableCell>
                 <TableCell>{task.observacoes}</TableCell>
                 <TableCell>
-                  <MuiSelect
-                    size="small"
+                  <Select
                     value={task.status || 'Pendente'}
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                    size="small"
                     disabled={updatingStatus}
-                    sx={{ 
-                      minWidth: 120,
-                      fontSize: '0.875rem',
-                      '& .MuiSelect-select': {
-                        fontSize: '0.875rem'
-                      }
-                    }}
+                    sx={{ minWidth: 120 }}
                   >
-                    <MuiMenuItem 
-                      value="Pendente"
-                      sx={{ 
-                        fontSize: '0.875rem',
-                        color: 'text.secondary',
-                        '&.Mui-selected': { backgroundColor: 'grey.100' }
-                      }}
-                    >
-                      Pendente
-                    </MuiMenuItem>
-                    <MuiMenuItem 
-                      value="Em andamento"
-                      sx={{ 
-                        fontSize: '0.875rem',
-                        color: 'warning.main',
-                        '&.Mui-selected': { backgroundColor: 'warning.lighter' }
-                      }}
-                    >
-                      Em andamento
-                    </MuiMenuItem>
-                    <MuiMenuItem 
-                      value="Finalizada"
-                      sx={{ 
-                        fontSize: '0.875rem',
-                        color: 'success.main',
-                        '&.Mui-selected': { backgroundColor: 'success.lighter' }
-                      }}
-                    >
-                      Finalizada
-                    </MuiMenuItem>
-                    <MuiMenuItem 
-                      value="Aguardando"
-                      sx={{ 
-                        fontSize: '0.875rem',
-                        color: 'info.main',
-                        '&.Mui-selected': { backgroundColor: 'info.lighter' }
-                      }}
-                    >
-                      Aguardando
-                    </MuiMenuItem>
-                  </MuiSelect>
+                    <MenuItem value="Pendente">Pendente</MenuItem>
+                    <MenuItem value="Em andamento">Em andamento</MenuItem>
+                    <MenuItem value="Finalizada">Finalizada</MenuItem>
+                    <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  </Select>
                 </TableCell>
                 <TableCell align="right">
                   <IconButton
