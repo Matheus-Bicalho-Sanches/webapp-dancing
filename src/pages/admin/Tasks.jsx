@@ -708,6 +708,8 @@ export default function Tasks() {
             <Tab label="Diárias" />
             <Tab label="Semanais" />
             <Tab label="Mensais" />
+            <Tab label="Por horário" />
+            {hasDeletePermission && <Tab label="Logs" />}
           </Tabs>
         </Box>
 
@@ -736,6 +738,20 @@ export default function Tasks() {
             Funcionalidade de tarefas mensais será implementada em breve.
           </Typography>
         </TabPanel>
+
+        <TabPanel value={currentTab} index={5}>
+          <Typography>
+            Funcionalidade de tarefas por horário será implementada em breve.
+          </Typography>
+        </TabPanel>
+
+        {hasDeletePermission && (
+          <TabPanel value={currentTab} index={6}>
+            <Typography>
+              Logs de alterações das tarefas serão exibidos aqui.
+            </Typography>
+          </TabPanel>
+        )}
 
         {/* Dialog para adicionar/editar tarefa */}
         <Dialog
