@@ -99,6 +99,12 @@ export default function Tasks() {
   const [responsavelFilter, setResponsavelFilter] = useState(null);
   const [responsavelSort, setResponsavelSort] = useState('asc');
   const [responsavelAnchorEl, setResponsavelAnchorEl] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [statusSort, setStatusSort] = useState('asc');
+  const [statusAnchorEl, setStatusAnchorEl] = useState(null);
+  const [prazoFilter, setPrazoFilter] = useState(null);
+  const [prazoSort, setPrazoSort] = useState('asc');
+  const [prazoAnchorEl, setPrazoAnchorEl] = useState(null);
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -317,6 +323,42 @@ export default function Tasks() {
     handleResponsavelFilterClose();
   };
 
+  const handleStatusFilterClick = (event) => {
+    setStatusAnchorEl(event.currentTarget);
+  };
+
+  const handleStatusFilterClose = () => {
+    setStatusAnchorEl(null);
+  };
+
+  const handleStatusFilterChange = (status) => {
+    setStatusFilter(status);
+    handleStatusFilterClose();
+  };
+
+  const clearStatusFilter = () => {
+    setStatusFilter(null);
+    handleStatusFilterClose();
+  };
+
+  const handlePrazoFilterClick = (event) => {
+    setPrazoAnchorEl(event.currentTarget);
+  };
+
+  const handlePrazoFilterClose = () => {
+    setPrazoAnchorEl(null);
+  };
+
+  const handlePrazoFilterChange = (date) => {
+    setPrazoFilter(date);
+    handlePrazoFilterClose();
+  };
+
+  const clearPrazoFilter = () => {
+    setPrazoFilter(null);
+    handlePrazoFilterClose();
+  };
+
   const filterTasks = (tasksToFilter) => {
     let filteredTasks = tasksToFilter;
     
@@ -332,6 +374,20 @@ export default function Tasks() {
     // Apply responsável filter
     if (responsavelFilter) {
       filteredTasks = filteredTasks.filter(task => task.responsavel === responsavelFilter);
+    }
+
+    // Apply status filter
+    if (statusFilter) {
+      filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
+    }
+
+    // Apply prazo filter
+    if (prazoFilter) {
+      filteredTasks = filteredTasks.filter(task => {
+        if (!task.prazoLimite) return false;
+        const taskPrazo = dayjs(task.prazoLimite).format('YYYY-MM-DD');
+        return taskPrazo === prazoFilter;
+      });
     }
 
     // Apply date sorting
@@ -352,6 +408,27 @@ export default function Tasks() {
         return responsavelSort === 'asc' 
           ? userA.localeCompare(userB)
           : userB.localeCompare(userA);
+      });
+    }
+
+    // Apply status sorting
+    if (orderBy === 'status') {
+      filteredTasks = [...filteredTasks].sort((a, b) => {
+        const statusA = a.status || 'Pendente';
+        const statusB = b.status || 'Pendente';
+        return statusSort === 'asc'
+          ? statusA.localeCompare(statusB)
+          : statusB.localeCompare(statusA);
+      });
+    }
+
+    // Apply prazo sorting
+    if (orderBy === 'prazo') {
+      filteredTasks = [...filteredTasks].sort((a, b) => {
+        if (!a.prazoLimite || !b.prazoLimite) return 0;
+        const prazoA = dayjs(a.prazoLimite);
+        const prazoB = dayjs(b.prazoLimite);
+        return prazoSort === 'asc' ? prazoA.diff(prazoB) : prazoB.diff(prazoA);
       });
     }
 
@@ -419,7 +496,40 @@ export default function Tasks() {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>Prazo</TableCell>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Prazo
+                  <IconButton 
+                    size="small" 
+                    onClick={handlePrazoFilterClick}
+                    sx={{ 
+                      ml: 1,
+                      color: (prazoFilter || prazoSort === 'desc') ? 'primary.main' : 'inherit'
+                    }}
+                  >
+                    <FilterListIcon fontSize="small" />
+                    {!prazoFilter && prazoSort === 'desc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↓
+                      </Box>
+                    )}
+                    {!prazoFilter && prazoSort === 'asc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↑
+                      </Box>
+                    )}
+                  </IconButton>
+                  {prazoFilter && (
+                    <IconButton 
+                      size="small" 
+                      onClick={clearPrazoFilter}
+                      sx={{ ml: 0.5 }}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </TableCell>
               <TableCell sx={{ width: '10%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   Responsável
@@ -455,7 +565,40 @@ export default function Tasks() {
                 </Box>
               </TableCell>
               <TableCell>Observações</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Status
+                  <IconButton 
+                    size="small" 
+                    onClick={handleStatusFilterClick}
+                    sx={{ 
+                      ml: 1,
+                      color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
+                    }}
+                  >
+                    <FilterListIcon fontSize="small" />
+                    {!statusFilter && statusSort === 'desc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↓
+                      </Box>
+                    )}
+                    {!statusFilter && statusSort === 'asc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↑
+                      </Box>
+                    )}
+                  </IconButton>
+                  {statusFilter && (
+                    <IconButton 
+                      size="small" 
+                      onClick={clearStatusFilter}
+                      sx={{ ml: 0.5 }}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </TableCell>
               <TableCell align="right">Ações</TableCell>
             </TableRow>
           </TableHead>
@@ -576,6 +719,7 @@ export default function Tasks() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={currentTab} onChange={handleTabChange}>
             <Tab label="Não recorrentes" />
+            <Tab label="Arquivo" />
             <Tab label="Diárias" />
             <Tab label="Semanais" />
             <Tab label="Mensais" />
@@ -588,17 +732,23 @@ export default function Tasks() {
 
         <TabPanel value={currentTab} index={1}>
           <Typography>
-            Funcionalidade de tarefas diárias será implementada em breve.
+            Tarefas arquivadas serão exibidas aqui.
           </Typography>
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
           <Typography>
-            Funcionalidade de tarefas semanais será implementada em breve.
+            Funcionalidade de tarefas diárias será implementada em breve.
           </Typography>
         </TabPanel>
 
         <TabPanel value={currentTab} index={3}>
+          <Typography>
+            Funcionalidade de tarefas semanais será implementada em breve.
+          </Typography>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={4}>
           <Typography>
             Funcionalidade de tarefas mensais será implementada em breve.
           </Typography>
@@ -677,7 +827,7 @@ export default function Tasks() {
           </DialogActions>
         </Dialog>
 
-        {/* Filter Popover */}
+        {/* Date Filter Popover */}
         <Popover
           open={Boolean(anchorEl)}
           anchorEl={anchorEl}
@@ -701,9 +851,6 @@ export default function Tasks() {
               value={dateFilter || ''}
               onChange={(e) => handleDateFilterChange(e.target.value)}
               sx={{ minWidth: 200 }}
-              InputLabelProps={{
-                shrink: true,
-              }}
             />
             
             <Divider sx={{ my: 1 }} />
@@ -717,7 +864,7 @@ export default function Tasks() {
                 onChange={(e) => setDateSort(e.target.value)}
                 sx={{ minWidth: 200 }}
               >
-                <MenuItem value="asc">Mais antigas primeiro</MenuItem>
+                <MenuItem value="asc">Mais antigos primeiro</MenuItem>
                 <MenuItem value="desc">Mais recentes primeiro</MenuItem>
               </Select>
             </FormControl>
@@ -771,6 +918,101 @@ export default function Tasks() {
               >
                 <MenuItem value="asc">A-Z</MenuItem>
                 <MenuItem value="desc">Z-A</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Status Filter Popover */}
+        <Popover
+          open={Boolean(statusAnchorEl)}
+          anchorEl={statusAnchorEl}
+          onClose={handleStatusFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por status
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={statusFilter || ''}
+                onChange={(e) => handleStatusFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="Pendente">Pendente</MenuItem>
+                <MenuItem value="Em andamento">Em andamento</MenuItem>
+                <MenuItem value="Finalizada">Finalizada</MenuItem>
+                <MenuItem value="Aguardando">Aguardando</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={statusSort}
+                onChange={(e) => setStatusSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">A-Z</MenuItem>
+                <MenuItem value="desc">Z-A</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Prazo Filter Popover */}
+        <Popover
+          open={Boolean(prazoAnchorEl)}
+          anchorEl={prazoAnchorEl}
+          onClose={handlePrazoFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por prazo
+            </Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={prazoFilter || ''}
+              onChange={(e) => handlePrazoFilterChange(e.target.value)}
+              sx={{ minWidth: 200 }}
+            />
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={prazoSort}
+                onChange={(e) => setPrazoSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Mais próximos primeiro</MenuItem>
+                <MenuItem value="desc">Mais distantes primeiro</MenuItem>
               </Select>
             </FormControl>
           </Box>
