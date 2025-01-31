@@ -6,7 +6,8 @@ import {
   ListItemIcon, 
   ListItemText,
   Box,
-  Typography
+  Typography,
+  IconButton
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -15,14 +16,15 @@ import {
   Assignment as AssignmentIcon,
   AttachMoney as AttachMoneyIcon,
   ShoppingCart as ShoppingCartIcon,
-  Store as StoreIcon,
-  Payment as PaymentIcon,
   CreditCard as CreditCardIcon,
-  PeopleAlt as PeopleAltIcon
+  PeopleAlt as PeopleAltIcon,
+  ChevronLeft as ChevronLeftIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const Sidebar = () => {
+const drawerWidth = 240;
+
+const Sidebar = ({ open, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -44,16 +46,22 @@ const Sidebar = () => {
 
   return (
     <Drawer
-      variant="permanent"
+      variant="persistent"
+      anchor="left"
+      open={open}
       sx={{
-        width: 240,
+        width: drawerWidth,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: 240,
+          width: drawerWidth,
           boxSizing: 'border-box',
           backgroundColor: '#ffffff',
           color: '#333333',
           borderRight: '1px solid #e0e0e0',
+          transition: theme => theme.transitions.create('transform', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
         },
       }}
     >
@@ -63,31 +71,15 @@ const Sidebar = () => {
         height: 'calc(100vh - 64px)',
         display: 'flex',
         flexDirection: 'column',
-        '&::-webkit-scrollbar': {
-          width: '4px',
-          display: 'none'
-        },
-        '&:hover::-webkit-scrollbar': {
-          display: 'block'
-        },
-        '&::-webkit-scrollbar-track': {
-          background: 'transparent'
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: '#bdbdbd',
-          borderRadius: '4px'
-        },
-        '&::-webkit-scrollbar-thumb:hover': {
-          background: '#757575'
-        },
-        '-ms-overflow-style': 'none',
-        'scrollbarWidth': 'none',
       }}>
         <Box sx={{ 
           padding: '12px 20px',
           borderBottom: '1px solid #e0e0e0',
           marginBottom: '10px',
-          flexShrink: 0
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
         }}>
           <Typography variant="h6" sx={{ 
             color: '#1976d2', 
@@ -96,6 +88,9 @@ const Sidebar = () => {
           }}>
             Dancing Patinação
           </Typography>
+          <IconButton onClick={onClose} sx={{ color: '#1976d2' }}>
+            <ChevronLeftIcon />
+          </IconButton>
         </Box>
 
         <List sx={{ 
