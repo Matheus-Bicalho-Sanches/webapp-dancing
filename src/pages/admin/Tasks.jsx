@@ -28,12 +28,15 @@ import {
   Tabs,
   Tab,
   Select as MuiSelect,
-  MenuItem as MuiMenuItem
+  MenuItem as MuiMenuItem,
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  FilterList as FilterListIcon,
+  Clear as ClearIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { 
@@ -51,6 +54,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import Popover from '@mui/material/Popover';
 
 // Componente TabPanel para renderizar o conteúdo de cada aba
 function TabPanel(props) {
@@ -89,6 +93,12 @@ export default function Tasks() {
     observacoes: ''
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [dateFilter, setDateFilter] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [dateSort, setDateSort] = useState('asc');
+  const [responsavelFilter, setResponsavelFilter] = useState(null);
+  const [responsavelSort, setResponsavelSort] = useState('asc');
+  const [responsavelAnchorEl, setResponsavelAnchorEl] = useState(null);
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -271,6 +281,83 @@ export default function Tasks() {
     return 'success';
   };
 
+  const handleFilterClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleFilterClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDateFilterChange = (date) => {
+    setDateFilter(date);
+    handleFilterClose();
+  };
+
+  const clearDateFilter = () => {
+    setDateFilter(null);
+    handleFilterClose();
+  };
+
+  const handleResponsavelFilterClick = (event) => {
+    setResponsavelAnchorEl(event.currentTarget);
+  };
+
+  const handleResponsavelFilterClose = () => {
+    setResponsavelAnchorEl(null);
+  };
+
+  const handleResponsavelFilterChange = (userId) => {
+    setResponsavelFilter(userId);
+    handleResponsavelFilterClose();
+  };
+
+  const clearResponsavelFilter = () => {
+    setResponsavelFilter(null);
+    handleResponsavelFilterClose();
+  };
+
+  const filterTasks = (tasksToFilter) => {
+    let filteredTasks = tasksToFilter;
+    
+    // Apply date filter
+    if (dateFilter) {
+      filteredTasks = filteredTasks.filter(task => {
+        if (!task.createdAt) return false;
+        const taskDate = dayjs(task.createdAt.toDate()).format('YYYY-MM-DD');
+        return taskDate === dateFilter;
+      });
+    }
+
+    // Apply responsável filter
+    if (responsavelFilter) {
+      filteredTasks = filteredTasks.filter(task => task.responsavel === responsavelFilter);
+    }
+
+    // Apply date sorting
+    if (orderBy === 'createdAt') {
+      filteredTasks = [...filteredTasks].sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0;
+        const dateA = a.createdAt.toDate();
+        const dateB = b.createdAt.toDate();
+        return dateSort === 'asc' ? dateA - dateB : dateB - dateA;
+      });
+    }
+
+    // Apply responsável sorting
+    if (orderBy === 'responsavel') {
+      filteredTasks = [...filteredTasks].sort((a, b) => {
+        const userA = users.find(user => user.id === a.responsavel)?.name || a.responsavel;
+        const userB = users.find(user => user.id === b.responsavel)?.name || b.responsavel;
+        return responsavelSort === 'asc' 
+          ? userA.localeCompare(userB)
+          : userB.localeCompare(userA);
+      });
+    }
+
+    return filteredTasks;
+  };
+
   if (loading) {
     return (
       <MainLayout title="Tarefas">
@@ -298,16 +385,82 @@ export default function Tasks() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
-              <TableCell>Data criação</TableCell>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Data criação
+                  <IconButton 
+                    size="small" 
+                    onClick={handleFilterClick}
+                    sx={{ 
+                      ml: 1,
+                      color: (dateFilter || dateSort === 'desc') ? 'primary.main' : 'inherit'
+                    }}
+                  >
+                    <FilterListIcon fontSize="small" />
+                    {!dateFilter && dateSort === 'desc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↓
+                      </Box>
+                    )}
+                    {!dateFilter && dateSort === 'asc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↑
+                      </Box>
+                    )}
+                  </IconButton>
+                  {dateFilter && (
+                    <IconButton 
+                      size="small" 
+                      onClick={clearDateFilter}
+                      sx={{ ml: 0.5 }}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </TableCell>
               <TableCell>Prazo</TableCell>
-              <TableCell sx={{ width: '10%' }}>Responsável</TableCell>
+              <TableCell sx={{ width: '10%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  Responsável
+                  <IconButton 
+                    size="small" 
+                    onClick={handleResponsavelFilterClick}
+                    sx={{ 
+                      ml: 1,
+                      color: (responsavelFilter || responsavelSort === 'desc') ? 'primary.main' : 'inherit'
+                    }}
+                  >
+                    <FilterListIcon fontSize="small" />
+                    {!responsavelFilter && responsavelSort === 'desc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↓
+                      </Box>
+                    )}
+                    {!responsavelFilter && responsavelSort === 'asc' && (
+                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                        ↑
+                      </Box>
+                    )}
+                  </IconButton>
+                  {responsavelFilter && (
+                    <IconButton 
+                      size="small" 
+                      onClick={clearResponsavelFilter}
+                      sx={{ ml: 0.5 }}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              </TableCell>
               <TableCell>Observações</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Ações</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {tasks.map((task) => (
+            {filterTasks(tasks).map((task) => (
               <TableRow key={task.id}>
                 <TableCell sx={{ width: '30%' }}>{task.descricao}</TableCell>
                 <TableCell>
@@ -523,6 +676,105 @@ export default function Tasks() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Filter Popover */}
+        <Popover
+          open={Boolean(anchorEl)}
+          anchorEl={anchorEl}
+          onClose={handleFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por data
+            </Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={dateFilter || ''}
+              onChange={(e) => handleDateFilterChange(e.target.value)}
+              sx={{ minWidth: 200 }}
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={dateSort}
+                onChange={(e) => setDateSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Mais antigas primeiro</MenuItem>
+                <MenuItem value="desc">Mais recentes primeiro</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Responsável Filter Popover */}
+        <Popover
+          open={Boolean(responsavelAnchorEl)}
+          anchorEl={responsavelAnchorEl}
+          onClose={handleResponsavelFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por responsável
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={responsavelFilter || ''}
+                onChange={(e) => handleResponsavelFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.name || user.email}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={responsavelSort}
+                onChange={(e) => setResponsavelSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">A-Z</MenuItem>
+                <MenuItem value="desc">Z-A</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
 
         {/* Snackbar para feedback */}
         <Snackbar
