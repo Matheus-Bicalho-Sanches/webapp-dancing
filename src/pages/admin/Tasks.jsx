@@ -445,16 +445,18 @@ export default function Tasks() {
     );
   }
 
-  const renderTasksTable = () => (
+  const renderTasksTable = (isArchive = false) => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Nova Tarefa
-        </Button>
+        {!isArchive && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Nova Tarefa
+          </Button>
+        )}
       </Box>
 
       <TableContainer component={Paper}>
@@ -530,7 +532,7 @@ export default function Tasks() {
                   )}
                 </Box>
               </TableCell>
-              <TableCell sx={{ width: '10%' }}>
+              <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   Responsável
                   <IconButton 
@@ -603,7 +605,9 @@ export default function Tasks() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filterTasks(tasks).map((task) => (
+            {filterTasks(tasks)
+              .filter(task => isArchive ? task.status === 'Arquivar' : task.status !== 'Arquivar')
+              .map((task) => (
               <TableRow key={task.id}>
                 <TableCell sx={{ width: '30%' }}>
                   <Typography
@@ -652,6 +656,7 @@ export default function Tasks() {
                     <MenuItem value="Em andamento">Em andamento</MenuItem>
                     <MenuItem value="Finalizada">Finalizada</MenuItem>
                     <MenuItem value="Aguardando">Aguardando</MenuItem>
+                    <MenuItem value="Arquivar">Arquivar</MenuItem>
                   </Select>
                 </TableCell>
                 <TableCell align="right">
@@ -674,9 +679,11 @@ export default function Tasks() {
                 </TableCell>
               </TableRow>
             ))}
-            {tasks.length === 0 && (
+            {filterTasks(tasks)
+              .filter(task => isArchive ? task.status === 'Arquivar' : task.status !== 'Arquivar')
+              .length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={7} align="center">
                   Nenhuma tarefa encontrada
                 </TableCell>
               </TableRow>
@@ -705,13 +712,11 @@ export default function Tasks() {
         </Box>
 
         <TabPanel value={currentTab} index={0}>
-          {renderTasksTable()}
+          {renderTasksTable(false)}
         </TabPanel>
 
         <TabPanel value={currentTab} index={1}>
-          <Typography>
-            Tarefas arquivadas serão exibidas aqui.
-          </Typography>
+          {renderTasksTable(true)}
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
@@ -931,6 +936,7 @@ export default function Tasks() {
                 <MenuItem value="Em andamento">Em andamento</MenuItem>
                 <MenuItem value="Finalizada">Finalizada</MenuItem>
                 <MenuItem value="Aguardando">Aguardando</MenuItem>
+                <MenuItem value="Arquivar">Arquivar</MenuItem>
               </Select>
             </FormControl>
             
