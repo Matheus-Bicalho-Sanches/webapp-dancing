@@ -1,0 +1,14 @@
+{
+  "name": "Dancing Patinação",
+  "short_name": "Dancing",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "display": "standalone"
+} 
