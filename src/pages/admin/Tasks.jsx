@@ -26,7 +26,9 @@ import {
   Alert,
   Snackbar,
   Tabs,
-  Tab
+  Tab,
+  Select as MuiSelect,
+  MenuItem as MuiMenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -86,6 +88,7 @@ export default function Tasks() {
     prazoLimite: dayjs().format('YYYY-MM-DD'),
     observacoes: ''
   });
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -177,6 +180,7 @@ export default function Tasks() {
     try {
       const taskData = {
         ...formData,
+        status: 'Pendente',
         tipo: 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
@@ -233,6 +237,30 @@ export default function Tasks() {
     }
   };
 
+  const handleStatusChange = async (taskId, newStatus) => {
+    try {
+      setUpdatingStatus(true);
+      await updateDoc(doc(db, 'tarefas', taskId), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      setSnackbar({
+        open: true,
+        message: 'Status atualizado com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar status. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const getStatusColor = (prazoLimite) => {
     const hoje = dayjs();
     const prazo = dayjs(prazoLimite);
@@ -269,19 +297,21 @@ export default function Tasks() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Descrição</TableCell>
-              <TableCell>Responsável</TableCell>
+              <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
+              <TableCell>Data criação</TableCell>
               <TableCell>Prazo</TableCell>
+              <TableCell sx={{ width: '10%' }}>Responsável</TableCell>
               <TableCell>Observações</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell align="right">Ações</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {tasks.map((task) => (
               <TableRow key={task.id}>
-                <TableCell>{task.descricao}</TableCell>
+                <TableCell sx={{ width: '30%' }}>{task.descricao}</TableCell>
                 <TableCell>
-                  {users.find(user => user.id === task.responsavel)?.email || task.responsavel}
+                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
                 </TableCell>
                 <TableCell>
                   <Chip
@@ -290,7 +320,66 @@ export default function Tasks() {
                     size="small"
                   />
                 </TableCell>
+                <TableCell sx={{ width: '10%' }}>
+                  {users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                </TableCell>
                 <TableCell>{task.observacoes}</TableCell>
+                <TableCell>
+                  <MuiSelect
+                    size="small"
+                    value={task.status || 'Pendente'}
+                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                    disabled={updatingStatus}
+                    sx={{ 
+                      minWidth: 120,
+                      fontSize: '0.875rem',
+                      '& .MuiSelect-select': {
+                        fontSize: '0.875rem'
+                      }
+                    }}
+                  >
+                    <MuiMenuItem 
+                      value="Pendente"
+                      sx={{ 
+                        fontSize: '0.875rem',
+                        color: 'text.secondary',
+                        '&.Mui-selected': { backgroundColor: 'grey.100' }
+                      }}
+                    >
+                      Pendente
+                    </MuiMenuItem>
+                    <MuiMenuItem 
+                      value="Em andamento"
+                      sx={{ 
+                        fontSize: '0.875rem',
+                        color: 'warning.main',
+                        '&.Mui-selected': { backgroundColor: 'warning.lighter' }
+                      }}
+                    >
+                      Em andamento
+                    </MuiMenuItem>
+                    <MuiMenuItem 
+                      value="Finalizada"
+                      sx={{ 
+                        fontSize: '0.875rem',
+                        color: 'success.main',
+                        '&.Mui-selected': { backgroundColor: 'success.lighter' }
+                      }}
+                    >
+                      Finalizada
+                    </MuiMenuItem>
+                    <MuiMenuItem 
+                      value="Aguardando"
+                      sx={{ 
+                        fontSize: '0.875rem',
+                        color: 'info.main',
+                        '&.Mui-selected': { backgroundColor: 'info.lighter' }
+                      }}
+                    >
+                      Aguardando
+                    </MuiMenuItem>
+                  </MuiSelect>
+                </TableCell>
                 <TableCell align="right">
                   <IconButton
                     color="primary"
@@ -366,7 +455,7 @@ export default function Tasks() {
         <Dialog
           open={openDialog}
           onClose={handleCloseDialog}
-          maxWidth="sm"
+          maxWidth="md"
           fullWidth
         >
           <DialogTitle>
@@ -380,6 +469,8 @@ export default function Tasks() {
                 value={formData.descricao}
                 onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                 required
+                multiline
+                rows={4}
               />
 
               <FormControl fullWidth required>
@@ -391,7 +482,7 @@ export default function Tasks() {
                 >
                   {users.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
-                      {user.email}
+                      {user.name || user.email}
                     </MenuItem>
                   ))}
                 </Select>
