@@ -29,7 +29,10 @@ import {
   Tab,
   Select as MuiSelect,
   MenuItem as MuiMenuItem,
-  Divider
+  Divider,
+  Checkbox,
+  Pagination,
+  TablePagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -89,6 +92,7 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
   const [formData, setFormData] = useState({
     descricao: '',
     responsavel: [],
@@ -110,6 +114,10 @@ export default function Tasks() {
   const [prazoAnchorEl, setPrazoAnchorEl] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [logStartDate, setLogStartDate] = useState('');
+  const [logEndDate, setLogEndDate] = useState('');
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -418,6 +426,11 @@ export default function Tasks() {
   const filterTasks = (tasksToFilter) => {
     let filteredTasks = tasksToFilter;
     
+    // Filter out completed tasks if showCompletedTasks is false
+    if (!showCompletedTasks) {
+      filteredTasks = filteredTasks.filter(task => task.status !== 'Finalizada');
+    }
+
     // Apply date filter
     if (dateFilter) {
       filteredTasks = filteredTasks.filter(task => {
@@ -544,61 +557,152 @@ export default function Tasks() {
       );
     }
 
+    // Filter logs by date range
+    let filteredLogs = logs;
+    if (logStartDate || logEndDate) {
+      filteredLogs = logs.filter(log => {
+        if (!log.timestamp) return false;
+        const logDate = dayjs(log.timestamp.toDate());
+        
+        if (logStartDate && logEndDate) {
+          return logDate.isAfter(dayjs(logStartDate).startOf('day')) && 
+                 logDate.isBefore(dayjs(logEndDate).endOf('day'));
+        } else if (logStartDate) {
+          return logDate.isAfter(dayjs(logStartDate).startOf('day'));
+        } else if (logEndDate) {
+          return logDate.isBefore(dayjs(logEndDate).endOf('day'));
+        }
+        
+        return true;
+      });
+    }
+
+    // Calculate the current page's logs
+    const startIndex = page * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const currentLogs = filteredLogs.slice(startIndex, endIndex);
+
     return (
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Data/Hora</TableCell>
-              <TableCell>Usuário</TableCell>
-              <TableCell>Ação</TableCell>
-              <TableCell>Descrição da Tarefa</TableCell>
-              <TableCell>Alterações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {logs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>
-                  {log.timestamp ? format(log.timestamp.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : '-'}
-                </TableCell>
-                <TableCell>{log.userName}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={
-                      log.action === 'create' ? 'Criação' :
-                      log.action === 'update' ? 'Atualização' :
-                      log.action === 'delete' ? 'Exclusão' : log.action
-                    }
-                    color={
-                      log.action === 'create' ? 'success' :
-                      log.action === 'update' ? 'primary' :
-                      log.action === 'delete' ? 'error' : 'default'
-                    }
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>{log.description}</TableCell>
-                <TableCell>
-                  <Box sx={{ whiteSpace: 'pre-line' }}>
-                    {log.action === 'create' && 'Nova tarefa criada'}
-                    {log.action === 'delete' && 'Tarefa excluída'}
-                    {log.action === 'update' && Object.entries(log.changes).map(([field, change]) => (
-                      <Typography key={field} variant="body2" sx={{ mb: 1 }}>
-                        <strong>{field}:</strong> {
-                          Array.isArray(change.from) ?
-                            `${change.from.join(', ')} → ${change.to.join(', ')}` :
-                            `${change.from} → ${change.to}`
-                        }
-                      </Typography>
-                    ))}
-                  </Box>
-                </TableCell>
+      <>
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            type="date"
+            label="Data inicial"
+            value={logStartDate}
+            onChange={(e) => {
+              setLogStartDate(e.target.value);
+              setPage(0);
+            }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ 
+              width: 200,
+              '& .MuiSvgIcon-root': {
+                color: '#000'
+              }
+            }}
+          />
+          <TextField
+            type="date"
+            label="Data final"
+            value={logEndDate}
+            onChange={(e) => {
+              setLogEndDate(e.target.value);
+              setPage(0);
+            }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ 
+              width: 200,
+              '& .MuiSvgIcon-root': {
+                color: '#000'
+              }
+            }}
+          />
+          {(logStartDate || logEndDate) && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setLogStartDate('');
+                setLogEndDate('');
+                setPage(0);
+              }}
+              startIcon={<ClearIcon />}
+            >
+              Limpar filtros
+            </Button>
+          )}
+        </Box>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Data/Hora</TableCell>
+                <TableCell>Usuário</TableCell>
+                <TableCell>Ação</TableCell>
+                <TableCell>Descrição da Tarefa</TableCell>
+                <TableCell>Alterações</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {currentLogs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>
+                    {log.timestamp ? format(log.timestamp.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : '-'}
+                  </TableCell>
+                  <TableCell>{log.userName}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        log.action === 'create' ? 'Criação' :
+                        log.action === 'update' ? 'Atualização' :
+                        log.action === 'delete' ? 'Exclusão' : log.action
+                      }
+                      color={
+                        log.action === 'create' ? 'success' :
+                        log.action === 'update' ? 'primary' :
+                        log.action === 'delete' ? 'error' : 'default'
+                      }
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>{log.description}</TableCell>
+                  <TableCell>
+                    <Box sx={{ whiteSpace: 'pre-line' }}>
+                      {log.action === 'create' && 'Nova tarefa criada'}
+                      {log.action === 'delete' && 'Tarefa excluída'}
+                      {log.action === 'update' && Object.entries(log.changes).map(([field, change]) => (
+                        <Typography key={field} variant="body2" sx={{ mb: 1 }}>
+                          <strong>{field}:</strong> {
+                            Array.isArray(change.from) ?
+                              `${change.from.join(', ')} → ${change.to.join(', ')}` :
+                              `${change.from} → ${change.to}`
+                          }
+                        </Typography>
+                      ))}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+          <TablePagination
+            component="div"
+            count={filteredLogs.length}
+            page={page}
+            onPageChange={(event, newPage) => setPage(newPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(event) => {
+              setRowsPerPage(parseInt(event.target.value, 10));
+              setPage(0);
+            }}
+            labelRowsPerPage="Logs por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            rowsPerPageOptions={[10, 25, 50]}
+          />
+        </Box>
+      </>
     );
   };
 
@@ -614,7 +718,24 @@ export default function Tasks() {
 
   const renderTasksTable = (isArchive = false, taskType = 'nao_recorrente') => (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <FormControl component="fieldset">
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Checkbox
+              checked={showCompletedTasks}
+              onChange={(e) => setShowCompletedTasks(e.target.checked)}
+              id="show-completed"
+            />
+            <Typography
+              component="label"
+              htmlFor="show-completed"
+              sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
+            >
+              Mostrar tarefas concluídas
+            </Typography>
+          </Box>
+        </FormControl>
+        
         {!isArchive && (
           <Button
             variant="contained"
