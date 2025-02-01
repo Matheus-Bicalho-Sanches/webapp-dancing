@@ -88,7 +88,7 @@ export default function Tasks() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formData, setFormData] = useState({
     descricao: '',
-    responsavel: '',
+    responsavel: [],
     prazoLimite: dayjs().format('YYYY-MM-DD'),
     observacoes: ''
   });
@@ -171,7 +171,7 @@ export default function Tasks() {
       setEditingTask(task);
       setFormData({
         descricao: task.descricao,
-        responsavel: task.responsavel,
+        responsavel: Array.isArray(task.responsavel) ? task.responsavel : [task.responsavel],
         prazoLimite: task.prazoLimite,
         observacoes: task.observacoes || ''
       });
@@ -179,7 +179,7 @@ export default function Tasks() {
       setEditingTask(null);
       setFormData({
         descricao: '',
-        responsavel: '',
+        responsavel: [],
         prazoLimite: dayjs().format('YYYY-MM-DD'),
         observacoes: ''
       });
@@ -194,6 +194,15 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     try {
+      if (formData.responsavel.length === 0) {
+        setSnackbar({
+          open: true,
+          message: 'Selecione pelo menos um responsável.',
+          severity: 'error'
+        });
+        return;
+      }
+
       const taskData = {
         ...formData,
         status: 'Pendente',
@@ -373,7 +382,7 @@ export default function Tasks() {
 
     // Apply responsável filter
     if (responsavelFilter) {
-      filteredTasks = filteredTasks.filter(task => task.responsavel === responsavelFilter);
+      filteredTasks = filteredTasks.filter(task => task.responsavel.includes(responsavelFilter));
     }
 
     // Apply status filter
@@ -631,7 +640,23 @@ export default function Tasks() {
                   />
                 </TableCell>
                 <TableCell>
-                  {users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {Array.isArray(task.responsavel) ? (
+                      task.responsavel.map((userId) => (
+                        <Chip
+                          key={userId}
+                          label={users.find(user => user.id === userId)?.name || userId}
+                          size="small"
+                          sx={{ margin: '2px' }}
+                        />
+                      ))
+                    ) : (
+                      <Chip
+                        label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                        size="small"
+                      />
+                    )}
+                  </Box>
                 </TableCell>
                 <TableCell>
                   <Typography
@@ -778,9 +803,21 @@ export default function Tasks() {
               <FormControl fullWidth required>
                 <InputLabel>Responsável</InputLabel>
                 <Select
+                  multiple
                   value={formData.responsavel}
                   onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
                   label="Responsável"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => (
+                        <Chip
+                          key={value}
+                          label={users.find(user => user.id === value)?.name || value}
+                          size="small"
+                        />
+                      ))}
+                    </Box>
+                  )}
                 >
                   {users.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
