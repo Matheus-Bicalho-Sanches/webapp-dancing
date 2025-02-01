@@ -97,7 +97,9 @@ export default function Tasks() {
     descricao: '',
     responsavel: [],
     prazoLimite: dayjs().format('YYYY-MM-DD'),
-    observacoes: ''
+    observacoes: '',
+    diasSemana: [],
+    horario: ''
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [dateFilter, setDateFilter] = useState(null);
@@ -118,6 +120,21 @@ export default function Tasks() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [logStartDate, setLogStartDate] = useState('');
   const [logEndDate, setLogEndDate] = useState('');
+  const [taskPage, setTaskPage] = useState(0);
+  const [tasksPerPage, setTasksPerPage] = useState(100);
+  const [diaHorarioFilter, setDiaHorarioFilter] = useState(null);
+  const [diaHorarioSort, setDiaHorarioSort] = useState('asc');
+  const [diaHorarioAnchorEl, setDiaHorarioAnchorEl] = useState(null);
+
+  const diasSemanaOptions = [
+    { value: 'segunda', label: 'Segunda-feira' },
+    { value: 'terca', label: 'Terça-feira' },
+    { value: 'quarta', label: 'Quarta-feira' },
+    { value: 'quinta', label: 'Quinta-feira' },
+    { value: 'sexta', label: 'Sexta-feira' },
+    { value: 'sabado', label: 'Sábado' },
+    { value: 'domingo', label: 'Domingo' }
+  ];
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -210,7 +227,9 @@ export default function Tasks() {
         descricao: task.descricao,
         responsavel: Array.isArray(task.responsavel) ? task.responsavel : [task.responsavel],
         prazoLimite: task.prazoLimite,
-        observacoes: task.observacoes || ''
+        observacoes: task.observacoes || '',
+        diasSemana: task.diasSemana || [],
+        horario: task.horario || ''
       });
     } else {
       setEditingTask(null);
@@ -218,7 +237,9 @@ export default function Tasks() {
         descricao: '',
         responsavel: [],
         prazoLimite: dayjs().format('YYYY-MM-DD'),
-        observacoes: ''
+        observacoes: '',
+        diasSemana: [],
+        horario: ''
       });
     }
     setOpenDialog(true);
@@ -423,15 +444,32 @@ export default function Tasks() {
     handlePrazoFilterClose();
   };
 
-  const filterTasks = (tasksToFilter) => {
+  const handleDiaHorarioFilterClick = (event) => {
+    setDiaHorarioAnchorEl(event.currentTarget);
+  };
+
+  const handleDiaHorarioFilterClose = () => {
+    setDiaHorarioAnchorEl(null);
+  };
+
+  const handleDiaHorarioFilterChange = (dia) => {
+    setDiaHorarioFilter(dia);
+    handleDiaHorarioFilterClose();
+  };
+
+  const clearDiaHorarioFilter = () => {
+    setDiaHorarioFilter(null);
+    handleDiaHorarioFilterClose();
+  };
+
+  const filterTasks = (tasksToFilter, taskType = 'nao_recorrente') => {
     let filteredTasks = tasksToFilter;
     
-    // Filter out completed tasks if showCompletedTasks is false
+    // Apply filters
     if (!showCompletedTasks) {
       filteredTasks = filteredTasks.filter(task => task.status !== 'Finalizada');
     }
 
-    // Apply date filter
     if (dateFilter) {
       filteredTasks = filteredTasks.filter(task => {
         if (!task.createdAt) return false;
@@ -440,17 +478,14 @@ export default function Tasks() {
       });
     }
 
-    // Apply responsável filter
     if (responsavelFilter) {
       filteredTasks = filteredTasks.filter(task => task.responsavel.includes(responsavelFilter));
     }
 
-    // Apply status filter
     if (statusFilter) {
       filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
     }
 
-    // Apply prazo filter
     if (prazoFilter) {
       filteredTasks = filteredTasks.filter(task => {
         if (!task.prazoLimite) return false;
@@ -459,45 +494,66 @@ export default function Tasks() {
       });
     }
 
-    // Apply date sorting
-    if (orderBy === 'createdAt') {
-      filteredTasks = [...filteredTasks].sort((a, b) => {
-        if (!a.createdAt || !b.createdAt) return 0;
-        const dateA = a.createdAt.toDate();
-        const dateB = b.createdAt.toDate();
-        return dateSort === 'asc' ? dateA - dateB : dateB - dateA;
-      });
+    if (diaHorarioFilter) {
+      filteredTasks = filteredTasks.filter(task => 
+        task.diasSemana?.includes(diaHorarioFilter)
+      );
     }
 
-    // Apply responsável sorting
-    if (orderBy === 'responsavel') {
+    // Apply sorting
+    if (taskType === 'por_horario') {
+      // Apply dia e horário sorting
       filteredTasks = [...filteredTasks].sort((a, b) => {
-        const userA = users.find(user => user.id === a.responsavel)?.name || a.responsavel;
-        const userB = users.find(user => user.id === b.responsavel)?.name || b.responsavel;
-        return responsavelSort === 'asc' 
-          ? userA.localeCompare(userB)
-          : userB.localeCompare(userA);
+        const diaA = a.diasSemana?.[0] || '';
+        const diaB = b.diasSemana?.[0] || '';
+        
+        if (diaA === diaB) {
+          const horarioA = a.horario || '';
+          const horarioB = b.horario || '';
+          return diaHorarioSort === 'asc' 
+            ? horarioA.localeCompare(horarioB)
+            : horarioB.localeCompare(horarioA);
+        }
+        
+        const diaIndexA = diasSemanaOptions.findIndex(opt => opt.value === diaA);
+        const diaIndexB = diasSemanaOptions.findIndex(opt => opt.value === diaB);
+        return diaHorarioSort === 'asc'
+          ? diaIndexA - diaIndexB
+          : diaIndexB - diaIndexA;
       });
+    } else {
+      // Apply responsável sorting for non-por_horario tasks
+      if (responsavelSort) {
+        filteredTasks = [...filteredTasks].sort((a, b) => {
+          const userA = users.find(user => user.id === a.responsavel[0])?.name || a.responsavel[0];
+          const userB = users.find(user => user.id === b.responsavel[0])?.name || b.responsavel[0];
+          return responsavelSort === 'asc'
+            ? userA.localeCompare(userB)
+            : userB.localeCompare(userA);
+        });
+      }
+
+      // Apply prazo sorting for non-por_horario tasks
+      if (prazoSort) {
+        filteredTasks = [...filteredTasks].sort((a, b) => {
+          if (!a.prazoLimite || !b.prazoLimite) return 0;
+          const prazoA = dayjs(a.prazoLimite);
+          const prazoB = dayjs(b.prazoLimite);
+          return prazoSort === 'asc' 
+            ? prazoA.diff(prazoB) 
+            : prazoB.diff(prazoA);
+        });
+      }
     }
 
-    // Apply status sorting
-    if (orderBy === 'status') {
+    // Apply status sorting for all tasks (both por_horario and non-por_horario)
+    if (statusSort) {
       filteredTasks = [...filteredTasks].sort((a, b) => {
         const statusA = a.status || 'Pendente';
         const statusB = b.status || 'Pendente';
         return statusSort === 'asc'
           ? statusA.localeCompare(statusB)
           : statusB.localeCompare(statusA);
-      });
-    }
-
-    // Apply prazo sorting
-    if (orderBy === 'prazo') {
-      filteredTasks = [...filteredTasks].sort((a, b) => {
-        if (!a.prazoLimite || !b.prazoLimite) return 0;
-        const prazoA = dayjs(a.prazoLimite);
-        const prazoB = dayjs(b.prazoLimite);
-        return prazoSort === 'asc' ? prazoA.diff(prazoB) : prazoB.diff(prazoA);
       });
     }
 
@@ -596,8 +652,19 @@ export default function Tasks() {
             InputLabelProps={{ shrink: true }}
             sx={{ 
               width: 200,
-              '& .MuiSvgIcon-root': {
+              '& .MuiInputBase-root': {
                 color: '#000'
+              },
+              '& .MuiOutlinedInput-root': {
+                '& .MuiIconButton-root': {
+                  color: '#000'
+                },
+                '& button': {
+                  color: '#000'
+                },
+                '& .MuiInputAdornment-root button': {
+                  color: '#000 !important'
+                }
               }
             }}
           />
@@ -612,8 +679,19 @@ export default function Tasks() {
             InputLabelProps={{ shrink: true }}
             sx={{ 
               width: 200,
-              '& .MuiSvgIcon-root': {
+              '& .MuiInputBase-root': {
                 color: '#000'
+              },
+              '& .MuiOutlinedInput-root': {
+                '& .MuiIconButton-root': {
+                  color: '#000'
+                },
+                '& button': {
+                  color: '#000'
+                },
+                '& .MuiInputAdornment-root button': {
+                  color: '#000 !important'
+                }
               }
             }}
           />
@@ -716,286 +794,330 @@ export default function Tasks() {
     );
   }
 
-  const renderTasksTable = (isArchive = false, taskType = 'nao_recorrente') => (
-    <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <FormControl component="fieldset">
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Checkbox
-              checked={showCompletedTasks}
-              onChange={(e) => setShowCompletedTasks(e.target.checked)}
-              id="show-completed"
-            />
-            <Typography
-              component="label"
-              htmlFor="show-completed"
-              sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
-            >
-              Mostrar tarefas concluídas
-            </Typography>
-          </Box>
-        </FormControl>
-        
-        {!isArchive && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Nova Tarefa
-          </Button>
-        )}
-      </Box>
+  const renderTasksTable = (isArchive = false, taskType = 'nao_recorrente') => {
+    const filteredTasks = filterTasks(tasks.filter(task => task.tipo === taskType), taskType);
+    const startIndex = taskPage * tasksPerPage;
+    const endIndex = startIndex + tasksPerPage;
+    const currentTasks = filteredTasks.slice(startIndex, endIndex);
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
-              <TableCell sx={{ width: '10%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Data criação
-                  <IconButton 
-                    size="small" 
-                    onClick={handleFilterClick}
-                    sx={{ 
-                      ml: 1,
-                      color: (dateFilter || dateSort === 'desc') ? 'primary.main' : 'inherit'
-                    }}
-                  >
-                    <FilterListIcon fontSize="small" />
-                    {!dateFilter && dateSort === 'desc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↓
-                      </Box>
-                    )}
-                    {!dateFilter && dateSort === 'asc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↑
-                      </Box>
-                    )}
-                  </IconButton>
-                  {dateFilter && (
-                    <IconButton 
-                      size="small" 
-                      onClick={clearDateFilter}
-                      sx={{ ml: 0.5 }}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Prazo
-                  <IconButton 
-                    size="small" 
-                    onClick={handlePrazoFilterClick}
-                    sx={{ 
-                      ml: 1,
-                      color: (prazoFilter || prazoSort === 'desc') ? 'primary.main' : 'inherit'
-                    }}
-                  >
-                    <FilterListIcon fontSize="small" />
-                    {!prazoFilter && prazoSort === 'desc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↓
-                      </Box>
-                    )}
-                    {!prazoFilter && prazoSort === 'asc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↑
-                      </Box>
-                    )}
-                  </IconButton>
-                  {prazoFilter && (
-                    <IconButton 
-                      size="small" 
-                      onClick={clearPrazoFilter}
-                      sx={{ ml: 0.5 }}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Responsável
-                  <IconButton 
-                    size="small" 
-                    onClick={handleResponsavelFilterClick}
-                    sx={{ 
-                      ml: 1,
-                      color: (responsavelFilter || responsavelSort === 'desc') ? 'primary.main' : 'inherit'
-                    }}
-                  >
-                    <FilterListIcon fontSize="small" />
-                    {!responsavelFilter && responsavelSort === 'desc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↓
-                      </Box>
-                    )}
-                    {!responsavelFilter && responsavelSort === 'asc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↑
-                      </Box>
-                    )}
-                  </IconButton>
-                  {responsavelFilter && (
-                    <IconButton 
-                      size="small" 
-                      onClick={clearResponsavelFilter}
-                      sx={{ ml: 0.5 }}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell>Observações</TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Status
-                  <IconButton 
-                    size="small" 
-                    onClick={handleStatusFilterClick}
-                    sx={{ 
-                      ml: 1,
-                      color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
-                    }}
-                  >
-                    <FilterListIcon fontSize="small" />
-                    {!statusFilter && statusSort === 'desc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↓
-                      </Box>
-                    )}
-                    {!statusFilter && statusSort === 'asc' && (
-                      <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                        ↑
-                      </Box>
-                    )}
-                  </IconButton>
-                  {statusFilter && (
-                    <IconButton 
-                      size="small" 
-                      onClick={clearStatusFilter}
-                      sx={{ ml: 0.5 }}
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell align="right">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filterTasks(
-              tasks.filter(task => task.tipo === taskType)
-            ).map((task) => (
-              <TableRow key={task.id}>
-                <TableCell sx={{ width: '30%' }}>
-                  <Typography
-                    component="div"
-                    sx={{
-                      whiteSpace: 'pre-line',
-                      wordBreak: 'break-word'
-                    }}
-                  >
-                    {task.descricao}
-                  </Typography>
-                </TableCell>
+    return (
+      <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <FormControl component="fieldset">
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Checkbox
+                checked={showCompletedTasks}
+                onChange={(e) => setShowCompletedTasks(e.target.checked)}
+                id="show-completed"
+              />
+              <Typography
+                component="label"
+                htmlFor="show-completed"
+                sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
+              >
+                Mostrar tarefas concluídas
+              </Typography>
+            </Box>
+          </FormControl>
+          
+          {!isArchive && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+            >
+              Nova Tarefa
+            </Button>
+          )}
+        </Box>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
+                <TableCell sx={{ width: '10%' }}>Data criação</TableCell>
                 <TableCell>
-                  {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
+                  {taskType === 'por_horario' ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Dia e horário
+                      <IconButton 
+                        size="small" 
+                        onClick={handleDiaHorarioFilterClick}
+                        sx={{ 
+                          ml: 1,
+                          color: (diaHorarioFilter || diaHorarioSort === 'desc') ? 'primary.main' : 'inherit'
+                        }}
+                      >
+                        <FilterListIcon fontSize="small" />
+                        {!diaHorarioFilter && diaHorarioSort === 'desc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↓
+                          </Box>
+                        )}
+                        {!diaHorarioFilter && diaHorarioSort === 'asc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↑
+                          </Box>
+                        )}
+                      </IconButton>
+                      {diaHorarioFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearDiaHorarioFilter}
+                          sx={{ ml: 0.5 }}
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Prazo
+                      <IconButton 
+                        size="small" 
+                        onClick={handlePrazoFilterClick}
+                        sx={{ 
+                          ml: 1,
+                          color: (prazoFilter || prazoSort === 'desc') ? 'primary.main' : 'inherit'
+                        }}
+                      >
+                        <FilterListIcon fontSize="small" />
+                        {!prazoFilter && prazoSort === 'desc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↓
+                          </Box>
+                        )}
+                        {!prazoFilter && prazoSort === 'asc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↑
+                          </Box>
+                        )}
+                      </IconButton>
+                      {prazoFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearPrazoFilter}
+                          sx={{ ml: 0.5 }}
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  )}
                 </TableCell>
+                {taskType !== 'por_horario' && (
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Responsável
+                      <IconButton 
+                        size="small" 
+                        onClick={handleResponsavelFilterClick}
+                        sx={{ 
+                          ml: 1,
+                          color: (responsavelFilter || responsavelSort === 'desc') ? 'primary.main' : 'inherit'
+                        }}
+                      >
+                        <FilterListIcon fontSize="small" />
+                        {!responsavelFilter && responsavelSort === 'desc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↓
+                          </Box>
+                        )}
+                        {!responsavelFilter && responsavelSort === 'asc' && (
+                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                            ↑
+                          </Box>
+                        )}
+                      </IconButton>
+                      {responsavelFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearResponsavelFilter}
+                          sx={{ ml: 0.5 }}
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
+                )}
+                <TableCell>Observações</TableCell>
                 <TableCell>
-                  <Chip
-                    label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
-                    color={getStatusColor(task.prazoLimite)}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {Array.isArray(task.responsavel) ? (
-                      task.responsavel.map((userId) => (
-                        <Chip
-                          key={userId}
-                          label={users.find(user => user.id === userId)?.name || userId}
-                          size="small"
-                          sx={{ margin: '2px' }}
-                        />
-                      ))
-                    ) : (
-                      <Chip
-                        label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
-                        size="small"
-                      />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Status
+                    <IconButton 
+                      size="small" 
+                      onClick={handleStatusFilterClick}
+                      sx={{ 
+                        ml: 1,
+                        color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
+                      }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                      {!statusFilter && statusSort === 'desc' && (
+                        <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                          ↓
+                        </Box>
+                      )}
+                      {!statusFilter && statusSort === 'asc' && (
+                        <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
+                          ↑
+                        </Box>
+                      )}
+                    </IconButton>
+                    {statusFilter && (
+                      <IconButton 
+                        size="small" 
+                        onClick={clearStatusFilter}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>
-                  <Typography
-                    component="div"
-                    sx={{
-                      whiteSpace: 'pre-line',
-                      wordBreak: 'break-word'
-                    }}
-                  >
-                    {task.observacoes}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={task.status || 'Pendente'}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                    size="small"
-                    disabled={updatingStatus}
-                    sx={{ minWidth: 120 }}
-                  >
-                    <MenuItem value="Pendente">Pendente</MenuItem>
-                    <MenuItem value="Em andamento">Em andamento</MenuItem>
-                    <MenuItem value="Finalizada">Finalizada</MenuItem>
-                    <MenuItem value="Aguardando">Aguardando</MenuItem>
-                  </Select>
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleOpenDialog(task)}
-                    size="small"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  {hasDeletePermission && (
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {currentTasks.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell sx={{ width: '30%' }}>
+                    <Typography
+                      component="div"
+                      sx={{
+                        whiteSpace: 'pre-line',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {task.descricao}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {taskType === 'por_horario' ? (
+                      <Box>
+                        {task.diasSemana?.map((dia) => (
+                          <Chip
+                            key={dia}
+                            label={diasSemanaOptions.find(opt => opt.value === dia)?.label}
+                            size="small"
+                            sx={{ mr: 1, mb: 1 }}
+                          />
+                        ))}
+                        {task.horario && (
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            {task.horario}
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Chip
+                        label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
+                        color={getStatusColor(task.prazoLimite)}
+                        size="small"
+                      />
+                    )}
+                  </TableCell>
+                  {taskType !== 'por_horario' && (
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {Array.isArray(task.responsavel) ? (
+                          task.responsavel.map((userId) => (
+                            <Chip
+                              key={userId}
+                              label={users.find(user => user.id === userId)?.name || userId}
+                              size="small"
+                              sx={{ margin: '2px' }}
+                            />
+                          ))
+                        ) : (
+                          <Chip
+                            label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                            size="small"
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <Typography
+                      component="div"
+                      sx={{
+                        whiteSpace: 'pre-line',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {task.observacoes}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={task.status || 'Pendente'}
+                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                      size="small"
+                      disabled={updatingStatus}
+                      sx={{ minWidth: 120 }}
+                    >
+                      <MenuItem value="Pendente">Pendente</MenuItem>
+                      <MenuItem value="Em andamento">Em andamento</MenuItem>
+                      <MenuItem value="Finalizada">Finalizada</MenuItem>
+                      <MenuItem value="Aguardando">Aguardando</MenuItem>
+                    </Select>
+                  </TableCell>
+                  <TableCell align="right">
                     <IconButton
-                      color="error"
-                      onClick={() => handleDelete(task.id)}
+                      color="primary"
+                      onClick={() => handleOpenDialog(task)}
                       size="small"
                     >
-                      <DeleteIcon />
+                      <EditIcon />
                     </IconButton>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {filterTasks(
-              tasks.filter(task => task.tipo === taskType)
-            ).length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} align="center">
-                  Nenhuma tarefa encontrada
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </>
-  );
+                    {hasDeletePermission && (
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDelete(task.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {currentTasks.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center">
+                    Nenhuma tarefa encontrada
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+          <TablePagination
+            component="div"
+            count={filteredTasks.length}
+            page={taskPage}
+            onPageChange={(event, newPage) => setTaskPage(newPage)}
+            rowsPerPage={tasksPerPage}
+            onRowsPerPageChange={(event) => {
+              setTasksPerPage(parseInt(event.target.value, 10));
+              setTaskPage(0);
+            }}
+            labelRowsPerPage="Tarefas por página"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            rowsPerPageOptions={[50, 100, 200]}
+          />
+        </Box>
+      </>
+    );
+  };
 
   return (
     <MainLayout title="Tarefas">
@@ -1067,44 +1189,92 @@ export default function Tasks() {
                 rows={4}
               />
 
-              <FormControl fullWidth required>
-                <InputLabel>Responsável</InputLabel>
-                <Select
-                  multiple
-                  value={formData.responsavel}
-                  onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
-                  label="Responsável"
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip
-                          key={value}
-                          label={users.find(user => user.id === value)?.name || value}
-                          size="small"
-                        />
-                      ))}
-                    </Box>
-                  )}
-                >
-                  {users.map((user) => (
-                    <MenuItem key={user.id} value={user.id}>
-                      {user.name || user.email}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              {currentTab !== 4 && (
+                <FormControl fullWidth required>
+                  <InputLabel>Responsável</InputLabel>
+                  <Select
+                    multiple
+                    value={formData.responsavel}
+                    onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
+                    label="Responsável"
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {selected.map((value) => (
+                          <Chip
+                            key={value}
+                            label={users.find(user => user.id === value)?.name || value}
+                            size="small"
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {users.map((user) => (
+                      <MenuItem key={user.id} value={user.id}>
+                        {user.name || user.email}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
 
-              <TextField
-                fullWidth
-                label="Prazo Limite"
-                type="date"
-                value={formData.prazoLimite}
-                onChange={(e) => setFormData({ ...formData, prazoLimite: e.target.value })}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-                required
-              />
+              {currentTab === 4 ? (
+                <>
+                  <FormControl fullWidth required>
+                    <InputLabel>Dias da semana</InputLabel>
+                    <Select
+                      multiple
+                      value={formData.diasSemana || []}
+                      onChange={(e) => setFormData({ ...formData, diasSemana: e.target.value })}
+                      label="Dias da semana"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.map((value) => (
+                            <Chip
+                              key={value}
+                              label={diasSemanaOptions.find(opt => opt.value === value)?.label}
+                              size="small"
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    >
+                      {diasSemanaOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    fullWidth
+                    label="Horário"
+                    type="time"
+                    value={formData.horario || ''}
+                    onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    inputProps={{
+                      step: 300 // 5 minutes
+                    }}
+                    required
+                  />
+                </>
+              ) : (
+                <TextField
+                  fullWidth
+                  label="Prazo Limite"
+                  type="date"
+                  value={formData.prazoLimite}
+                  onChange={(e) => setFormData({ ...formData, prazoLimite: e.target.value })}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  required
+                />
+              )}
 
               <TextField
                 fullWidth
@@ -1123,7 +1293,11 @@ export default function Tasks() {
             <Button
               onClick={handleSubmit}
               variant="contained"
-              disabled={!formData.descricao || !formData.responsavel || !formData.prazoLimite}
+              disabled={
+                !formData.descricao || 
+                (currentTab !== 4 && !formData.responsavel.length) || 
+                (currentTab === 4 ? (!formData.diasSemana?.length || !formData.horario) : !formData.prazoLimite)
+              }
             >
               {editingTask ? 'Salvar' : 'Criar'}
             </Button>
@@ -1286,10 +1460,6 @@ export default function Tasks() {
             vertical: 'bottom',
             horizontal: 'left',
           }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
         >
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Typography variant="subtitle2">
@@ -1297,10 +1467,12 @@ export default function Tasks() {
             </Typography>
             <TextField
               type="date"
-              size="small"
               value={prazoFilter || ''}
               onChange={(e) => handlePrazoFilterChange(e.target.value)}
               sx={{ minWidth: 200 }}
+              InputLabelProps={{
+                shrink: true,
+              }}
             />
             
             <Divider sx={{ my: 1 }} />
@@ -1314,8 +1486,56 @@ export default function Tasks() {
                 onChange={(e) => setPrazoSort(e.target.value)}
                 sx={{ minWidth: 200 }}
               >
-                <MenuItem value="asc">Mais próximos primeiro</MenuItem>
-                <MenuItem value="desc">Mais distantes primeiro</MenuItem>
+                <MenuItem value="asc">Mais próximo</MenuItem>
+                <MenuItem value="desc">Mais distante</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Dia e Horário Filter Popover */}
+        <Popover
+          open={Boolean(diaHorarioAnchorEl)}
+          anchorEl={diaHorarioAnchorEl}
+          onClose={handleDiaHorarioFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por dia da semana
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={diaHorarioFilter || ''}
+                onChange={(e) => handleDiaHorarioFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {diasSemanaOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={diaHorarioSort}
+                onChange={(e) => setDiaHorarioSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Segunda → Domingo</MenuItem>
+                <MenuItem value="desc">Domingo → Segunda</MenuItem>
               </Select>
             </FormControl>
           </Box>
