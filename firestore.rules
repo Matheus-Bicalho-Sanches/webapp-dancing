@@ -137,5 +137,14 @@ service cloud.firestore {
         isCurrentUserMasterOrAdmin() && 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']);
     }
+
+    // Regras para a coleção task_logs
+    match /task_logs/{logId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação/atualização/exclusão para master ou administrativo
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+    }
   }
 } 

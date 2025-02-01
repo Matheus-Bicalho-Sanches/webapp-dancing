@@ -50,11 +50,14 @@ import {
   doc,
   serverTimestamp,
   getDocs,
-  where
+  where,
+  getDoc
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import Popover from '@mui/material/Popover';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Componente TabPanel para renderizar o conteúdo de cada aba
 function TabPanel(props) {
@@ -105,6 +108,8 @@ export default function Tasks() {
   const [prazoFilter, setPrazoFilter] = useState(null);
   const [prazoSort, setPrazoSort] = useState('asc');
   const [prazoAnchorEl, setPrazoAnchorEl] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -138,7 +143,7 @@ export default function Tasks() {
     // Configurar listener para atualizações em tempo real
     const q = query(
       collection(db, 'tarefas'), 
-      where('tipo', '==', 'nao_recorrente'),
+      where('tipo', 'in', ['nao_recorrente', 'por_horario']),
       orderBy('prazoLimite', 'asc')
     );
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -161,6 +166,30 @@ export default function Tasks() {
     // Cleanup subscription
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const loadLogs = () => {
+      const q = query(
+        collection(db, 'task_logs'),
+        orderBy('timestamp', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const logsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setLogs(logsData);
+        setLoadingLogs(false);
+      });
+
+      return unsubscribe;
+    };
+
+    if (currentTab === 5) {
+      return loadLogs();
+    }
+  }, [currentTab]);
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
@@ -206,24 +235,26 @@ export default function Tasks() {
       const taskData = {
         ...formData,
         status: 'Pendente',
-        tipo: 'nao_recorrente',
+        tipo: currentTab === 4 ? 'por_horario' : 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
 
       if (editingTask) {
-        // Atualizar tarefa existente
         await updateDoc(doc(db, 'tarefas', editingTask.id), taskData);
+        await createLogEntry('update', { ...taskData, id: editingTask.id }, editingTask);
         setSnackbar({
           open: true,
           message: 'Tarefa atualizada com sucesso!',
           severity: 'success'
         });
       } else {
-        // Adicionar nova tarefa
-        taskData.createdAt = serverTimestamp();
-        taskData.createdBy = currentUser.uid;
-        await addDoc(collection(db, 'tarefas'), taskData);
+        const docRef = await addDoc(collection(db, 'tarefas'), {
+          ...taskData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        });
+        await createLogEntry('create', { ...taskData, id: docRef.id });
         setSnackbar({
           open: true,
           message: 'Tarefa criada com sucesso!',
@@ -245,7 +276,13 @@ export default function Tasks() {
   const handleDelete = async (taskId) => {
     if (window.confirm('Tem certeza que deseja excluir esta tarefa?')) {
       try {
-        await deleteDoc(doc(db, 'tarefas', taskId));
+        const taskRef = doc(db, 'tarefas', taskId);
+        const taskSnapshot = await getDoc(taskRef);
+        const taskData = { ...taskSnapshot.data(), id: taskId };
+        
+        await deleteDoc(taskRef);
+        await createLogEntry('delete', taskData);
+        
         setSnackbar({
           open: true,
           message: 'Tarefa excluída com sucesso!',
@@ -265,10 +302,20 @@ export default function Tasks() {
   const handleStatusChange = async (taskId, newStatus) => {
     try {
       setUpdatingStatus(true);
-      await updateDoc(doc(db, 'tarefas', taskId), {
+      const taskRef = doc(db, 'tarefas', taskId);
+      const taskSnapshot = await getDoc(taskRef);
+      const previousData = { ...taskSnapshot.data(), id: taskId };
+      
+      await updateDoc(taskRef, {
         status: newStatus,
         updatedAt: serverTimestamp()
       });
+
+      await createLogEntry('update', 
+        { ...previousData, status: newStatus }, 
+        previousData
+      );
+
       setSnackbar({
         open: true,
         message: 'Status atualizado com sucesso!',
@@ -444,6 +491,117 @@ export default function Tasks() {
     return filteredTasks;
   };
 
+  const createLogEntry = async (action, taskData, previousData = null) => {
+    try {
+      const logEntry = {
+        action,
+        taskId: taskData.id,
+        description: taskData.descricao,
+        userId: currentUser.uid,
+        userName: users.find(u => u.id === currentUser.uid)?.name || currentUser.email,
+        timestamp: serverTimestamp(),
+        changes: {}
+      };
+
+      if (action === 'create') {
+        logEntry.changes = {
+          descricao: taskData.descricao,
+          responsavel: taskData.responsavel,
+          prazoLimite: taskData.prazoLimite,
+          observacoes: taskData.observacoes,
+          status: taskData.status,
+          tipo: taskData.tipo
+        };
+      } else if (action === 'update' && previousData) {
+        // Compare and record only changed fields
+        Object.keys(taskData).forEach(key => {
+          if (JSON.stringify(taskData[key]) !== JSON.stringify(previousData[key])) {
+            logEntry.changes[key] = {
+              from: previousData[key],
+              to: taskData[key]
+            };
+          }
+        });
+      } else if (action === 'delete') {
+        logEntry.changes = {
+          deleted: true,
+          taskData: taskData
+        };
+      }
+
+      await addDoc(collection(db, 'task_logs'), logEntry);
+    } catch (error) {
+      console.error('Error creating log entry:', error);
+    }
+  };
+
+  const renderLogs = () => {
+    if (loadingLogs) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    return (
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Data/Hora</TableCell>
+              <TableCell>Usuário</TableCell>
+              <TableCell>Ação</TableCell>
+              <TableCell>Descrição da Tarefa</TableCell>
+              <TableCell>Alterações</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {logs.map((log) => (
+              <TableRow key={log.id}>
+                <TableCell>
+                  {log.timestamp ? format(log.timestamp.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : '-'}
+                </TableCell>
+                <TableCell>{log.userName}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={
+                      log.action === 'create' ? 'Criação' :
+                      log.action === 'update' ? 'Atualização' :
+                      log.action === 'delete' ? 'Exclusão' : log.action
+                    }
+                    color={
+                      log.action === 'create' ? 'success' :
+                      log.action === 'update' ? 'primary' :
+                      log.action === 'delete' ? 'error' : 'default'
+                    }
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>{log.description}</TableCell>
+                <TableCell>
+                  <Box sx={{ whiteSpace: 'pre-line' }}>
+                    {log.action === 'create' && 'Nova tarefa criada'}
+                    {log.action === 'delete' && 'Tarefa excluída'}
+                    {log.action === 'update' && Object.entries(log.changes).map(([field, change]) => (
+                      <Typography key={field} variant="body2" sx={{ mb: 1 }}>
+                        <strong>{field}:</strong> {
+                          Array.isArray(change.from) ?
+                            `${change.from.join(', ')} → ${change.to.join(', ')}` :
+                            `${change.from} → ${change.to}`
+                        }
+                      </Typography>
+                    ))}
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
   if (loading) {
     return (
       <MainLayout title="Tarefas">
@@ -454,7 +612,7 @@ export default function Tasks() {
     );
   }
 
-  const renderTasksTable = (isArchive = false) => (
+  const renderTasksTable = (isArchive = false, taskType = 'nao_recorrente') => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
         {!isArchive && (
@@ -473,7 +631,7 @@ export default function Tasks() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
-              <TableCell>
+              <TableCell sx={{ width: '10%' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   Data criação
                   <IconButton 
@@ -614,9 +772,9 @@ export default function Tasks() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filterTasks(tasks)
-              .filter(task => isArchive ? task.status === 'Arquivar' : task.status !== 'Arquivar')
-              .map((task) => (
+            {filterTasks(
+              tasks.filter(task => task.tipo === taskType)
+            ).map((task) => (
               <TableRow key={task.id}>
                 <TableCell sx={{ width: '30%' }}>
                   <Typography
@@ -681,7 +839,6 @@ export default function Tasks() {
                     <MenuItem value="Em andamento">Em andamento</MenuItem>
                     <MenuItem value="Finalizada">Finalizada</MenuItem>
                     <MenuItem value="Aguardando">Aguardando</MenuItem>
-                    <MenuItem value="Arquivar">Arquivar</MenuItem>
                   </Select>
                 </TableCell>
                 <TableCell align="right">
@@ -704,9 +861,9 @@ export default function Tasks() {
                 </TableCell>
               </TableRow>
             ))}
-            {filterTasks(tasks)
-              .filter(task => isArchive ? task.status === 'Arquivar' : task.status !== 'Arquivar')
-              .length === 0 && (
+            {filterTasks(
+              tasks.filter(task => task.tipo === taskType)
+            ).length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} align="center">
                   Nenhuma tarefa encontrada
@@ -729,54 +886,43 @@ export default function Tasks() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={currentTab} onChange={handleTabChange}>
             <Tab label="Não recorrentes" />
-            <Tab label="Arquivo" />
             <Tab label="Diárias" />
             <Tab label="Semanais" />
             <Tab label="Mensais" />
             <Tab label="Por horário" />
-            {hasDeletePermission && <Tab label="Logs" />}
+            <Tab label="Logs" />
           </Tabs>
         </Box>
 
         <TabPanel value={currentTab} index={0}>
-          {renderTasksTable(false)}
+          {renderTasksTable(false, 'nao_recorrente')}
         </TabPanel>
 
         <TabPanel value={currentTab} index={1}>
-          {renderTasksTable(true)}
-        </TabPanel>
-
-        <TabPanel value={currentTab} index={2}>
           <Typography>
             Funcionalidade de tarefas diárias será implementada em breve.
           </Typography>
         </TabPanel>
 
-        <TabPanel value={currentTab} index={3}>
+        <TabPanel value={currentTab} index={2}>
           <Typography>
             Funcionalidade de tarefas semanais será implementada em breve.
           </Typography>
         </TabPanel>
 
-        <TabPanel value={currentTab} index={4}>
+        <TabPanel value={currentTab} index={3}>
           <Typography>
             Funcionalidade de tarefas mensais será implementada em breve.
           </Typography>
         </TabPanel>
 
-        <TabPanel value={currentTab} index={5}>
-          <Typography>
-            Funcionalidade de tarefas por horário será implementada em breve.
-          </Typography>
+        <TabPanel value={currentTab} index={4}>
+          {renderTasksTable(false, 'por_horario')}
         </TabPanel>
 
-        {hasDeletePermission && (
-          <TabPanel value={currentTab} index={6}>
-            <Typography>
-              Logs de alterações das tarefas serão exibidos aqui.
-            </Typography>
-          </TabPanel>
-        )}
+        <TabPanel value={currentTab} index={5}>
+          {renderLogs()}
+        </TabPanel>
 
         {/* Dialog para adicionar/editar tarefa */}
         <Dialog
@@ -989,7 +1135,6 @@ export default function Tasks() {
                 <MenuItem value="Em andamento">Em andamento</MenuItem>
                 <MenuItem value="Finalizada">Finalizada</MenuItem>
                 <MenuItem value="Aguardando">Aguardando</MenuItem>
-                <MenuItem value="Arquivar">Arquivar</MenuItem>
               </Select>
             </FormControl>
             
