@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -13,6 +13,8 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import Sidebar from '../components/Sidebar';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const drawerWidth = 240;
 
@@ -20,6 +22,27 @@ export default function MainLayout({ children, title }) {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (currentUser?.uid) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            setUserName(userDoc.data().name || currentUser.email);
+          } else {
+            setUserName(currentUser.email);
+          }
+        } catch (error) {
+          console.error('Error fetching user name:', error);
+          setUserName(currentUser.email);
+        }
+      }
+    };
+
+    fetchUserName();
+  }, [currentUser]);
 
   const handleLogout = async () => {
     try {
@@ -73,7 +96,7 @@ export default function MainLayout({ children, title }) {
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2">
-              {currentUser?.email}
+              {userName}
             </Typography>
             <IconButton
               color="inherit"

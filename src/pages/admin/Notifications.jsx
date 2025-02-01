@@ -168,7 +168,7 @@ export default function Notifications() {
     <MainLayout title="Notificações">
       <Box sx={{ p: 3 }}>
         <Typography variant="h5" sx={{ color: '#000', mb: 3 }}>
-          Notificações de Tarefas
+          Notificações do dia
         </Typography>
 
         <TableContainer component={Paper}>
