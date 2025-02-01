@@ -252,7 +252,8 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     try {
-      if (formData.responsavel.length === 0) {
+      // Only validate responsável for non-por_horario tasks
+      if (currentTab !== 4 && formData.responsavel.length === 0) {
         setSnackbar({
           open: true,
           message: 'Selecione pelo menos um responsável.',
@@ -268,6 +269,11 @@ export default function Tasks() {
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
+
+      // Remove responsável field for por_horario tasks
+      if (currentTab === 4) {
+        delete taskData.responsavel;
+      }
 
       if (editingTask) {
         await updateDoc(doc(db, 'tarefas', editingTask.id), taskData);

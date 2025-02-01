@@ -18,6 +18,7 @@ import Reports from './pages/admin/Reports';
 import Attendance from './pages/admin/Attendance';
 import Products from './pages/admin/Products';
 import Stripe from './pages/admin/Stripe';
+import Notifications from './pages/admin/Notifications';
 import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
 import AppointmentBooking from './pages/public/AppointmentBooking';
@@ -178,6 +179,14 @@ function App() {
               </MainLayout>
             </PrivateRoute>
           } />
+          <Route 
+            path="/admin/notifications" 
+            element={
+              <PrivateRoute>
+                <Notifications />
+              </PrivateRoute>
+            } 
+          />
           
           {/* Redirecionamentos */}
           <Route path="/" element={<Navigate to="/agendar" />} />

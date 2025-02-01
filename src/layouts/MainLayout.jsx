@@ -7,9 +7,11 @@ import {
   Toolbar,
   Typography,
   Button,
-  IconButton
+  IconButton,
+  Badge
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import Sidebar from '../components/Sidebar';
 
 const drawerWidth = 240;
@@ -30,6 +32,10 @@ export default function MainLayout({ children, title }) {
 
   const handleToggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleNotificationsClick = () => {
+    navigate('/admin/notifications');
   };
 
   return (
@@ -69,6 +75,16 @@ export default function MainLayout({ children, title }) {
             <Typography variant="body2">
               {currentUser?.email}
             </Typography>
+            <IconButton
+              color="inherit"
+              onClick={handleNotificationsClick}
+              size="large"
+              aria-label="show notifications"
+            >
+              <Badge color="error">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
             <Button 
               color="inherit" 
               onClick={handleLogout}
