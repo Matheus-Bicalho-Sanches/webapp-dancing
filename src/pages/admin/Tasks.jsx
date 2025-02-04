@@ -99,7 +99,8 @@ export default function Tasks() {
     prazoLimite: dayjs().format('YYYY-MM-DD'),
     observacoes: '',
     diasSemana: [],
-    horario: ''
+    horario: '',
+    importancia: 'normal'
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [dateFilter, setDateFilter] = useState(null);
@@ -125,6 +126,9 @@ export default function Tasks() {
   const [diaHorarioFilter, setDiaHorarioFilter] = useState(null);
   const [diaHorarioSort, setDiaHorarioSort] = useState('asc');
   const [diaHorarioAnchorEl, setDiaHorarioAnchorEl] = useState(null);
+  const [importanciaFilter, setImportanciaFilter] = useState(null);
+  const [importanciaSort, setImportanciaSort] = useState('asc');
+  const [importanciaAnchorEl, setImportanciaAnchorEl] = useState(null);
 
   const diasSemanaOptions = [
     { value: 'segunda', label: 'Segunda-feira' },
@@ -166,30 +170,70 @@ export default function Tasks() {
 
   useEffect(() => {
     // Configurar listener para atualizações em tempo real
-    const q = query(
-      collection(db, 'tarefas'), 
-      where('tipo', 'in', ['nao_recorrente', 'por_horario']),
-      orderBy('prazoLimite', 'asc')
+    const unsubscribeNonDaily = onSnapshot(
+      query(
+        collection(db, 'tarefas'),
+        where('tipo', 'in', ['nao_recorrente', 'por_horario']),
+        orderBy('prazoLimite', 'asc')
+      ),
+      (querySnapshot) => {
+        const nonDailyTasks = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Update tasks state with both daily and non-daily tasks
+        setTasks(currentTasks => {
+          const dailyTasks = currentTasks.filter(task => task.tipo === 'diaria');
+          return [...dailyTasks, ...nonDailyTasks];
+        });
+      },
+      (error) => {
+        console.error('Erro ao carregar tarefas não diárias:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
     );
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const tasksData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setTasks(tasksData);
-      setLoading(false);
-    }, (error) => {
-      console.error('Erro ao carregar tarefas:', error);
-      setSnackbar({
-        open: true,
-        message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
-        severity: 'error'
-      });
-      setLoading(false);
-    });
 
-    // Cleanup subscription
-    return () => unsubscribe();
+    // Separate query for daily tasks
+    const unsubscribeDaily = onSnapshot(
+      query(
+        collection(db, 'tarefas'),
+        where('tipo', '==', 'diaria'),
+        orderBy('descricao', 'asc')  // Order by description since there's no prazoLimite
+      ),
+      (querySnapshot) => {
+        const dailyTasks = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Update tasks state with both daily and non-daily tasks
+        setTasks(currentTasks => {
+          const nonDailyTasks = currentTasks.filter(task => task.tipo !== 'diaria');
+          return [...nonDailyTasks, ...dailyTasks];
+        });
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Erro ao carregar tarefas diárias:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
+          severity: 'error'
+        });
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribeNonDaily();
+      unsubscribeDaily();
+    };
   }, []);
 
   useEffect(() => {
@@ -229,7 +273,8 @@ export default function Tasks() {
         prazoLimite: task.prazoLimite,
         observacoes: task.observacoes || '',
         diasSemana: task.diasSemana || [],
-        horario: task.horario || ''
+        horario: task.horario || '',
+        importancia: task.importancia || 'normal'
       });
     } else {
       setEditingTask(null);
@@ -239,7 +284,8 @@ export default function Tasks() {
         prazoLimite: dayjs().format('YYYY-MM-DD'),
         observacoes: '',
         diasSemana: [],
-        horario: ''
+        horario: '',
+        importancia: 'normal'
       });
     }
     setOpenDialog(true);
@@ -252,8 +298,7 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     try {
-      // Only validate responsável for non-por_horario tasks
-      if (currentTab !== 4 && formData.responsavel.length === 0) {
+      if (currentTab !== 4 && currentTab !== 1 && formData.responsavel.length === 0) {
         setSnackbar({
           open: true,
           message: 'Selecione pelo menos um responsável.',
@@ -265,10 +310,18 @@ export default function Tasks() {
       const taskData = {
         ...formData,
         status: 'Pendente',
-        tipo: currentTab === 4 ? 'por_horario' : 'nao_recorrente',
+        tipo: currentTab === 4 ? 'por_horario' : 
+              currentTab === 1 ? 'diaria' : 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
+
+      // For daily tasks, add lastCompletedDate field
+      if (currentTab === 1) {
+        taskData.lastCompletedDate = null;
+        delete taskData.responsavel;
+        delete taskData.prazoLimite;
+      }
 
       // Remove responsável field for por_horario tasks
       if (currentTab === 4) {
@@ -468,6 +521,24 @@ export default function Tasks() {
     handleDiaHorarioFilterClose();
   };
 
+  const handleImportanciaFilterClick = (event) => {
+    setImportanciaAnchorEl(event.currentTarget);
+  };
+
+  const handleImportanciaFilterClose = () => {
+    setImportanciaAnchorEl(null);
+  };
+
+  const handleImportanciaFilterChange = (value) => {
+    setImportanciaFilter(value);
+    handleImportanciaFilterClose();
+  };
+
+  const clearImportanciaFilter = () => {
+    setImportanciaFilter(null);
+    handleImportanciaFilterClose();
+  };
+
   const filterTasks = (tasksToFilter, taskType = 'nao_recorrente') => {
     let filteredTasks = tasksToFilter;
     
@@ -506,6 +577,10 @@ export default function Tasks() {
       );
     }
 
+    if (importanciaFilter && taskType === 'diaria') {
+      filteredTasks = filteredTasks.filter(task => task.importancia === importanciaFilter);
+    }
+
     // Apply sorting
     if (taskType === 'por_horario') {
       // Apply dia e horário sorting
@@ -529,10 +604,20 @@ export default function Tasks() {
       });
     } else {
       // Apply responsável sorting for non-por_horario tasks
-      if (responsavelSort) {
+      if (responsavelSort && taskType !== 'diaria') {
         filteredTasks = [...filteredTasks].sort((a, b) => {
-          const userA = users.find(user => user.id === a.responsavel[0])?.name || a.responsavel[0];
-          const userB = users.find(user => user.id === b.responsavel[0])?.name || b.responsavel[0];
+          // Handle cases where responsavel might be undefined or not an array
+          const respA = Array.isArray(a.responsavel) ? a.responsavel[0] : a.responsavel;
+          const respB = Array.isArray(b.responsavel) ? b.responsavel[0] : b.responsavel;
+          
+          // If either task doesn't have a responsavel, handle it gracefully
+          if (!respA && !respB) return 0;
+          if (!respA) return 1;
+          if (!respB) return -1;
+
+          const userA = users.find(user => user.id === respA)?.name || respA;
+          const userB = users.find(user => user.id === respB)?.name || respB;
+          
           return responsavelSort === 'asc'
             ? userA.localeCompare(userB)
             : userB.localeCompare(userA);
@@ -563,6 +648,16 @@ export default function Tasks() {
       });
     }
 
+    // Apply sorting for daily tasks
+    if (taskType === 'diaria' && importanciaSort) {
+      filteredTasks = [...filteredTasks].sort((a, b) => {
+        const importanceOrder = { alta: 3, normal: 2, baixa: 1 };
+        const valueA = importanceOrder[a.importancia || 'normal'];
+        const valueB = importanceOrder[b.importancia || 'normal'];
+        return importanciaSort === 'asc' ? valueA - valueB : valueB - valueA;
+      });
+    }
+
     return filteredTasks;
   };
 
@@ -579,17 +674,34 @@ export default function Tasks() {
       };
 
       if (action === 'create') {
-        logEntry.changes = {
+        // Base fields for all task types
+        const changes = {
           descricao: taskData.descricao,
-          responsavel: taskData.responsavel,
-          prazoLimite: taskData.prazoLimite,
-          observacoes: taskData.observacoes,
           status: taskData.status,
-          tipo: taskData.tipo
+          tipo: taskData.tipo,
+          observacoes: taskData.observacoes || ''
         };
+
+        // Add type-specific fields
+        if (taskData.tipo === 'diaria') {
+          changes.importancia = taskData.importancia;
+        } else if (taskData.tipo === 'por_horario') {
+          changes.diasSemana = taskData.diasSemana;
+          changes.horario = taskData.horario;
+        } else {
+          // For non-recurring tasks
+          changes.responsavel = taskData.responsavel;
+          changes.prazoLimite = taskData.prazoLimite;
+        }
+
+        logEntry.changes = changes;
       } else if (action === 'update' && previousData) {
         // Compare and record only changed fields
         Object.keys(taskData).forEach(key => {
+          // Skip undefined or null values
+          if (taskData[key] === undefined || taskData[key] === null) return;
+          
+          // Only include the field if it has changed
           if (JSON.stringify(taskData[key]) !== JSON.stringify(previousData[key])) {
             logEntry.changes[key] = {
               from: previousData[key],
@@ -600,7 +712,19 @@ export default function Tasks() {
       } else if (action === 'delete') {
         logEntry.changes = {
           deleted: true,
-          taskData: taskData
+          taskData: {
+            descricao: taskData.descricao,
+            tipo: taskData.tipo,
+            status: taskData.status,
+            ...(taskData.tipo === 'diaria' ? { importancia: taskData.importancia } :
+                taskData.tipo === 'por_horario' ? { 
+                  diasSemana: taskData.diasSemana,
+                  horario: taskData.horario 
+                } : { 
+                  responsavel: taskData.responsavel,
+                  prazoLimite: taskData.prazoLimite 
+                })
+          }
         };
       }
 
@@ -841,105 +965,35 @@ export default function Tasks() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ width: '30%' }}>Descrição</TableCell>
-                <TableCell sx={{ width: '10%' }}>Data criação</TableCell>
-                <TableCell>
-                  {taskType === 'por_horario' ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      Dia e horário
-                      <IconButton 
-                        size="small" 
-                        onClick={handleDiaHorarioFilterClick}
-                        sx={{ 
-                          ml: 1,
-                          color: (diaHorarioFilter || diaHorarioSort === 'desc') ? 'primary.main' : 'inherit'
-                        }}
-                      >
-                        <FilterListIcon fontSize="small" />
-                        {!diaHorarioFilter && diaHorarioSort === 'desc' && (
-                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                            ↓
-                          </Box>
-                        )}
-                        {!diaHorarioFilter && diaHorarioSort === 'asc' && (
-                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                            ↑
-                          </Box>
-                        )}
-                      </IconButton>
-                      {diaHorarioFilter && (
-                        <IconButton 
-                          size="small" 
-                          onClick={clearDiaHorarioFilter}
-                          sx={{ ml: 0.5 }}
-                        >
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      Prazo
-                      <IconButton 
-                        size="small" 
-                        onClick={handlePrazoFilterClick}
-                        sx={{ 
-                          ml: 1,
-                          color: (prazoFilter || prazoSort === 'desc') ? 'primary.main' : 'inherit'
-                        }}
-                      >
-                        <FilterListIcon fontSize="small" />
-                        {!prazoFilter && prazoSort === 'desc' && (
-                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                            ↓
-                          </Box>
-                        )}
-                        {!prazoFilter && prazoSort === 'asc' && (
-                          <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
-                            ↑
-                          </Box>
-                        )}
-                      </IconButton>
-                      {prazoFilter && (
-                        <IconButton 
-                          size="small" 
-                          onClick={clearPrazoFilter}
-                          sx={{ ml: 0.5 }}
-                        >
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Box>
-                  )}
-                </TableCell>
-                {taskType !== 'por_horario' && (
+                <TableCell>Descrição</TableCell>
+                {taskType === 'diaria' ? (
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      Responsável
+                      Importância
                       <IconButton 
                         size="small" 
-                        onClick={handleResponsavelFilterClick}
+                        onClick={handleImportanciaFilterClick}
                         sx={{ 
                           ml: 1,
-                          color: (responsavelFilter || responsavelSort === 'desc') ? 'primary.main' : 'inherit'
+                          color: (importanciaFilter || importanciaSort === 'desc') ? 'primary.main' : 'inherit'
                         }}
                       >
                         <FilterListIcon fontSize="small" />
-                        {!responsavelFilter && responsavelSort === 'desc' && (
+                        {!importanciaFilter && importanciaSort === 'desc' && (
                           <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
                             ↓
                           </Box>
                         )}
-                        {!responsavelFilter && responsavelSort === 'asc' && (
+                        {!importanciaFilter && importanciaSort === 'asc' && (
                           <Box component="span" sx={{ ml: 0.5, fontSize: '0.75rem' }}>
                             ↑
                           </Box>
                         )}
                       </IconButton>
-                      {responsavelFilter && (
+                      {importanciaFilter && (
                         <IconButton 
                           size="small" 
-                          onClick={clearResponsavelFilter}
+                          onClick={clearImportanciaFilter}
                           sx={{ ml: 0.5 }}
                         >
                           <ClearIcon fontSize="small" />
@@ -947,8 +1001,16 @@ export default function Tasks() {
                       )}
                     </Box>
                   </TableCell>
+                ) : (
+                  <>
+                    <TableCell>Data criação</TableCell>
+                    <TableCell>
+                      {taskType === 'por_horario' ? 'Dia e horário' : 'Prazo'}
+                    </TableCell>
+                    <TableCell>Responsável</TableCell>
+                    <TableCell>Observações</TableCell>
+                  </>
                 )}
-                <TableCell>Observações</TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     Status
@@ -987,116 +1049,111 @@ export default function Tasks() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {currentTasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell sx={{ width: '30%' }}>
-                    <Typography
-                      component="div"
-                      sx={{
-                        whiteSpace: 'pre-line',
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {task.descricao}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {taskType === 'por_horario' ? (
-                      <Box>
-                        {task.diasSemana?.map((dia) => (
-                          <Chip
-                            key={dia}
-                            label={diasSemanaOptions.find(opt => opt.value === dia)?.label}
-                            size="small"
-                            sx={{ mr: 1, mb: 1 }}
-                          />
-                        ))}
-                        {task.horario && (
-                          <Typography variant="body2" sx={{ mt: 1 }}>
-                            {task.horario}
-                          </Typography>
-                        )}
-                      </Box>
+              {currentTasks.length > 0 ? (
+                currentTasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell>{task.descricao}</TableCell>
+                    {taskType === 'diaria' ? (
+                      <TableCell>
+                        <Chip
+                          label={task.importancia === 'alta' ? 'Alta' : 
+                                task.importancia === 'baixa' ? 'Baixa' : 'Normal'}
+                          color={task.importancia === 'alta' ? 'error' : 
+                                task.importancia === 'baixa' ? 'success' : 'primary'}
+                          size="small"
+                        />
+                      </TableCell>
                     ) : (
-                      <Chip
-                        label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
-                        color={getStatusColor(task.prazoLimite)}
-                        size="small"
-                      />
-                    )}
-                  </TableCell>
-                  {taskType !== 'por_horario' && (
-                    <TableCell>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {Array.isArray(task.responsavel) ? (
-                          task.responsavel.map((userId) => (
+                      <>
+                        <TableCell>
+                          {task.createdAt ? dayjs(task.createdAt.toDate()).format('DD/MM/YY') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {taskType === 'por_horario' ? (
+                            <Box>
+                              {task.diasSemana?.map((dia) => (
+                                <Chip
+                                  key={dia}
+                                  label={diasSemanaOptions.find(opt => opt.value === dia)?.label}
+                                  size="small"
+                                  sx={{ mr: 1, mb: 1 }}
+                                />
+                              ))}
+                              {task.horario && (
+                                <Typography variant="body2" sx={{ mt: 1 }}>
+                                  {task.horario}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
                             <Chip
-                              key={userId}
-                              label={users.find(user => user.id === userId)?.name || userId}
+                              label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
+                              color={getStatusColor(task.prazoLimite)}
                               size="small"
-                              sx={{ margin: '2px' }}
                             />
-                          ))
-                        ) : (
-                          <Chip
-                            label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
-                            size="small"
-                          />
-                        )}
-                      </Box>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {Array.isArray(task.responsavel) ? (
+                              task.responsavel.map((userId) => (
+                                <Chip
+                                  key={userId}
+                                  label={users.find(user => user.id === userId)?.name || userId}
+                                  size="small"
+                                  sx={{ margin: '2px' }}
+                                />
+                              ))
+                            ) : (
+                              <Chip
+                                label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                                size="small"
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {task.observacoes}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell>
+                      <Select
+                        value={task.status || 'Pendente'}
+                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        size="small"
+                        disabled={updatingStatus}
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="Pendente">Pendente</MenuItem>
+                        <MenuItem value="Em andamento">Em andamento</MenuItem>
+                        <MenuItem value="Finalizada">Finalizada</MenuItem>
+                        <MenuItem value="Aguardando">Aguardando</MenuItem>
+                      </Select>
                     </TableCell>
-                  )}
-                  <TableCell>
-                    <Typography
-                      component="div"
-                      sx={{
-                        whiteSpace: 'pre-line',
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {task.observacoes}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={task.status || 'Pendente'}
-                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                      size="small"
-                      disabled={updatingStatus}
-                      sx={{ minWidth: 120 }}
-                    >
-                      <MenuItem value="Pendente">Pendente</MenuItem>
-                      <MenuItem value="Em andamento">Em andamento</MenuItem>
-                      <MenuItem value="Finalizada">Finalizada</MenuItem>
-                      <MenuItem value="Aguardando">Aguardando</MenuItem>
-                    </Select>
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDialog(task)}
-                      size="small"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    {hasDeletePermission && (
+                    <TableCell align="right">
                       <IconButton
-                        color="error"
-                        onClick={() => handleDelete(task.id)}
+                        color="primary"
+                        onClick={() => handleOpenDialog(task)}
                         size="small"
                       >
-                        <DeleteIcon />
+                        <EditIcon />
                       </IconButton>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {currentTasks.length === 0 && (
+                      {hasDeletePermission && (
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(task.id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={taskType === 'diaria' ? 4 : 7} align="center">
                     Nenhuma tarefa encontrada
                   </TableCell>
                 </TableRow>
@@ -1148,9 +1205,7 @@ export default function Tasks() {
         </TabPanel>
 
         <TabPanel value={currentTab} index={1}>
-          <Typography>
-            Funcionalidade de tarefas diárias será implementada em breve.
-          </Typography>
+          {renderTasksTable(false, 'diaria')}
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
@@ -1195,7 +1250,22 @@ export default function Tasks() {
                 rows={4}
               />
 
-              {currentTab !== 4 && (
+              {currentTab === 1 && (
+                <FormControl fullWidth required>
+                  <InputLabel>Importância</InputLabel>
+                  <Select
+                    value={formData.importancia}
+                    onChange={(e) => setFormData({ ...formData, importancia: e.target.value })}
+                    label="Importância"
+                  >
+                    <MenuItem value="alta">Alta</MenuItem>
+                    <MenuItem value="normal">Normal</MenuItem>
+                    <MenuItem value="baixa">Baixa</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
+
+              {currentTab !== 4 && currentTab !== 1 && (
                 <FormControl fullWidth required>
                   <InputLabel>Responsável</InputLabel>
                   <Select
@@ -1268,7 +1338,7 @@ export default function Tasks() {
                     required
                   />
                 </>
-              ) : (
+              ) : currentTab !== 1 && (
                 <TextField
                   fullWidth
                   label="Prazo Limite"
@@ -1301,8 +1371,9 @@ export default function Tasks() {
               variant="contained"
               disabled={
                 !formData.descricao || 
-                (currentTab !== 4 && !formData.responsavel.length) || 
-                (currentTab === 4 ? (!formData.diasSemana?.length || !formData.horario) : !formData.prazoLimite)
+                (currentTab !== 4 && currentTab !== 1 && !formData.responsavel.length) || 
+                (currentTab === 4 ? (!formData.diasSemana?.length || !formData.horario) : 
+                 currentTab !== 1 && !formData.prazoLimite)
               }
             >
               {editingTask ? 'Salvar' : 'Criar'}
@@ -1542,6 +1613,52 @@ export default function Tasks() {
               >
                 <MenuItem value="asc">Segunda → Domingo</MenuItem>
                 <MenuItem value="desc">Domingo → Segunda</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Importância Filter Popover */}
+        <Popover
+          open={Boolean(importanciaAnchorEl)}
+          anchorEl={importanciaAnchorEl}
+          onClose={handleImportanciaFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por importância
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={importanciaFilter || ''}
+                onChange={(e) => handleImportanciaFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todas</MenuItem>
+                <MenuItem value="alta">Alta</MenuItem>
+                <MenuItem value="normal">Normal</MenuItem>
+                <MenuItem value="baixa">Baixa</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={importanciaSort}
+                onChange={(e) => setImportanciaSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Baixa → Alta</MenuItem>
+                <MenuItem value="desc">Alta → Baixa</MenuItem>
               </Select>
             </FormControl>
           </Box>
