@@ -27,7 +27,8 @@ import {
   Snackbar,
   Link,
   Divider,
-  Popover
+  Popover,
+  TablePagination
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -104,6 +105,10 @@ export default function CRM() {
     'REC10',
     'REC11'
   ];
+
+  // Add pagination state
+  const [page, setPage] = useState(0);
+  const [rowsPerPage] = useState(50);
 
   // Filter handlers
   const handleStatusFilterClick = (event) => {
@@ -395,6 +400,34 @@ export default function CRM() {
     window.open(`https://wa.me/55${formattedNumber}`, '_blank');
   };
 
+  // Add this new handler for inline status update
+  const handleStatusUpdate = async (leadId, newStatus) => {
+    try {
+      await updateDoc(doc(db, 'leads', leadId), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+      setSnackbar({
+        open: true,
+        message: 'Status atualizado com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar status. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // Add pagination handlers
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
   if (loading) {
     return (
       <MainLayout title="CRM">
@@ -529,66 +562,94 @@ export default function CRM() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredLeads.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell>{lead.nome}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={lead.status}
-                      color={
-                        lead.status === 'Matrícula' ? 'success' :
-                        lead.status === 'Inativo' ? 'error' :
-                        lead.status === 'AE Agend' ? 'warning' :
-                        lead.status === 'AE Feita' ? 'info' :
-                        lead.status === 'Barra' ? 'secondary' :
-                        'default'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {lead.whatsapp}
+              {filteredLeads
+                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                .map((lead) => (
+                  <TableRow key={lead.id}>
+                    <TableCell>{lead.nome}</TableCell>
+                    <TableCell>
+                      <FormControl size="small">
+                        <Select
+                          value={lead.status}
+                          onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
+                          size="small"
+                          sx={{ minWidth: 120 }}
+                          renderValue={(value) => (
+                            <Chip
+                              label={value}
+                              color={
+                                value === 'Matrícula' ? 'success' :
+                                value === 'Inativo' ? 'error' :
+                                value === 'AE Agend' ? 'warning' :
+                                value === 'AE Feita' ? 'info' :
+                                value === 'Barra' ? 'secondary' :
+                                'default'
+                              }
+                              size="small"
+                            />
+                          )}
+                        >
+                          {statusOptions.map((status) => (
+                            <MenuItem key={status} value={status}>
+                              {status}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {lead.whatsapp}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleWhatsAppClick(lead.whatsapp)}
+                          color="success"
+                        >
+                          <WhatsAppIcon />
+                        </IconButton>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {lead.ultimoContato ? format(new Date(lead.ultimoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {lead.proximoContato ? format(new Date(lead.proximoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {lead.dataAE ? format(new Date(lead.dataAE), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                    </TableCell>
+                    <TableCell>{lead.turmaAE || '-'}</TableCell>
+                    <TableCell>{lead.observacoes || '-'}</TableCell>
+                    <TableCell align="right">
                       <IconButton
+                        color="primary"
+                        onClick={() => handleOpenDialog(lead)}
                         size="small"
-                        onClick={() => handleWhatsAppClick(lead.whatsapp)}
-                        color="success"
                       >
-                        <WhatsAppIcon />
+                        <EditIcon />
                       </IconButton>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    {lead.ultimoContato ? format(new Date(lead.ultimoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {lead.proximoContato ? format(new Date(lead.proximoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                  </TableCell>
-                  <TableCell>
-                    {lead.dataAE ? format(new Date(lead.dataAE), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                  </TableCell>
-                  <TableCell>{lead.turmaAE || '-'}</TableCell>
-                  <TableCell>{lead.observacoes || '-'}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDialog(lead)}
-                      size="small"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(lead.id)}
-                      size="small"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDelete(lead.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
+          <TablePagination
+            rowsPerPageOptions={[50]}
+            component="div"
+            count={filteredLeads.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            labelRowsPerPage="Leads por página"
+          />
         </TableContainer>
 
         <Dialog
