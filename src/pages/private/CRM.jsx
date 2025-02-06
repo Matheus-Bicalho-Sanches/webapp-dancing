@@ -1,112 +1,894 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import MainLayout from '../../layouts/MainLayout';
 import {
   Box,
-  Typography,
   Paper,
-  Container,
-  Grid,
-  Card,
-  CardContent,
-  Divider
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  Button,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  CircularProgress,
+  Alert,
+  Snackbar,
+  Link,
+  Divider,
+  Popover
 } from '@mui/material';
-import MainLayout from '../../layouts/MainLayout';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  WhatsApp as WhatsAppIcon,
+  FilterList as FilterListIcon,
+  Clear as ClearIcon
+} from '@mui/icons-material';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { useAuth } from '../../contexts/AuthContext';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import dayjs from 'dayjs';
 
 export default function CRM() {
+  const { currentUser } = useAuth();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingLead, setEditingLead] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [filteredLeads, setFilteredLeads] = useState([]);
+
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [statusSort, setStatusSort] = useState('asc');
+  const [statusAnchorEl, setStatusAnchorEl] = useState(null);
+
+  const [proxContatoFilter, setProxContatoFilter] = useState(null);
+  const [proxContatoSort, setProxContatoSort] = useState('asc');
+  const [proxContatoAnchorEl, setProxContatoAnchorEl] = useState(null);
+
+  const [dataAEFilter, setDataAEFilter] = useState(null);
+  const [dataAESort, setDataAESort] = useState('asc');
+  const [dataAEAnchorEl, setDataAEAnchorEl] = useState(null);
+
+  const [turmaAEFilter, setTurmaAEFilter] = useState(null);
+  const [turmaAESort, setTurmaAESort] = useState('asc');
+  const [turmaAEAnchorEl, setTurmaAEAnchorEl] = useState(null);
+
+  const [formData, setFormData] = useState({
+    nome: '',
+    status: 'Lead',
+    whatsapp: '',
+    ultimoContato: '',
+    proximoContato: '',
+    dataAE: '',
+    turmaAE: '',
+    observacoes: ''
+  });
+
+  // Status options for the leads
+  const statusOptions = [
+    'Lead',
+    'AE Agend',
+    'AE Feita',
+    'Barra',
+    'Matrícula',
+    'Inativo'
+  ];
+
+  // Add this after statusOptions array
+  const turmaOptions = [
+    'D12N',
+    'D13M',
+    'D13T',
+    'D13N',
+    'D14M',
+    'D14N',
+    'ADULTO',
+    'AI',
+    'REC10',
+    'REC11'
+  ];
+
+  // Filter handlers
+  const handleStatusFilterClick = (event) => {
+    setStatusAnchorEl(event.currentTarget);
+  };
+
+  const handleStatusFilterClose = () => {
+    setStatusAnchorEl(null);
+  };
+
+  const handleStatusFilterChange = (status) => {
+    setStatusFilter(status);
+    handleStatusFilterClose();
+  };
+
+  const clearStatusFilter = () => {
+    setStatusFilter(null);
+    handleStatusFilterClose();
+  };
+
+  const handleProxContatoFilterClick = (event) => {
+    setProxContatoAnchorEl(event.currentTarget);
+  };
+
+  const handleProxContatoFilterClose = () => {
+    setProxContatoAnchorEl(null);
+  };
+
+  const handleProxContatoFilterChange = (date) => {
+    setProxContatoFilter(date);
+    handleProxContatoFilterClose();
+  };
+
+  const clearProxContatoFilter = () => {
+    setProxContatoFilter(null);
+    handleProxContatoFilterClose();
+  };
+
+  const handleDataAEFilterClick = (event) => {
+    setDataAEAnchorEl(event.currentTarget);
+  };
+
+  const handleDataAEFilterClose = () => {
+    setDataAEAnchorEl(null);
+  };
+
+  const handleDataAEFilterChange = (date) => {
+    setDataAEFilter(date);
+    handleDataAEFilterClose();
+  };
+
+  const clearDataAEFilter = () => {
+    setDataAEFilter(null);
+    handleDataAEFilterClose();
+  };
+
+  const handleTurmaAEFilterClick = (event) => {
+    setTurmaAEAnchorEl(event.currentTarget);
+  };
+
+  const handleTurmaAEFilterClose = () => {
+    setTurmaAEAnchorEl(null);
+  };
+
+  const handleTurmaAEFilterChange = (turma) => {
+    setTurmaAEFilter(turma);
+    handleTurmaAEFilterClose();
+  };
+
+  const clearTurmaAEFilter = () => {
+    setTurmaAEFilter(null);
+    handleTurmaAEFilterClose();
+  };
+
+  // Filter logic
+  const filterLeads = (leadsToFilter) => {
+    let filtered = [...leadsToFilter];
+
+    // Apply status filter
+    if (statusFilter) {
+      filtered = filtered.filter(lead => lead.status === statusFilter);
+    }
+
+    // Apply próximo contato filter
+    if (proxContatoFilter) {
+      filtered = filtered.filter(lead => {
+        if (!lead.proximoContato) return false;
+        return dayjs(lead.proximoContato).format('YYYY-MM-DD') === proxContatoFilter;
+      });
+    }
+
+    // Apply data AE filter
+    if (dataAEFilter) {
+      filtered = filtered.filter(lead => {
+        if (!lead.dataAE) return false;
+        return dayjs(lead.dataAE).format('YYYY-MM-DD') === dataAEFilter;
+      });
+    }
+
+    // Apply turma AE filter
+    if (turmaAEFilter) {
+      filtered = filtered.filter(lead => lead.turmaAE === turmaAEFilter);
+    }
+
+    // Apply sorting
+    if (statusSort) {
+      filtered.sort((a, b) => {
+        return statusSort === 'asc' 
+          ? (a.status || '').localeCompare(b.status || '')
+          : (b.status || '').localeCompare(a.status || '');
+      });
+    }
+
+    if (proxContatoSort) {
+      filtered.sort((a, b) => {
+        if (!a.proximoContato && !b.proximoContato) return 0;
+        if (!a.proximoContato) return 1;
+        if (!b.proximoContato) return -1;
+        return proxContatoSort === 'asc'
+          ? dayjs(a.proximoContato).diff(dayjs(b.proximoContato))
+          : dayjs(b.proximoContato).diff(dayjs(a.proximoContato));
+      });
+    }
+
+    if (dataAESort) {
+      filtered.sort((a, b) => {
+        if (!a.dataAE && !b.dataAE) return 0;
+        if (!a.dataAE) return 1;
+        if (!b.dataAE) return -1;
+        return dataAESort === 'asc'
+          ? dayjs(a.dataAE).diff(dayjs(b.dataAE))
+          : dayjs(b.dataAE).diff(dayjs(a.dataAE));
+      });
+    }
+
+    if (turmaAESort) {
+      filtered.sort((a, b) => {
+        return turmaAESort === 'asc'
+          ? (a.turmaAE || '').localeCompare(b.turmaAE || '')
+          : (b.turmaAE || '').localeCompare(a.turmaAE || '');
+      });
+    }
+
+    return filtered;
+  };
+
+  // Update filtered leads when filters or leads change
+  useEffect(() => {
+    const filtered = filterLeads(leads);
+    setFilteredLeads(filtered);
+  }, [leads, statusFilter, proxContatoFilter, dataAEFilter, turmaAEFilter,
+      statusSort, proxContatoSort, dataAESort, turmaAESort]);
+
+  useEffect(() => {
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, 'leads'),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, 
+        (querySnapshot) => {
+          const leadsData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setLeads(leadsData);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error loading leads:", error);
+          setSnackbar({
+            open: true,
+            message: 'Erro ao carregar leads. Por favor, tente novamente.',
+            severity: 'error'
+          });
+          setLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch (error) {
+      console.error("Error setting up leads listener:", error);
+      setLoading(false);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao configurar monitoramento de leads.',
+        severity: 'error'
+      });
+    }
+  }, []);
+
+  const handleOpenDialog = (lead = null) => {
+    if (lead) {
+      setEditingLead(lead);
+      setFormData({
+        nome: lead.nome,
+        status: lead.status,
+        whatsapp: lead.whatsapp,
+        ultimoContato: lead.ultimoContato || '',
+        proximoContato: lead.proximoContato || '',
+        dataAE: lead.dataAE || '',
+        turmaAE: lead.turmaAE || '',
+        observacoes: lead.observacoes || ''
+      });
+    } else {
+      setEditingLead(null);
+      setFormData({
+        nome: '',
+        status: 'Lead',
+        whatsapp: '',
+        ultimoContato: '',
+        proximoContato: '',
+        dataAE: '',
+        turmaAE: '',
+        observacoes: ''
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingLead(null);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const leadData = {
+        ...formData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      if (editingLead) {
+        await updateDoc(doc(db, 'leads', editingLead.id), leadData);
+        setSnackbar({
+          open: true,
+          message: 'Lead atualizado com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        await addDoc(collection(db, 'leads'), {
+          ...leadData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        });
+        setSnackbar({
+          open: true,
+          message: 'Lead criado com sucesso!',
+          severity: 'success'
+        });
+      }
+
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar lead:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar lead. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDelete = async (leadId) => {
+    if (window.confirm('Tem certeza que deseja excluir este lead?')) {
+      try {
+        await deleteDoc(doc(db, 'leads', leadId));
+        setSnackbar({
+          open: true,
+          message: 'Lead excluído com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir lead:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir lead. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleWhatsAppClick = (whatsapp) => {
+    const formattedNumber = whatsapp.replace(/\D/g, '');
+    window.open(`https://wa.me/55${formattedNumber}`, '_blank');
+  };
+
+  if (loading) {
+    return (
+      <MainLayout title="CRM">
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+          <CircularProgress />
+        </Box>
+      </MainLayout>
+    );
+  }
+
   return (
-    <MainLayout>
+    <MainLayout title="CRM">
       <Box sx={{ p: 3 }}>
-        <Paper elevation={0} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 500 }}>
-            CRM
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" sx={{ color: '#000' }}>
+            Gestão de Leads
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-            Gerenciamento de Relacionamento com o Cliente
-          </Typography>
-          <Divider sx={{ my: 2 }} />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Novo Lead
+          </Button>
+        </Box>
 
-          <Grid container spacing={3}>
-            {/* Estatísticas Gerais */}
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Alunos Ativos
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    0
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Status
+                    <IconButton 
+                      size="small" 
+                      onClick={handleStatusFilterClick}
+                      sx={{ 
+                        ml: 1,
+                        color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
+                      }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                    </IconButton>
+                    {statusFilter && (
+                      <IconButton 
+                        size="small" 
+                        onClick={clearStatusFilter}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>WhatsApp</TableCell>
+                <TableCell>Últ. Contato</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Próx. Contato
+                    <IconButton 
+                      size="small" 
+                      onClick={handleProxContatoFilterClick}
+                      sx={{ 
+                        ml: 1,
+                        color: (proxContatoFilter || proxContatoSort === 'desc') ? 'primary.main' : 'inherit'
+                      }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                    </IconButton>
+                    {proxContatoFilter && (
+                      <IconButton 
+                        size="small" 
+                        onClick={clearProxContatoFilter}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Data AE
+                    <IconButton 
+                      size="small" 
+                      onClick={handleDataAEFilterClick}
+                      sx={{ 
+                        ml: 1,
+                        color: (dataAEFilter || dataAESort === 'desc') ? 'primary.main' : 'inherit'
+                      }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                    </IconButton>
+                    {dataAEFilter && (
+                      <IconButton 
+                        size="small" 
+                        onClick={clearDataAEFilter}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Turma AE
+                    <IconButton 
+                      size="small" 
+                      onClick={handleTurmaAEFilterClick}
+                      sx={{ 
+                        ml: 1,
+                        color: (turmaAEFilter || turmaAESort === 'desc') ? 'primary.main' : 'inherit'
+                      }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                    </IconButton>
+                    {turmaAEFilter && (
+                      <IconButton 
+                        size="small" 
+                        onClick={clearTurmaAEFilter}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>Observações</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredLeads.map((lead) => (
+                <TableRow key={lead.id}>
+                  <TableCell>{lead.nome}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={lead.status}
+                      color={
+                        lead.status === 'Matrícula' ? 'success' :
+                        lead.status === 'Inativo' ? 'error' :
+                        lead.status === 'AE Agend' ? 'warning' :
+                        lead.status === 'AE Feita' ? 'info' :
+                        lead.status === 'Barra' ? 'secondary' :
+                        'default'
+                      }
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {lead.whatsapp}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleWhatsAppClick(lead.whatsapp)}
+                        color="success"
+                      >
+                        <WhatsAppIcon />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {lead.ultimoContato ? format(new Date(lead.ultimoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {lead.proximoContato ? format(new Date(lead.proximoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {lead.dataAE ? format(new Date(lead.dataAE), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
+                  </TableCell>
+                  <TableCell>{lead.turmaAE || '-'}</TableCell>
+                  <TableCell>{lead.observacoes || '-'}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleOpenDialog(lead)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDelete(lead.id)}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Aulas Este Mês
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    0
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+        <Dialog
+          open={openDialog}
+          onClose={handleCloseDialog}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingLead ? 'Editar Lead' : 'Novo Lead'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Nome"
+                value={formData.nome}
+                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                required
+              />
 
-            <Grid item xs={12} md={4}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Taxa de Retenção
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    0%
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  label="Status"
+                >
+                  {statusOptions.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            {/* Seção Principal */}
-            <Grid item xs={12}>
-              <Card sx={{ mt: 2 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Atividades Recentes
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhuma atividade registrada ainda.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+              <TextField
+                fullWidth
+                label="WhatsApp"
+                value={formData.whatsapp}
+                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                required
+              />
 
-            {/* Seção de Métricas */}
-            <Grid item xs={12} md={6}>
-              <Card sx={{ mt: 2 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Satisfação dos Alunos
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Dados de satisfação serão exibidos aqui.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+              <TextField
+                fullWidth
+                label="Último Contato"
+                type="date"
+                value={formData.ultimoContato}
+                onChange={(e) => setFormData({ ...formData, ultimoContato: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
 
-            <Grid item xs={12} md={6}>
-              <Card sx={{ mt: 2 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Próximas Ações
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Lista de ações pendentes será exibida aqui.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Paper>
+              <TextField
+                fullWidth
+                label="Próximo Contato"
+                type="date"
+                value={formData.proximoContato}
+                onChange={(e) => setFormData({ ...formData, proximoContato: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                fullWidth
+                label="Data da Aula Experimental"
+                type="date"
+                value={formData.dataAE}
+                onChange={(e) => setFormData({ ...formData, dataAE: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <FormControl fullWidth>
+                <InputLabel>Turma da Aula Experimental</InputLabel>
+                <Select
+                  value={formData.turmaAE}
+                  onChange={(e) => setFormData({ ...formData, turmaAE: e.target.value })}
+                  label="Turma da Aula Experimental"
+                >
+                  {turmaOptions.map((turma) => (
+                    <MenuItem key={turma} value={turma}>
+                      {turma}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Observações"
+                value={formData.observacoes}
+                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                multiline
+                rows={4}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={!formData.nome || !formData.whatsapp}
+            >
+              {editingLead ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Status Filter Popover */}
+        <Popover
+          open={Boolean(statusAnchorEl)}
+          anchorEl={statusAnchorEl}
+          onClose={handleStatusFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por status
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={statusFilter || ''}
+                onChange={(e) => handleStatusFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {statusOptions.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={statusSort}
+                onChange={(e) => setStatusSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">A-Z</MenuItem>
+                <MenuItem value="desc">Z-A</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Próximo Contato Filter Popover */}
+        <Popover
+          open={Boolean(proxContatoAnchorEl)}
+          anchorEl={proxContatoAnchorEl}
+          onClose={handleProxContatoFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por próximo contato
+            </Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={proxContatoFilter || ''}
+              onChange={(e) => handleProxContatoFilterChange(e.target.value)}
+              sx={{ minWidth: 200 }}
+            />
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={proxContatoSort}
+                onChange={(e) => setProxContatoSort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Mais próximo</MenuItem>
+                <MenuItem value="desc">Mais distante</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Data AE Filter Popover */}
+        <Popover
+          open={Boolean(dataAEAnchorEl)}
+          anchorEl={dataAEAnchorEl}
+          onClose={handleDataAEFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por data da aula experimental
+            </Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={dataAEFilter || ''}
+              onChange={(e) => handleDataAEFilterChange(e.target.value)}
+              sx={{ minWidth: 200 }}
+            />
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={dataAESort}
+                onChange={(e) => setDataAESort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">Mais próximo</MenuItem>
+                <MenuItem value="desc">Mais distante</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        {/* Turma AE Filter Popover */}
+        <Popover
+          open={Boolean(turmaAEAnchorEl)}
+          anchorEl={turmaAEAnchorEl}
+          onClose={handleTurmaAEFilterClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+        >
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="subtitle2">
+              Filtrar por turma
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={turmaAEFilter || ''}
+                onChange={(e) => handleTurmaAEFilterChange(e.target.value)}
+                sx={{ minWidth: 200 }}
+                displayEmpty
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {turmaOptions.map((turma) => (
+                  <MenuItem key={turma} value={turma}>
+                    {turma}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Divider sx={{ my: 1 }} />
+            
+            <Typography variant="subtitle2">
+              Ordenação
+            </Typography>
+            <FormControl size="small">
+              <Select
+                value={turmaAESort}
+                onChange={(e) => setTurmaAESort(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                <MenuItem value="asc">A-Z</MenuItem>
+                <MenuItem value="desc">Z-A</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Popover>
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+            severity={snackbar.severity}
+            variant="filled"
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </MainLayout>
   );

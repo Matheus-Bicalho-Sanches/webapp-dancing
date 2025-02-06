@@ -18,7 +18,8 @@ import {
   ShoppingCart as ShoppingCartIcon,
   CreditCard as CreditCardIcon,
   PeopleAlt as PeopleAltIcon,
-  ChevronLeft as ChevronLeftIcon
+  ChevronLeft as ChevronLeftIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -36,7 +37,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Frequência', icon: <AssignmentIcon />, path: '/admin/frequencia' },
     { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas' },
     { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas' },
-    { text: 'CRM', icon: <PeopleAltIcon />, path: '/admin/crm' },
+    { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm' },
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },

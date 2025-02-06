@@ -129,6 +129,7 @@ export default function Tasks() {
   const [importanciaFilter, setImportanciaFilter] = useState(null);
   const [importanciaSort, setImportanciaSort] = useState('asc');
   const [importanciaAnchorEl, setImportanciaAnchorEl] = useState(null);
+  const [filteredTasks, setFilteredTasks] = useState([]);
 
   const diasSemanaOptions = [
     { value: 'segunda', label: 'Segunda-feira' },
@@ -394,13 +395,19 @@ export default function Tasks() {
       const taskSnapshot = await getDoc(taskRef);
       const previousData = { ...taskSnapshot.data(), id: taskId };
       
-      await updateDoc(taskRef, {
+      const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp()
-      });
+      };
 
+      // If it's a daily task being marked as completed, set the lastCompletedDate
+      if (previousData.tipo === 'diaria' && newStatus === 'Finalizada') {
+        updateData.lastCompletedDate = serverTimestamp();
+      }
+
+      await updateDoc(taskRef, updateData);
       await createLogEntry('update', 
-        { ...previousData, status: newStatus }, 
+        { ...previousData, ...updateData }, 
         previousData
       );
 
@@ -539,9 +546,53 @@ export default function Tasks() {
     handleImportanciaFilterClose();
   };
 
-  const filterTasks = (tasksToFilter, taskType = 'nao_recorrente') => {
+  const filterTasks = async (tasksToFilter, taskType = 'nao_recorrente') => {
     let filteredTasks = tasksToFilter;
     
+    // Reset daily tasks status if they were completed on a previous day
+    if (taskType === 'diaria') {
+      const tasksToUpdate = [];
+      filteredTasks = filteredTasks.map(task => {
+        if (task.status === 'Finalizada' && task.lastCompletedDate) {
+          const completedDate = dayjs(task.lastCompletedDate.toDate());
+          const today = dayjs().startOf('day');
+          
+          // If the task was completed on a previous day, reset it to Pendente
+          if (completedDate.isBefore(today)) {
+            // Add task to update queue
+            tasksToUpdate.push({
+              id: task.id,
+              data: {
+                status: 'Pendente',
+                lastCompletedDate: null,
+                updatedAt: serverTimestamp()
+              }
+            });
+            
+            // Return updated task for UI
+            return {
+              ...task,
+              status: 'Pendente',
+              lastCompletedDate: null
+            };
+          }
+        }
+        return task;
+      });
+
+      // Update tasks in Firestore
+      for (const taskToUpdate of tasksToUpdate) {
+        try {
+          await updateDoc(
+            doc(db, 'tarefas', taskToUpdate.id),
+            taskToUpdate.data
+          );
+        } catch (error) {
+          console.error('Error updating task status:', error);
+        }
+      }
+    }
+
     // Apply filters
     if (!showCompletedTasks) {
       filteredTasks = filteredTasks.filter(task => task.status !== 'Finalizada');
@@ -660,6 +711,23 @@ export default function Tasks() {
 
     return filteredTasks;
   };
+
+  useEffect(() => {
+    const updateFilteredTasks = async () => {
+      if (currentTab === 0) {
+        const filtered = await filterTasks(tasks.filter(task => task.tipo === 'nao_recorrente'), 'nao_recorrente');
+        setFilteredTasks(filtered);
+      } else if (currentTab === 1) {
+        const filtered = await filterTasks(tasks.filter(task => task.tipo === 'diaria'), 'diaria');
+        setFilteredTasks(filtered);
+      } else if (currentTab === 4) {
+        const filtered = await filterTasks(tasks.filter(task => task.tipo === 'por_horario'), 'por_horario');
+        setFilteredTasks(filtered);
+      }
+    };
+
+    updateFilteredTasks();
+  }, [tasks, currentTab, showCompletedTasks, dateFilter, responsavelFilter, statusFilter, prazoFilter, diaHorarioFilter, importanciaFilter]);
 
   const createLogEntry = async (action, taskData, previousData = null) => {
     try {
@@ -925,7 +993,6 @@ export default function Tasks() {
   }
 
   const renderTasksTable = (isArchive = false, taskType = 'nao_recorrente') => {
-    const filteredTasks = filterTasks(tasks.filter(task => task.tipo === taskType), taskType);
     const startIndex = taskPage * tasksPerPage;
     const endIndex = startIndex + tasksPerPage;
     const currentTasks = filteredTasks.slice(startIndex, endIndex);

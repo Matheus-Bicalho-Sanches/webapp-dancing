@@ -146,5 +146,12 @@ service cloud.firestore {
       // Permitir criação/atualização/exclusão para master ou administrativo
       allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
     }
+
+    // Regras para a coleção leads
+    match /leads/{leadId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
   }
 } 
