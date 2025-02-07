@@ -41,7 +41,7 @@ import {
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import dayjs from 'dayjs';
 
@@ -53,6 +53,8 @@ export default function CRM() {
   const [editingLead, setEditingLead] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [filteredLeads, setFilteredLeads] = useState([]);
+  const [editingCell, setEditingCell] = useState(null);
+  const [editValue, setEditValue] = useState('');
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState(null);
@@ -109,6 +111,44 @@ export default function CRM() {
   // Add pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(50);
+
+  // Add date conversion helpers
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return format(date, 'yyyy-MM-dd');
+    } catch (error) {
+      console.error('Error formatting date for input:', error);
+      return '';
+    }
+  };
+
+  const formatDateForSave = (inputDate) => {
+    if (!inputDate) return '';
+    try {
+      // Create date at noon to avoid timezone issues
+      const [year, month, day] = inputDate.split('-').map(Number);
+      const date = new Date(year, month - 1, day, 12, 0, 0);
+      return date.toISOString();
+    } catch (error) {
+      console.error('Error formatting date for save:', error);
+      return '';
+    }
+  };
+
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    try {
+      // Add 12 hours to the date to ensure it's in the middle of the day
+      const date = new Date(dateString);
+      date.setHours(12);
+      return format(date, 'dd/MM/yy', { locale: ptBR });
+    } catch (error) {
+      console.error('Error formatting date for display:', error);
+      return '';
+    }
+  };
 
   // Filter handlers
   const handleStatusFilterClick = (event) => {
@@ -423,9 +463,85 @@ export default function CRM() {
     }
   };
 
+  // Add this new handler for turma updates
+  const handleTurmaUpdate = async (leadId, newTurma) => {
+    try {
+      await updateDoc(doc(db, 'leads', leadId), {
+        turmaAE: newTurma,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+      setSnackbar({
+        open: true,
+        message: 'Turma atualizada com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar turma:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar turma. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
   // Add pagination handlers
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
+  };
+
+  // Update handleStartEditing
+  const handleStartEditing = (leadId, value) => {
+    setEditingCell(leadId);
+    setEditValue(formatDateForInput(value) || '');
+  };
+
+  // Update handleSaveEdit
+  const handleSaveEdit = async (leadId, field) => {
+    try {
+      const leadRef = doc(db, 'leads', leadId);
+      await updateDoc(leadRef, {
+        [field]: formatDateForSave(editValue),
+        updatedAt: serverTimestamp(),
+      });
+
+      setSnackbar({
+        open: true,
+        message: field === 'ultimoContato' 
+          ? 'Último contato atualizado com sucesso!'
+          : field === 'proximoContato'
+          ? 'Próximo contato atualizado com sucesso!'
+          : 'Data da aula experimental atualizada com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      setSnackbar({
+        open: true,
+        message: field === 'ultimoContato'
+          ? 'Erro ao atualizar último contato'
+          : field === 'proximoContato'
+          ? 'Erro ao atualizar próximo contato'
+          : 'Erro ao atualizar data da aula experimental',
+        severity: 'error'
+      });
+    }
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleKeyPress = (event, leadId, field) => {
+    if (event.key === 'Enter') {
+      handleSaveEdit(leadId, field);
+    } else if (event.key === 'Escape') {
+      handleCancelEdit();
+    }
   };
 
   if (loading) {
@@ -562,82 +678,174 @@ export default function CRM() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredLeads
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell>{lead.nome}</TableCell>
-                    <TableCell>
-                      <FormControl size="small">
-                        <Select
-                          value={lead.status}
-                          onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
-                          size="small"
-                          sx={{ minWidth: 120 }}
-                          renderValue={(value) => (
-                            <Chip
-                              label={value}
-                              color={
-                                value === 'Matrícula' ? 'success' :
-                                value === 'Inativo' ? 'error' :
-                                value === 'AE Agend' ? 'warning' :
-                                value === 'AE Feita' ? 'info' :
-                                value === 'Barra' ? 'secondary' :
-                                'default'
-                              }
-                              size="small"
-                            />
-                          )}
-                        >
-                          {statusOptions.map((status) => (
-                            <MenuItem key={status} value={status}>
-                              {status}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {lead.whatsapp}
-                        <IconButton
-                          size="small"
-                          onClick={() => handleWhatsAppClick(lead.whatsapp)}
-                          color="success"
-                        >
-                          <WhatsAppIcon />
-                        </IconButton>
+              {(rowsPerPage > 0
+                ? filteredLeads.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                : filteredLeads
+              ).map((lead) => (
+                <TableRow key={lead.id}>
+                  <TableCell>{lead.nome}</TableCell>
+                  <TableCell>
+                    <FormControl size="small">
+                      <Select
+                        value={lead.status}
+                        onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                        renderValue={(value) => (
+                          <Chip
+                            label={value}
+                            color={
+                              value === 'Matrícula' ? 'success' :
+                              value === 'Inativo' ? 'error' :
+                              value === 'AE Agend' ? 'warning' :
+                              value === 'AE Feita' ? 'info' :
+                              value === 'Barra' ? 'secondary' :
+                              'default'
+                            }
+                            size="small"
+                          />
+                        )}
+                      >
+                        {statusOptions.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {status}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {lead.whatsapp}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleWhatsAppClick(lead.whatsapp)}
+                        color="success"
+                      >
+                        <WhatsAppIcon />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {editingCell === lead.id ? (
+                      <TextField
+                        type="date"
+                        fullWidth
+                        variant="standard"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'ultimoContato')}
+                        onBlur={() => handleSaveEdit(lead.id, 'ultimoContato')}
+                        autoFocus
+                        size="small"
+                        InputProps={{
+                          style: { fontSize: '0.875rem' }
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        onClick={() => handleStartEditing(lead.id, lead.ultimoContato)}
+                        style={{ cursor: 'pointer', minHeight: '20px' }}
+                      >
+                        {lead.ultimoContato ? formatDateForDisplay(lead.ultimoContato) : ''}
                       </Box>
-                    </TableCell>
-                    <TableCell>
-                      {lead.ultimoContato ? format(new Date(lead.ultimoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {lead.proximoContato ? format(new Date(lead.proximoContato), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {lead.dataAE ? format(new Date(lead.dataAE), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
-                    </TableCell>
-                    <TableCell>{lead.turmaAE || '-'}</TableCell>
-                    <TableCell>{lead.observacoes || '-'}</TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(lead)}
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingCell === `${lead.id}-prox` ? (
+                      <TextField
+                        type="date"
+                        fullWidth
+                        variant="standard"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'proximoContato')}
+                        onBlur={() => handleSaveEdit(lead.id, 'proximoContato')}
+                        autoFocus
                         size="small"
+                        InputProps={{
+                          style: { fontSize: '0.875rem' }
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        onClick={() => {
+                          setEditingCell(`${lead.id}-prox`);
+                          setEditValue(formatDateForInput(lead.proximoContato));
+                        }}
+                        style={{ cursor: 'pointer', minHeight: '20px' }}
                       >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDelete(lead.id)}
+                        {lead.proximoContato ? formatDateForDisplay(lead.proximoContato) : '-'}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingCell === `${lead.id}-ae` ? (
+                      <TextField
+                        type="date"
+                        fullWidth
+                        variant="standard"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'dataAE')}
+                        onBlur={() => handleSaveEdit(lead.id, 'dataAE')}
+                        autoFocus
                         size="small"
+                        InputProps={{
+                          style: { fontSize: '0.875rem' }
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        onClick={() => {
+                          setEditingCell(`${lead.id}-ae`);
+                          setEditValue(formatDateForInput(lead.dataAE));
+                        }}
+                        style={{ cursor: 'pointer', minHeight: '20px' }}
                       >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        {lead.dataAE ? formatDateForDisplay(lead.dataAE) : '-'}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <FormControl size="small">
+                      <Select
+                        value={lead.turmaAE || ''}
+                        onChange={(e) => handleTurmaUpdate(lead.id, e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                        displayEmpty
+                      >
+                        <MenuItem value="">
+                          <em>Sem turma</em>
+                        </MenuItem>
+                        {turmaOptions.map((turma) => (
+                          <MenuItem key={turma} value={turma}>
+                            {turma}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell>{lead.observacoes || '-'}</TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleOpenDialog(lead)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDelete(lead.id)}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
           <TablePagination
