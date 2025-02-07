@@ -225,6 +225,8 @@ export default function CRM() {
 
   // Filter logic
   const filterLeads = (leadsToFilter) => {
+    console.log('Starting filterLeads function');
+    console.log('Current dataAESort value:', dataAESort);
     let filtered = [...leadsToFilter];
 
     // Apply status filter
@@ -254,43 +256,76 @@ export default function CRM() {
     }
 
     // Apply sorting
-    if (statusSort) {
-      filtered.sort((a, b) => {
-        return statusSort === 'asc' 
-          ? (a.status || '').localeCompare(b.status || '')
-          : (b.status || '').localeCompare(a.status || '');
+    filtered.sort((a, b) => {
+      console.log('Sorting with:', {
+        statusSort,
+        proxContatoSort,
+        dataAESort,
+        turmaAESort
       });
-    }
 
-    if (proxContatoSort) {
-      filtered.sort((a, b) => {
+      // Status sorting
+      if (statusSort && a.status !== b.status) {
+        const aStatus = a.status || '';
+        const bStatus = b.status || '';
+        return statusSort === 'asc' 
+          ? aStatus.localeCompare(bStatus)
+          : bStatus.localeCompare(aStatus);
+      }
+
+      // Próximo contato sorting - moved before Data AE sorting
+      if (proxContatoSort) {
+        console.log('Applying Próximo Contato sort:', {
+          direction: proxContatoSort,
+          aProx: a.proximoContato,
+          bProx: b.proximoContato
+        });
+
+        // Handle cases where one or both dates are missing
         if (!a.proximoContato && !b.proximoContato) return 0;
         if (!a.proximoContato) return 1;
         if (!b.proximoContato) return -1;
-        return proxContatoSort === 'asc'
-          ? dayjs(a.proximoContato).diff(dayjs(b.proximoContato))
-          : dayjs(b.proximoContato).diff(dayjs(a.proximoContato));
-      });
-    }
 
-    if (dataAESort) {
-      filtered.sort((a, b) => {
+        const dateA = new Date(a.proximoContato);
+        const dateB = new Date(b.proximoContato);
+
+        const result = proxContatoSort === 'asc'
+          ? dateA.getTime() - dateB.getTime()
+          : dateB.getTime() - dateA.getTime();
+
+        if (result !== 0) return result;
+      }
+
+      // Data AE sorting
+      if (dataAESort) {
+        // Handle cases where one or both dates are missing
         if (!a.dataAE && !b.dataAE) return 0;
         if (!a.dataAE) return 1;
         if (!b.dataAE) return -1;
-        return dataAESort === 'asc'
-          ? dayjs(a.dataAE).diff(dayjs(b.dataAE))
-          : dayjs(b.dataAE).diff(dayjs(a.dataAE));
-      });
-    }
 
-    if (turmaAESort) {
-      filtered.sort((a, b) => {
-        return turmaAESort === 'asc'
-          ? (a.turmaAE || '').localeCompare(b.turmaAE || '')
-          : (b.turmaAE || '').localeCompare(a.turmaAE || '');
-      });
-    }
+        const dateA = new Date(a.dataAE);
+        const dateB = new Date(b.dataAE);
+        
+        const result = dataAESort === 'asc'
+          ? dateA.getTime() - dateB.getTime()
+          : dateB.getTime() - dateA.getTime();
+
+        if (result !== 0) return result;
+      }
+
+      // Turma AE sorting
+      if (turmaAESort) {
+        const aTurma = a.turmaAE || '';
+        const bTurma = b.turmaAE || '';
+        const result = turmaAESort === 'asc'
+          ? aTurma.localeCompare(bTurma)
+          : bTurma.localeCompare(aTurma);
+
+        if (result !== 0) return result;
+      }
+
+      return 0;
+    });
 
     return filtered;
   };
@@ -829,20 +864,22 @@ export default function CRM() {
                   </TableCell>
                   <TableCell>{lead.observacoes || '-'}</TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleOpenDialog(lead)}
-                      size="small"
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(lead.id)}
-                      size="small"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                      <IconButton
+                        color="primary"
+                        onClick={() => handleOpenDialog(lead)}
+                        size="small"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        onClick={() => handleDelete(lead.id)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1049,8 +1086,8 @@ export default function CRM() {
                 onChange={(e) => setProxContatoSort(e.target.value)}
                 sx={{ minWidth: 200 }}
               >
-                <MenuItem value="asc">Mais próximo</MenuItem>
-                <MenuItem value="desc">Mais distante</MenuItem>
+                <MenuItem value="asc">Mais antigos primeiro</MenuItem>
+                <MenuItem value="desc">Mais recentes primeiro</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -1089,8 +1126,8 @@ export default function CRM() {
                 onChange={(e) => setDataAESort(e.target.value)}
                 sx={{ minWidth: 200 }}
               >
-                <MenuItem value="asc">Mais próximo</MenuItem>
-                <MenuItem value="desc">Mais distante</MenuItem>
+                <MenuItem value="asc">Mais antigos primeiro</MenuItem>
+                <MenuItem value="desc">Mais recentes primeiro</MenuItem>
               </Select>
             </FormControl>
           </Box>
