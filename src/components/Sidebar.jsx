@@ -31,13 +31,13 @@ const Sidebar = ({ open, onClose }) => {
   
   const menuItems = [
     { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard' },
+    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas' },
+    { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm' },
     { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos' },
     { text: 'Matrículas', icon: <SchoolIcon />, path: '/admin/matriculas' },
     { text: 'Turmas', icon: <SchoolIcon />, path: '/admin/turmas' },
     { text: 'Frequência', icon: <AssignmentIcon />, path: '/admin/frequencia' },
     { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas' },
-    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas' },
-    { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm' },
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
