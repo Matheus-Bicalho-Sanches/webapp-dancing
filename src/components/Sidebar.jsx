@@ -16,7 +16,7 @@ import {
   Assignment as AssignmentIcon,
   AttachMoney as AttachMoneyIcon,
   ShoppingCart as ShoppingCartIcon,
-  CreditCard as CreditCardIcon,
+  Checkroom as CheckroomIcon,
   PeopleAlt as PeopleAltIcon,
   ChevronLeft as ChevronLeftIcon,
   People as PeopleIcon
@@ -41,7 +41,8 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
-    { text: 'Cantina', icon: <ShoppingCartIcon />, path: '/admin/produtos' }
+    { text: 'Cantina', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
+    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme' }
   ];
 
   return (

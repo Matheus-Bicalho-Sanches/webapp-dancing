@@ -17,7 +17,6 @@ import CashControl from './pages/admin/CashControl';
 import Reports from './pages/admin/Reports';
 import Attendance from './pages/admin/Attendance';
 import Products from './pages/admin/Products';
-import Stripe from './pages/admin/Stripe';
 import Notifications from './pages/admin/Notifications';
 import MainLayout from './layouts/MainLayout';
 import { Box, Alert } from '@mui/material';
@@ -25,6 +24,7 @@ import AppointmentBooking from './pages/public/AppointmentBooking';
 import PaymentSuccess from './pages/public/PaymentSuccess';
 import CRM from './pages/private/CRM';
 import ConfigTest from './components/ConfigTest';
+import Uniform from './pages/admin/Uniform';
 
 function App() {
   return (
@@ -39,13 +39,29 @@ function App() {
               <ConfigTest />
             </MainLayout>
           } />
-
-          {/* Rotas administrativas */}
+          
+          {/* Rotas privadas */}
           <Route 
             path="/admin/dashboard" 
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/aulas" 
+            element={
+              <PrivateRoute>
+                <IndividualClasses />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/admin/usuarios" 
+            element={
+              <PrivateRoute>
+                <Users />
               </PrivateRoute>
             } 
           />
@@ -62,22 +78,6 @@ function App() {
             element={
               <PrivateRoute>
                 <StudentProfile />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/admin/usuarios" 
-            element={
-              <PrivateRoute>
-                <Users />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/admin/aulas" 
-            element={
-              <PrivateRoute>
-                <IndividualClasses />
               </PrivateRoute>
             } 
           />
@@ -150,35 +150,6 @@ function App() {
               <Products />
             </PrivateRoute>
           } />
-          <Route path="/admin/stripe" element={
-            <PrivateRoute>
-              <MainLayout>
-                <Stripe />
-              </MainLayout>
-            </PrivateRoute>
-          } />
-          <Route path="/admin/stripe/success" element={
-            <PrivateRoute>
-              <MainLayout>
-                <Box p={3}>
-                  <Alert severity="success">
-                    Pagamento realizado com sucesso!
-                  </Alert>
-                </Box>
-              </MainLayout>
-            </PrivateRoute>
-          } />
-          <Route path="/admin/stripe/cancel" element={
-            <PrivateRoute>
-              <MainLayout>
-                <Box p={3}>
-                  <Alert severity="warning">
-                    Pagamento cancelado.
-                  </Alert>
-                </Box>
-              </MainLayout>
-            </PrivateRoute>
-          } />
           <Route 
             path="/admin/notifications" 
             element={
@@ -187,6 +158,13 @@ function App() {
               </PrivateRoute>
             } 
           />
+          <Route path="/admin/uniforme" element={
+            <PrivateRoute>
+              <MainLayout>
+                <Uniform />
+              </MainLayout>
+            </PrivateRoute>
+          } />
           
           {/* Redirecionamentos */}
           <Route path="/" element={<Navigate to="/agendar" />} />
