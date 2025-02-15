@@ -21,12 +21,19 @@ import {
   Snackbar,
   Alert,
   IconButton,
-  DialogContentText
+  DialogContentText,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -48,6 +55,14 @@ export default function Products() {
     valorVendaFunc: '',
     estoque: '',
     vencimento: ''
+  });
+  const [openSaleDialog, setOpenSaleDialog] = useState(false);
+  const [saleData, setSaleData] = useState({
+    productId: '',
+    quantity: 1,
+    total: 0,
+    isEmployeeSale: false,
+    paymentMethod: ''
   });
 
   useEffect(() => {
@@ -109,6 +124,28 @@ export default function Products() {
 
   const handleCloseDeleteDialog = () => {
     setOpenDeleteDialog(false);
+  };
+
+  const handleOpenSaleDialog = () => {
+    setOpenSaleDialog(true);
+    setSaleData({
+      productId: '',
+      quantity: 1,
+      total: 0,
+      isEmployeeSale: false,
+      paymentMethod: ''
+    });
+  };
+
+  const handleCloseSaleDialog = () => {
+    setOpenSaleDialog(false);
+    setSaleData({
+      productId: '',
+      quantity: 1,
+      total: 0,
+      isEmployeeSale: false,
+      paymentMethod: ''
+    });
   };
 
   const formatDateForInput = (date) => {
@@ -289,9 +326,76 @@ export default function Products() {
     return new Date(date).toLocaleDateString('pt-BR');
   };
 
+  const handleSaleSubmit = async () => {
+    try {
+      const product = products.find(p => p.id === saleData.productId);
+      if (!product) {
+        setSnackbar({
+          open: true,
+          message: 'Produto não encontrado',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (saleData.quantity > product.estoque) {
+        setSnackbar({
+          open: true,
+          message: 'Quantidade maior que o estoque disponível',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (!saleData.paymentMethod) {
+        setSnackbar({
+          open: true,
+          message: 'Selecione uma forma de pagamento',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Atualizar o estoque
+      const newStock = product.estoque - saleData.quantity;
+      await updateDoc(doc(db, 'produtos', product.id), {
+        estoque: newStock,
+        updatedAt: serverTimestamp()
+      });
+
+      // Registrar a venda
+      await addDoc(collection(db, 'vendas'), {
+        produtoId: product.id,
+        produtoNome: product.nome,
+        quantidade: saleData.quantity,
+        valorUnitario: saleData.isEmployeeSale ? product.valorVendaFunc : product.valorVenda,
+        valorTotal: saleData.total,
+        isEmployeeSale: saleData.isEmployeeSale,
+        formaPagamento: saleData.paymentMethod,
+        dataVenda: serverTimestamp(),
+        createdBy: currentUser.uid,
+        createdAt: serverTimestamp()
+      });
+
+      setSnackbar({
+        open: true,
+        message: 'Venda registrada com sucesso!',
+        severity: 'success'
+      });
+      handleCloseSaleDialog();
+    } catch (error) {
+      console.error('Erro ao registrar venda:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao registrar venda. Tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
   if (loading) {
     return (
-      <MainLayout title="Produtos">
+      <MainLayout title="Cantina">
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
           <CircularProgress />
         </Box>
@@ -300,33 +404,30 @@ export default function Products() {
   }
 
   return (
-    <MainLayout title="Produtos">
+    <MainLayout title="Cantina">
       <Box sx={{ p: 3 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          mb: 4 
-        }}>
-          <Typography variant="h5" sx={{ color: '#000' }}>
-            Produtos
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h5" component="h1">
+            Cantina
           </Typography>
           <Stack direction="row" spacing={2}>
             <Button
               variant="contained"
+              color="primary"
+              startIcon={<ShoppingCartIcon />}
+              onClick={handleOpenSaleDialog}
+            >
+              Nova Venda
+            </Button>
+            <Button
+              variant="contained"
               startIcon={<AddIcon />}
               onClick={handleOpenDialog}
-              sx={{ 
-                backgroundColor: '#1976d2',
-                '&:hover': {
-                  backgroundColor: '#115293'
-                }
-              }}
             >
-              Criar Produto
+              Novo Produto
             </Button>
           </Stack>
-        </Box>
+        </Stack>
 
         <TableContainer component={Paper}>
           <Table>
@@ -546,6 +647,120 @@ export default function Products() {
             <Button onClick={handleCloseDeleteDialog}>Cancelar</Button>
             <Button onClick={handleDeleteProduct} color="error" variant="contained">
               Excluir
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Modal de Nova Venda */}
+        <Dialog
+          open={openSaleDialog}
+          onClose={handleCloseSaleDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Nova Venda</DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <FormControl fullWidth required>
+                <InputLabel>Produto</InputLabel>
+                <Select
+                  value={saleData.productId}
+                  onChange={(e) => {
+                    const product = products.find(p => p.id === e.target.value);
+                    setSaleData(prev => ({
+                      ...prev,
+                      productId: e.target.value,
+                      total: product ? (prev.isEmployeeSale ? product.valorVendaFunc : product.valorVenda) * prev.quantity : 0
+                    }));
+                  }}
+                  label="Produto"
+                >
+                  {products.map((product) => (
+                    <MenuItem key={product.id} value={product.id}>
+                      {product.nome} - R$ {product.valorVenda?.toFixed(2)} {product.valorVendaFunc ? `(Func: R$ ${product.valorVendaFunc?.toFixed(2)})` : ''} (Estoque: {product.estoque})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <TextField
+                  sx={{ flex: 1 }}
+                  label="Quantidade"
+                  type="number"
+                  value={saleData.quantity}
+                  onChange={(e) => {
+                    const quantity = parseInt(e.target.value) || 1;
+                    const product = products.find(p => p.id === saleData.productId);
+                    setSaleData(prev => ({
+                      ...prev,
+                      quantity,
+                      total: product ? (prev.isEmployeeSale ? product.valorVendaFunc : product.valorVenda) * quantity : 0
+                    }));
+                  }}
+                  InputProps={{
+                    inputProps: { min: 1 }
+                  }}
+                  required
+                />
+
+                <FormControl component="fieldset">
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={saleData.isEmployeeSale}
+                      onChange={(e) => {
+                        const isEmployeeSale = e.target.checked;
+                        const product = products.find(p => p.id === saleData.productId);
+                        setSaleData(prev => ({
+                          ...prev,
+                          isEmployeeSale,
+                          total: product ? (isEmployeeSale ? product.valorVendaFunc : product.valorVenda) * prev.quantity : 0
+                        }));
+                      }}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <Typography>Venda para funcionário</Typography>
+                  </Box>
+                </FormControl>
+              </Box>
+
+              <FormControl fullWidth required>
+                <InputLabel>Forma de Pagamento</InputLabel>
+                <Select
+                  value={saleData.paymentMethod}
+                  onChange={(e) => setSaleData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                  label="Forma de Pagamento"
+                >
+                  <MenuItem value="pix">PIX</MenuItem>
+                  <MenuItem value="dinheiro">Dinheiro</MenuItem>
+                  <MenuItem value="debito">Cartão de Débito</MenuItem>
+                  <MenuItem value="credito">Cartão de Crédito</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Total"
+                type="number"
+                value={saleData.total.toFixed(2)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                  readOnly: true
+                }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseSaleDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaleSubmit}
+              variant="contained"
+              disabled={!saleData.productId || saleData.quantity < 1}
+            >
+              Confirmar
             </Button>
           </DialogActions>
         </Dialog>

@@ -145,7 +145,7 @@ function App() {
               </PrivateRoute>
             } 
           />
-          <Route path="/admin/produtos" element={
+          <Route path="/admin/cantina" element={
             <PrivateRoute>
               <Products />
             </PrivateRoute>

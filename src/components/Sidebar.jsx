@@ -19,7 +19,8 @@ import {
   Checkroom as CheckroomIcon,
   PeopleAlt as PeopleAltIcon,
   ChevronLeft as ChevronLeftIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  Restaurant as RestaurantIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -41,7 +42,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
-    { text: 'Cantina', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
+    { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina' },
     { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme' }
   ];
 

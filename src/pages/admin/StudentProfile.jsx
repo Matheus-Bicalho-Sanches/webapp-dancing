@@ -732,7 +732,6 @@ function PaymentsTab({ studentId }) {
   const tiposPagamento = [
     'Mensalidade',
     'Aula individual',
-    'Cantina',
     'Eventos',
     'Aula experimental',
     'Outros'
