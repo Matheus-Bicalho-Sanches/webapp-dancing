@@ -66,7 +66,6 @@ export default function CRM() {
   const [proxContatoAnchorEl, setProxContatoAnchorEl] = useState(null);
 
   const [dataAEFilter, setDataAEFilter] = useState(null);
-  const [dataAESort, setDataAESort] = useState('asc');
   const [dataAEAnchorEl, setDataAEAnchorEl] = useState(null);
 
   const [turmaAEFilter, setTurmaAEFilter] = useState(null);
@@ -225,8 +224,6 @@ export default function CRM() {
 
   // Filter logic
   const filterLeads = (leadsToFilter) => {
-    console.log('Starting filterLeads function');
-    console.log('Current dataAESort value:', dataAESort);
     let filtered = [...leadsToFilter];
 
     // Apply status filter
@@ -257,13 +254,6 @@ export default function CRM() {
 
     // Apply sorting
     filtered.sort((a, b) => {
-      console.log('Sorting with:', {
-        statusSort,
-        proxContatoSort,
-        dataAESort,
-        turmaAESort
-      });
-
       // Status sorting
       if (statusSort && a.status !== b.status) {
         const aStatus = a.status || '';
@@ -273,15 +263,8 @@ export default function CRM() {
           : bStatus.localeCompare(aStatus);
       }
 
-      // Próximo contato sorting - moved before Data AE sorting
+      // Próximo contato sorting
       if (proxContatoSort) {
-        console.log('Applying Próximo Contato sort:', {
-          direction: proxContatoSort,
-          aProx: a.proximoContato,
-          bProx: b.proximoContato
-        });
-
-        // Handle cases where one or both dates are missing
         if (!a.proximoContato && !b.proximoContato) return 0;
         if (!a.proximoContato) return 1;
         if (!b.proximoContato) return -1;
@@ -289,39 +272,9 @@ export default function CRM() {
         const dateA = new Date(a.proximoContato);
         const dateB = new Date(b.proximoContato);
 
-        const result = proxContatoSort === 'asc'
+        return proxContatoSort === 'asc'
           ? dateA.getTime() - dateB.getTime()
           : dateB.getTime() - dateA.getTime();
-
-        if (result !== 0) return result;
-      }
-
-      // Data AE sorting
-      if (dataAESort) {
-        // Handle cases where one or both dates are missing
-        if (!a.dataAE && !b.dataAE) return 0;
-        if (!a.dataAE) return 1;
-        if (!b.dataAE) return -1;
-
-        const dateA = new Date(a.dataAE);
-        const dateB = new Date(b.dataAE);
-        
-        const result = dataAESort === 'asc'
-          ? dateA.getTime() - dateB.getTime()
-          : dateB.getTime() - dateA.getTime();
-
-        if (result !== 0) return result;
-      }
-
-      // Turma AE sorting
-      if (turmaAESort) {
-        const aTurma = a.turmaAE || '';
-        const bTurma = b.turmaAE || '';
-        const result = turmaAESort === 'asc'
-          ? aTurma.localeCompare(bTurma)
-          : bTurma.localeCompare(aTurma);
-
-        if (result !== 0) return result;
       }
 
       return 0;
@@ -335,7 +288,7 @@ export default function CRM() {
     const filtered = filterLeads(leads);
     setFilteredLeads(filtered);
   }, [leads, statusFilter, proxContatoFilter, dataAEFilter, turmaAEFilter,
-      statusSort, proxContatoSort, dataAESort, turmaAESort]);
+      statusSort, proxContatoSort]);
 
   useEffect(() => {
     setLoading(true);
@@ -668,7 +621,7 @@ export default function CRM() {
                       onClick={handleDataAEFilterClick}
                       sx={{ 
                         ml: 1,
-                        color: (dataAEFilter || dataAESort === 'desc') ? 'primary.main' : 'inherit'
+                        color: dataAEFilter ? 'primary.main' : 'inherit'
                       }}
                     >
                       <FilterListIcon fontSize="small" />
@@ -1114,22 +1067,6 @@ export default function CRM() {
               onChange={(e) => handleDataAEFilterChange(e.target.value)}
               sx={{ minWidth: 200 }}
             />
-            
-            <Divider sx={{ my: 1 }} />
-            
-            <Typography variant="subtitle2">
-              Ordenação
-            </Typography>
-            <FormControl size="small">
-              <Select
-                value={dataAESort}
-                onChange={(e) => setDataAESort(e.target.value)}
-                sx={{ minWidth: 200 }}
-              >
-                <MenuItem value="asc">Mais antigos primeiro</MenuItem>
-                <MenuItem value="desc">Mais recentes primeiro</MenuItem>
-              </Select>
-            </FormControl>
           </Box>
         </Popover>
 

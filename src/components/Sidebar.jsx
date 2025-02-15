@@ -41,8 +41,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
-    { text: 'Produtos', icon: <ShoppingCartIcon />, path: '/admin/produtos' },
-    { text: 'Stripe', icon: <CreditCardIcon />, path: '/admin/stripe' }
+    { text: 'Cantina', icon: <ShoppingCartIcon />, path: '/admin/produtos' }
   ];
 
   return (

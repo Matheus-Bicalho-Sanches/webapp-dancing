@@ -339,4 +339,177 @@ router.get('/appointment-details/:sessionId', async (req, res) => {
   }
 });
 
+// Rota para criar ou recuperar um cliente Stripe
+router.post('/create-customer', async (req, res) => {
+  try {
+    const { userId, email, name, phone } = req.body;
+
+    if (!userId || !email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'UserId e email são obrigatórios'
+      });
+    }
+
+    // Verificar se o usuário já tem um documento no Firebase
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+
+    // Se já existe um customer_id, retorna o customer existente
+    if (userDoc.exists && userDoc.data().stripeCustomerId) {
+      const customer = await stripe.customers.retrieve(userDoc.data().stripeCustomerId);
+      return res.json({
+        status: 'success',
+        message: 'Cliente Stripe já existe',
+        customerId: customer.id
+      });
+    }
+
+    // Se não existe, cria um novo customer no Stripe
+    const customer = await stripe.customers.create({
+      email,
+      name,
+      phone,
+      metadata: {
+        firebaseUserId: userId
+      }
+    });
+
+    // Atualiza ou cria o documento do usuário no Firebase
+    if (userDoc.exists) {
+      await userRef.update({
+        stripeCustomerId: customer.id,
+        updatedAt: new Date()
+      });
+    } else {
+      await userRef.set({
+        email,
+        name: name || '',
+        phone: phone || '',
+        stripeCustomerId: customer.id,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      message: 'Cliente Stripe criado com sucesso',
+      customerId: customer.id
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar cliente Stripe:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao criar cliente Stripe',
+      error: error.message
+    });
+  }
+});
+
+// Rota para buscar um cliente Stripe
+router.get('/customer/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Buscar o documento do usuário no Firebase
+    const userDoc = await db.collection('users').doc(userId).get();
+    
+    if (!userDoc.exists || !userDoc.data().stripeCustomerId) {
+      return res.json({
+        status: 'success',
+        customer: null
+      });
+    }
+
+    // Buscar o cliente no Stripe
+    const customer = await stripe.customers.retrieve(userDoc.data().stripeCustomerId);
+    
+    return res.json({
+      status: 'success',
+      customer
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar cliente Stripe:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar cliente Stripe',
+      error: error.message
+    });
+  }
+});
+
+// Rota para criar uma sessão de setup de pagamento
+router.post('/create-setup-session', async (req, res) => {
+  try {
+    const { customerId } = req.body;
+
+    if (!customerId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'ID do cliente é obrigatório'
+      });
+    }
+
+    const session = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session' // Permite uso futuro do cartão
+    });
+
+    return res.json({
+      status: 'success',
+      clientSecret: session.client_secret
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar sessão de setup:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao criar sessão de setup',
+      error: error.message
+    });
+  }
+});
+
+// Rota para processar um pagamento
+router.post('/create-payment', async (req, res) => {
+  try {
+    const { customerId, amount, description } = req.body;
+
+    if (!customerId || !amount) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'ID do cliente e valor são obrigatórios'
+      });
+    }
+
+    // Criar o pagamento
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Converter para centavos
+      currency: 'brl',
+      customer: customerId,
+      description,
+      payment_method_types: ['card'],
+      off_session: true,
+      confirm: true
+    });
+
+    return res.json({
+      status: 'success',
+      paymentIntent
+    });
+
+  } catch (error) {
+    console.error('Erro ao processar pagamento:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Erro ao processar pagamento',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router; 

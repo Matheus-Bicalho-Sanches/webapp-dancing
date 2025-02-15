@@ -34,11 +34,17 @@ service cloud.firestore {
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação/atualização/exclusão se:
-      // 1. O usuário está autenticado E
-      // 2. O usuário é master OU está editando seu próprio documento
-      allow write: if isAuthenticated() && 
+      // Permitir criação se o usuário está autenticado e é o próprio usuário ou master
+      allow create: if isAuthenticated() && 
         (isCurrentUserMaster() || userId == request.auth.uid);
+      
+      // Permitir atualização se:
+      // 1. O usuário está autenticado E
+      // 2. É master OU está editando seu próprio documento
+      allow update: if isAuthenticated() && 
+        (isCurrentUserMaster() || userId == request.auth.uid);
+      
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção alunos
