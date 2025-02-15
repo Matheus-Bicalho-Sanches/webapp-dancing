@@ -25,7 +25,8 @@ import {
   DateRange as DateRangeIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
-  FilterAlt as FilterAltIcon
+  FilterAlt as FilterAltIcon,
+  ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { 
@@ -83,21 +84,58 @@ export default function CashControl() {
           endDate = dayjs().endOf('day');
       }
 
-      const q = query(
+      // Buscar movimentações regulares
+      const movementsQuery = query(
         collection(db, 'movimentacoes'),
         where('data', '>=', Timestamp.fromDate(startDate.toDate())),
         where('data', '<=', Timestamp.fromDate(endDate.toDate())),
         orderBy('data', 'desc')
       );
 
-      const querySnapshot = await getDocs(q);
-      const movementsData = querySnapshot.docs.map(doc => ({
+      // Buscar vendas da cantina
+      const salesQuery = query(
+        collection(db, 'vendas'),
+        where('dataVenda', '>=', Timestamp.fromDate(startDate.toDate())),
+        where('dataVenda', '<=', Timestamp.fromDate(endDate.toDate())),
+        orderBy('dataVenda', 'desc')
+      );
+
+      const [movementsSnapshot, salesSnapshot] = await Promise.all([
+        getDocs(movementsQuery),
+        getDocs(salesQuery)
+      ]);
+
+      // Processar movimentações regulares
+      const movementsData = movementsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
+      // Processar vendas da cantina e converter para o formato de movimentação
+      const salesData = salesSnapshot.docs.map(doc => {
+        const sale = doc.data();
+        return {
+          id: doc.id,
+          data: sale.dataVenda,
+          tipo: 'entrada',
+          descricao: `Venda Cantina: ${sale.quantidade}x ${sale.produtoNome}`,
+          valor: sale.valorTotal,
+          categoria: 'Cantina',
+          formaPagamento: sale.formaPagamento,
+          isEmployeeSale: sale.isEmployeeSale,
+          createdAt: sale.createdAt
+        };
+      });
+
+      // Combinar movimentações e vendas
+      const allMovements = [...movementsData, ...salesData].sort((a, b) => {
+        const dateA = a.data.toDate();
+        const dateB = b.data.toDate();
+        return dateB - dateA;
+      });
+
       // Calcular totais
-      const totals = movementsData.reduce((acc, movement) => {
+      const totals = allMovements.reduce((acc, movement) => {
         if (movement.tipo === 'entrada') {
           acc.entrada += movement.valor;
           acc.saldo += movement.valor;
@@ -109,7 +147,7 @@ export default function CashControl() {
       }, { entrada: 0, saida: 0, saldo: 0 });
 
       setTotals(totals);
-      setMovements(movementsData);
+      setMovements(allMovements);
     } catch (error) {
       console.error('Erro ao carregar movimentações:', error);
       setSnackbar({
@@ -257,25 +295,59 @@ export default function CashControl() {
             </TableHead>
             <TableBody>
               {movements.map((movement) => (
-                <TableRow key={movement.id}>
+                <TableRow key={movement.id} hover>
                   <TableCell>{formatDate(movement.data)}</TableCell>
-                  <TableCell>{movement.descricao}</TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {movement.categoria === 'Cantina' && (
+                        <ShoppingCartIcon fontSize="small" sx={{ color: 'primary.main' }} />
+                      )}
+                      <Typography>
+                        {movement.descricao}
+                        {movement.categoria === 'Cantina' && movement.isEmployeeSale && (
+                          <Chip
+                            label="Funcionário"
+                            size="small"
+                            color="info"
+                            sx={{ ml: 1, borderRadius: 1 }}
+                          />
+                        )}
+                      </Typography>
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={movement.tipo === 'entrada' ? 'Entrada' : 'Saída'}
                       color={movement.tipo === 'entrada' ? 'success' : 'error'}
                       size="small"
+                      sx={{ borderRadius: 1 }}
                     />
                   </TableCell>
-                  <TableCell>{movement.categoria}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={movement.categoria}
+                      color={movement.categoria === 'Cantina' ? 'primary' : 'default'}
+                      size="small"
+                      variant={movement.categoria === 'Cantina' ? 'filled' : 'outlined'}
+                      sx={{ borderRadius: 1 }}
+                    />
+                  </TableCell>
                   <TableCell align="right">
                     <Typography
                       color={movement.tipo === 'entrada' ? 'success.main' : 'error.main'}
+                      sx={{ fontWeight: 500 }}
                     >
                       {formatCurrency(movement.valor)}
                     </Typography>
                   </TableCell>
-                  <TableCell>{movement.formaPagamento}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={movement.formaPagamento}
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderRadius: 1, textTransform: 'capitalize' }}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
               {movements.length === 0 && (
