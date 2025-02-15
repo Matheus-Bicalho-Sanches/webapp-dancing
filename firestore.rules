@@ -173,5 +173,14 @@ service cloud.firestore {
       allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
+
+    // Regras para a coleção logs
+    match /logs/{logId} {
+      // Permitir leitura para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação/atualização/exclusão para master ou administrativo
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+    }
   }
 } 

@@ -27,15 +27,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  InputAdornment
+  InputAdornment,
+  Tab,
+  Tabs,
+  Chip,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  History as HistoryIcon,
+  Person as PersonIcon,
+  AttachMoney as MoneyIcon
 } from '@mui/icons-material';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -64,6 +71,9 @@ export default function Products() {
     isEmployeeSale: false,
     paymentMethod: ''
   });
+  const [currentTab, setCurrentTab] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
 
   useEffect(() => {
     // Configurar o listener para produtos
@@ -83,6 +93,28 @@ export default function Products() {
     });
 
     // Cleanup subscription
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const logsRef = collection(db, 'logs');
+    const q = query(
+      logsRef,
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const logsData = [];
+      querySnapshot.forEach((doc) => {
+        logsData.push({ id: doc.id, ...doc.data() });
+      });
+      setLogs(logsData);
+      setLoadingLogs(false);
+    }, (error) => {
+      console.error("Erro ao buscar logs:", error);
+      setLoadingLogs(false);
+    });
+
     return () => unsubscribe();
   }, []);
 
@@ -218,8 +250,15 @@ export default function Products() {
         updatedAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'produtos'), productData);
+      const docRef = await addDoc(collection(db, 'produtos'), productData);
       
+      // Create log entry
+      await createLogEntry('create_product', {
+        productId: docRef.id,
+        productName: newProduct.nome,
+        price: convertToNumber(newProduct.valorVenda)
+      });
+
       setSnackbar({
         open: true,
         message: 'Produto criado com sucesso!',
@@ -265,6 +304,16 @@ export default function Products() {
 
       await updateDoc(doc(db, 'produtos', selectedProduct.id), productData);
       
+      // Create log entry
+      await createLogEntry('update_product', {
+        productId: selectedProduct.id,
+        productName: selectedProduct.nome,
+        changes: {
+          price: convertToNumber(selectedProduct.valorVenda),
+          stock: Number(selectedProduct.estoque)
+        }
+      });
+
       setSnackbar({
         open: true,
         message: 'Produto atualizado com sucesso!',
@@ -377,6 +426,16 @@ export default function Products() {
         createdAt: serverTimestamp()
       });
 
+      // Create log entry
+      await createLogEntry('new_sale', {
+        productId: product.id,
+        productName: product.nome,
+        quantity: saleData.quantity,
+        total: saleData.total,
+        isEmployeeSale: saleData.isEmployeeSale,
+        paymentMethod: saleData.paymentMethod
+      });
+
       setSnackbar({
         open: true,
         message: 'Venda registrada com sucesso!',
@@ -393,7 +452,62 @@ export default function Products() {
     }
   };
 
-  if (loading) {
+  const createLogEntry = async (action, details) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userName = userDoc.exists() ? userDoc.data().name || currentUser.email : currentUser.email;
+      
+      await addDoc(collection(db, 'logs'), {
+        action,
+        details,
+        userId: currentUser.uid,
+        userName,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Erro ao criar log:', error);
+    }
+  };
+
+  const getLogIcon = (action) => {
+    switch (action) {
+      case 'new_sale':
+        return <MoneyIcon color="success" />;
+      case 'create_product':
+        return <AddIcon color="primary" />;
+      case 'update_product':
+        return <EditIcon color="warning" />;
+      default:
+        return <HistoryIcon />;
+    }
+  };
+
+  const getLogMessage = (log) => {
+    switch (log.action) {
+      case 'new_sale':
+        return `Venda: ${log.details.quantity}x ${log.details.productName} - ${formatCurrency(log.details.total)} (${log.details.paymentMethod})`;
+      case 'create_product':
+        return `Novo produto: ${log.details.productName} - ${formatCurrency(log.details.price)}`;
+      case 'update_product':
+        return `Produto atualizado: ${log.details.productName}`;
+      default:
+        return 'Ação desconhecida';
+    }
+  };
+
+  const formatLogDate = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate();
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading || loadingLogs) {
     return (
       <MainLayout title="Cantina">
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -406,73 +520,174 @@ export default function Products() {
   return (
     <MainLayout title="Cantina">
       <Box sx={{ p: 3 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h5" component="h1">
-            Cantina
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<ShoppingCartIcon />}
-              onClick={handleOpenSaleDialog}
-            >
-              Nova Venda
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleOpenDialog}
-            >
-              Novo Produto
-            </Button>
-          </Stack>
-        </Stack>
-
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nome do Produto</TableCell>
-                <TableCell align="right">Valor de Compra</TableCell>
-                <TableCell align="right">Valor de Venda</TableCell>
-                <TableCell align="right">Valor Venda Func.</TableCell>
-                <TableCell align="right">Estoque</TableCell>
-                <TableCell>Vencimento</TableCell>
-                <TableCell align="center">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>{product.nome || '-'}</TableCell>
-                  <TableCell align="right">{formatCurrency(product.valorCompra)}</TableCell>
-                  <TableCell align="right">{formatCurrency(product.valorVenda)}</TableCell>
-                  <TableCell align="right">{formatCurrency(product.valorVendaFunc)}</TableCell>
-                  <TableCell align="right">{product.estoque || 0}</TableCell>
-                  <TableCell>{formatDate(product.vencimento)}</TableCell>
-                  <TableCell align="center">
-                    <IconButton 
-                      onClick={() => handleOpenEditDialog(product)}
-                      sx={{ color: '#1976d2' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {products.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    Nenhum produto cadastrado
-                  </TableCell>
-                </TableRow>
+        <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: '#fff' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ShoppingCartIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+              <Typography variant="h5" sx={{ color: '#1a1a1a', fontWeight: 600 }}>
+                Gestão da Cantina
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={2}>
+              {currentTab === 0 && (
+                <>
+                  <Button
+                    variant="contained"
+                    startIcon={<ShoppingCartIcon />}
+                    onClick={handleOpenSaleDialog}
+                    sx={{
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      px: 3
+                    }}
+                  >
+                    Nova Venda
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleOpenDialog}
+                    sx={{
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      px: 3
+                    }}
+                  >
+                    Novo Produto
+                  </Button>
+                </>
               )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </Stack>
+          </Box>
 
-        {/* Diálogo para criar novo produto */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
+              <Tab label="Produtos" />
+              <Tab label="Histórico" />
+            </Tabs>
+          </Box>
+
+          {currentTab === 0 ? (
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Nome do Produto</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: '#666' }}>Valor de Compra</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: '#666' }}>Valor de Venda</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: '#666' }}>Valor Func.</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: '#666' }}>Estoque</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Vencimento</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600, color: '#666' }}>Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {products.map((product) => (
+                    <TableRow key={product.id} hover>
+                      <TableCell>{product.nome || '-'}</TableCell>
+                      <TableCell align="right">
+                        <Typography sx={{ color: 'text.secondary' }}>
+                          {formatCurrency(product.valorCompra)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography sx={{ color: 'success.main', fontWeight: 500 }}>
+                          {formatCurrency(product.valorVenda)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography sx={{ color: 'info.main', fontWeight: 500 }}>
+                          {formatCurrency(product.valorVendaFunc)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Chip 
+                          label={product.estoque}
+                          size="small"
+                          color={product.estoque > 0 ? 'success' : 'error'}
+                          sx={{ 
+                            borderRadius: 1,
+                            minWidth: 40,
+                            '& .MuiChip-label': { px: 1 }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(product.vencimento)}
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          onClick={() => handleOpenEditDialog(product)}
+                          size="small"
+                          sx={{ color: 'primary.main' }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {products.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Nenhum produto cadastrado
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data/Hora</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Ação</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Usuário</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Detalhes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {logs.map((log) => (
+                    <TableRow key={log.id} hover>
+                      <TableCell>{formatLogDate(log.createdAt)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {getLogIcon(log.action)}
+                          <Chip
+                            label={log.action === 'new_sale' ? 'Venda' : 
+                                  log.action === 'create_product' ? 'Novo Produto' :
+                                  log.action === 'update_product' ? 'Atualização' : 'Outro'}
+                            color={log.action === 'new_sale' ? 'success' :
+                                  log.action === 'create_product' ? 'primary' :
+                                  log.action === 'update_product' ? 'warning' : 'default'}
+                            size="small"
+                            sx={{ borderRadius: 1 }}
+                          />
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={log.userName}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon fontSize="small" sx={{ color: 'primary.main' }} />
+                            <Typography variant="body2">
+                              {log.userName.includes('@') ? log.userName.split('@')[0] : log.userName}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>{getLogMessage(log)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Paper>
+
+        {/* Diálogos existentes continuam aqui... */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
           <DialogTitle>Criar Novo Produto</DialogTitle>
           <DialogContent>
@@ -549,7 +764,6 @@ export default function Products() {
           </DialogActions>
         </Dialog>
 
-        {/* Diálogo para editar produto */}
         <Dialog open={openEditDialog} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth>
           <DialogTitle>Editar Produto</DialogTitle>
           <DialogContent>
@@ -635,7 +849,6 @@ export default function Products() {
           </DialogActions>
         </Dialog>
 
-        {/* Diálogo de confirmação de exclusão */}
         <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
           <DialogTitle>Confirmar Exclusão</DialogTitle>
           <DialogContent>
@@ -651,7 +864,6 @@ export default function Products() {
           </DialogActions>
         </Dialog>
 
-        {/* Modal de Nova Venda */}
         <Dialog
           open={openSaleDialog}
           onClose={handleCloseSaleDialog}
@@ -765,7 +977,6 @@ export default function Products() {
           </DialogActions>
         </Dialog>
 
-        {/* Snackbar para feedback */}
         <Snackbar 
           open={snackbar.open} 
           autoHideDuration={6000} 
