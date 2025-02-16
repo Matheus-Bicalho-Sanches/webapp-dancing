@@ -69,7 +69,6 @@ export default function CRM() {
   const [dataAEAnchorEl, setDataAEAnchorEl] = useState(null);
 
   const [turmaAEFilter, setTurmaAEFilter] = useState(null);
-  const [turmaAESort, setTurmaAESort] = useState('asc');
   const [turmaAEAnchorEl, setTurmaAEAnchorEl] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -662,7 +661,7 @@ export default function CRM() {
                       onClick={handleTurmaAEFilterClick}
                       sx={{ 
                         ml: 1,
-                        color: (turmaAEFilter || turmaAESort === 'desc') ? 'primary.main' : 'inherit'
+                        color: turmaAEFilter ? 'primary.main' : 'inherit'
                       }}
                     >
                       <FilterListIcon fontSize="small" />
@@ -1152,22 +1151,6 @@ export default function CRM() {
                     {turma}
                   </MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-            
-            <Divider sx={{ my: 1 }} />
-            
-            <Typography variant="subtitle2">
-              Ordenação
-            </Typography>
-            <FormControl size="small">
-              <Select
-                value={turmaAESort}
-                onChange={(e) => setTurmaAESort(e.target.value)}
-                sx={{ minWidth: 200 }}
-              >
-                <MenuItem value="asc">A-Z</MenuItem>
-                <MenuItem value="desc">Z-A</MenuItem>
               </Select>
             </FormControl>
           </Box>

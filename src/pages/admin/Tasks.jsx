@@ -100,7 +100,8 @@ export default function Tasks() {
     observacoes: '',
     diasSemana: [],
     horario: '',
-    importancia: 'normal'
+    importancia: 'normal',
+    tipo: 'nao_recorrente'
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [dateFilter, setDateFilter] = useState(null);
@@ -170,12 +171,12 @@ export default function Tasks() {
   }, []);
 
   useEffect(() => {
-    // Configurar listener para atualizações em tempo real
+    // Configurar listener para tarefas não recorrentes e por horário
     const unsubscribeNonDaily = onSnapshot(
       query(
-      collection(db, 'tarefas'), 
+        collection(db, 'tarefas'), 
         where('tipo', 'in', ['nao_recorrente', 'por_horario']),
-      orderBy('prazoLimite', 'asc')
+        orderBy('prazoLimite', 'asc')
       ),
       (querySnapshot) => {
         const nonDailyTasks = querySnapshot.docs.map(doc => ({
@@ -183,10 +184,11 @@ export default function Tasks() {
           ...doc.data()
         }));
         
-        // Update tasks state with both daily and non-daily tasks
         setTasks(currentTasks => {
-          const dailyTasks = currentTasks.filter(task => task.tipo === 'diaria');
-          return [...dailyTasks, ...nonDailyTasks];
+          const otherTasks = currentTasks.filter(task => 
+            task.tipo !== 'nao_recorrente' && task.tipo !== 'por_horario'
+          );
+          return [...otherTasks, ...nonDailyTasks];
         });
       },
       (error) => {
@@ -199,40 +201,68 @@ export default function Tasks() {
       }
     );
 
-    // Separate query for daily tasks
+    // Query para tarefas semanais
+    const unsubscribeWeekly = onSnapshot(
+      query(
+        collection(db, 'tarefas'),
+        where('tipo', '==', 'semanal'),
+        orderBy('descricao', 'asc')
+      ),
+      (querySnapshot) => {
+        const weeklyTasks = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setTasks(currentTasks => {
+          const otherTasks = currentTasks.filter(task => task.tipo !== 'semanal');
+          return [...otherTasks, ...weeklyTasks];
+        });
+      },
+      (error) => {
+        console.error('Erro ao carregar tarefas semanais:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar tarefas semanais. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    );
+
+    // Query para tarefas diárias
     const unsubscribeDaily = onSnapshot(
       query(
         collection(db, 'tarefas'),
         where('tipo', '==', 'diaria'),
-        orderBy('descricao', 'asc')  // Order by description since there's no prazoLimite
+        orderBy('descricao', 'asc')
       ),
       (querySnapshot) => {
         const dailyTasks = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+          id: doc.id,
+          ...doc.data()
+        }));
         
-        // Update tasks state with both daily and non-daily tasks
         setTasks(currentTasks => {
-          const nonDailyTasks = currentTasks.filter(task => task.tipo !== 'diaria');
-          return [...nonDailyTasks, ...dailyTasks];
+          const otherTasks = currentTasks.filter(task => task.tipo !== 'diaria');
+          return [...otherTasks, ...dailyTasks];
         });
-      setLoading(false);
+        setLoading(false);
       },
       (error) => {
         console.error('Erro ao carregar tarefas diárias:', error);
-      setSnackbar({
-        open: true,
-        message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
-        severity: 'error'
-      });
-      setLoading(false);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar tarefas. Por favor, tente novamente.',
+          severity: 'error'
+        });
+        setLoading(false);
       }
     );
 
     // Cleanup subscriptions
     return () => {
       unsubscribeNonDaily();
+      unsubscribeWeekly();
       unsubscribeDaily();
     };
   }, []);
@@ -275,7 +305,8 @@ export default function Tasks() {
         observacoes: task.observacoes || '',
         diasSemana: task.diasSemana || [],
         horario: task.horario || '',
-        importancia: task.importancia || 'normal'
+        importancia: task.importancia || 'normal',
+        tipo: task.tipo || 'nao_recorrente'
       });
     } else {
       setEditingTask(null);
@@ -286,7 +317,8 @@ export default function Tasks() {
         observacoes: '',
         diasSemana: [],
         horario: '',
-        importancia: 'normal'
+        importancia: 'normal',
+        tipo: 'nao_recorrente'
       });
     }
     setOpenDialog(true);
@@ -299,7 +331,7 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     try {
-      if (currentTab !== 4 && currentTab !== 1 && formData.responsavel.length === 0) {
+      if (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && formData.responsavel.length === 0) {
         setSnackbar({
           open: true,
           message: 'Selecione pelo menos um responsável.',
@@ -312,7 +344,8 @@ export default function Tasks() {
         ...formData,
         status: 'Pendente',
         tipo: currentTab === 4 ? 'por_horario' : 
-              currentTab === 1 ? 'diaria' : 'nao_recorrente',
+              currentTab === 1 ? 'diaria' :
+              currentTab === 2 ? 'semanal' : 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
@@ -327,6 +360,13 @@ export default function Tasks() {
       // Remove responsável field for por_horario tasks
       if (currentTab === 4) {
         delete taskData.responsavel;
+      }
+
+      // For weekly tasks, ensure ultimaExecucao field exists
+      if (currentTab === 2) {
+        taskData.ultimaExecucao = null;
+        delete taskData.responsavel;
+        delete taskData.prazoLimite;
       }
 
       if (editingTask) {
@@ -403,6 +443,11 @@ export default function Tasks() {
       // If it's a daily task being marked as completed, set the lastCompletedDate
       if (previousData.tipo === 'diaria' && newStatus === 'Finalizada') {
         updateData.lastCompletedDate = serverTimestamp();
+      }
+
+      // If it's a weekly task being marked as completed, set the ultimaExecucao
+      if (previousData.tipo === 'semanal' && newStatus === 'Finalizada') {
+        updateData.ultimaExecucao = serverTimestamp();
       }
 
       await updateDoc(taskRef, updateData);
@@ -557,9 +602,7 @@ export default function Tasks() {
           const completedDate = dayjs(task.lastCompletedDate.toDate());
           const today = dayjs().startOf('day');
           
-          // If the task was completed on a previous day, reset it to Pendente
           if (completedDate.isBefore(today)) {
-            // Add task to update queue
             tasksToUpdate.push({
               id: task.id,
               data: {
@@ -569,7 +612,6 @@ export default function Tasks() {
               }
             });
             
-            // Return updated task for UI
             return {
               ...task,
               status: 'Pendente',
@@ -593,6 +635,46 @@ export default function Tasks() {
       }
     }
 
+    // Reset weekly tasks status if they were completed more than 7 days ago
+    if (taskType === 'semanal') {
+      const tasksToUpdate = [];
+      filteredTasks = filteredTasks.map(task => {
+        if (task.status === 'Finalizada' && task.ultimaExecucao) {
+          const lastExecution = dayjs(task.ultimaExecucao.toDate());
+          const today = dayjs().startOf('day');
+          const daysSinceLastExecution = today.diff(lastExecution, 'day');
+          
+          if (daysSinceLastExecution >= 7) {
+            tasksToUpdate.push({
+              id: task.id,
+              data: {
+                status: 'Pendente',
+                updatedAt: serverTimestamp()
+              }
+            });
+            
+            return {
+              ...task,
+              status: 'Pendente'
+            };
+          }
+        }
+        return task;
+      });
+
+      // Update tasks in Firestore
+      for (const taskToUpdate of tasksToUpdate) {
+        try {
+          await updateDoc(
+            doc(db, 'tarefas', taskToUpdate.id),
+            taskToUpdate.data
+          );
+        } catch (error) {
+          console.error('Error updating weekly task status:', error);
+        }
+      }
+    }
+
     // Apply filters
     if (!showCompletedTasks) {
       filteredTasks = filteredTasks.filter(task => task.status !== 'Finalizada');
@@ -606,34 +688,35 @@ export default function Tasks() {
       });
     }
 
-    if (responsavelFilter) {
-      filteredTasks = filteredTasks.filter(task => task.responsavel.includes(responsavelFilter));
-    }
+    // Aplicar filtros específicos por tipo de tarefa
+    if (taskType === 'semanal') {
+      // Para tarefas semanais, apenas aplicamos o filtro de status
+      if (statusFilter) {
+        filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
+      }
 
-    if (statusFilter) {
-      filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
-    }
+      // E ordenação por status se necessário
+      if (statusSort) {
+        filteredTasks = [...filteredTasks].sort((a, b) => {
+          const statusA = a.status || 'Pendente';
+          const statusB = b.status || 'Pendente';
+          return statusSort === 'asc'
+            ? statusA.localeCompare(statusB)
+            : statusB.localeCompare(statusA);
+        });
+      }
+    } else if (taskType === 'por_horario') {
+      // Manter a lógica existente para tarefas por horário
+      if (diaHorarioFilter) {
+        filteredTasks = filteredTasks.filter(task => 
+          task.diasSemana?.includes(diaHorarioFilter)
+        );
+      }
 
-    if (prazoFilter) {
-      filteredTasks = filteredTasks.filter(task => {
-        if (!task.prazoLimite) return false;
-        const taskPrazo = dayjs(task.prazoLimite).format('YYYY-MM-DD');
-        return taskPrazo === prazoFilter;
-      });
-    }
+      if (statusFilter) {
+        filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
+      }
 
-    if (diaHorarioFilter) {
-      filteredTasks = filteredTasks.filter(task => 
-        task.diasSemana?.includes(diaHorarioFilter)
-      );
-    }
-
-    if (importanciaFilter && taskType === 'diaria') {
-      filteredTasks = filteredTasks.filter(task => task.importancia === importanciaFilter);
-    }
-
-    // Apply sorting
-    if (taskType === 'por_horario') {
       // Apply dia e horário sorting
       filteredTasks = [...filteredTasks].sort((a, b) => {
         const diaA = a.diasSemana?.[0] || '';
@@ -654,14 +737,33 @@ export default function Tasks() {
           : diaIndexB - diaIndexA;
       });
     } else {
-      // Apply responsável sorting for non-por_horario tasks
+      // Lógica para tarefas não recorrentes e diárias
+      if (responsavelFilter && taskType !== 'diaria') {
+        filteredTasks = filteredTasks.filter(task => task.responsavel?.includes(responsavelFilter));
+      }
+
+      if (statusFilter) {
+        filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
+      }
+
+      if (prazoFilter && taskType !== 'diaria') {
+        filteredTasks = filteredTasks.filter(task => {
+          if (!task.prazoLimite) return false;
+          const taskPrazo = dayjs(task.prazoLimite).format('YYYY-MM-DD');
+          return taskPrazo === prazoFilter;
+        });
+      }
+
+      if (importanciaFilter && taskType === 'diaria') {
+        filteredTasks = filteredTasks.filter(task => task.importancia === importanciaFilter);
+      }
+
+      // Apply sorting
       if (responsavelSort && taskType !== 'diaria') {
         filteredTasks = [...filteredTasks].sort((a, b) => {
-          // Handle cases where responsavel might be undefined or not an array
           const respA = Array.isArray(a.responsavel) ? a.responsavel[0] : a.responsavel;
           const respB = Array.isArray(b.responsavel) ? b.responsavel[0] : b.responsavel;
           
-          // If either task doesn't have a responsavel, handle it gracefully
           if (!respA && !respB) return 0;
           if (!respA) return 1;
           if (!respB) return -1;
@@ -669,14 +771,13 @@ export default function Tasks() {
           const userA = users.find(user => user.id === respA)?.name || respA;
           const userB = users.find(user => user.id === respB)?.name || respB;
           
-        return responsavelSort === 'asc' 
-          ? userA.localeCompare(userB)
-          : userB.localeCompare(userA);
+          return responsavelSort === 'asc' 
+            ? userA.localeCompare(userB)
+            : userB.localeCompare(userA);
         });
       }
 
-      // Apply prazo sorting for non-por_horario tasks
-      if (prazoSort) {
+      if (prazoSort && taskType !== 'diaria') {
         filteredTasks = [...filteredTasks].sort((a, b) => {
           if (!a.prazoLimite || !b.prazoLimite) return 0;
           const prazoA = dayjs(a.prazoLimite);
@@ -686,27 +787,25 @@ export default function Tasks() {
             : prazoB.diff(prazoA);
         });
       }
-    }
 
-    // Apply status sorting for all tasks (both por_horario and non-por_horario)
-    if (statusSort) {
-      filteredTasks = [...filteredTasks].sort((a, b) => {
-        const statusA = a.status || 'Pendente';
-        const statusB = b.status || 'Pendente';
-        return statusSort === 'asc'
-          ? statusA.localeCompare(statusB)
-          : statusB.localeCompare(statusA);
-      });
-    }
+      if (statusSort) {
+        filteredTasks = [...filteredTasks].sort((a, b) => {
+          const statusA = a.status || 'Pendente';
+          const statusB = b.status || 'Pendente';
+          return statusSort === 'asc'
+            ? statusA.localeCompare(statusB)
+            : statusB.localeCompare(statusA);
+        });
+      }
 
-    // Apply sorting for daily tasks
-    if (taskType === 'diaria' && importanciaSort) {
-      filteredTasks = [...filteredTasks].sort((a, b) => {
-        const importanceOrder = { alta: 3, normal: 2, baixa: 1 };
-        const valueA = importanceOrder[a.importancia || 'normal'];
-        const valueB = importanceOrder[b.importancia || 'normal'];
-        return importanciaSort === 'asc' ? valueA - valueB : valueB - valueA;
-      });
+      if (taskType === 'diaria' && importanciaSort) {
+        filteredTasks = [...filteredTasks].sort((a, b) => {
+          const importanceOrder = { alta: 3, normal: 2, baixa: 1 };
+          const valueA = importanceOrder[a.importancia || 'normal'];
+          const valueB = importanceOrder[b.importancia || 'normal'];
+          return importanciaSort === 'asc' ? valueA - valueB : valueB - valueA;
+        });
+      }
     }
 
     return filteredTasks;
@@ -719,6 +818,9 @@ export default function Tasks() {
         setFilteredTasks(filtered);
       } else if (currentTab === 1) {
         const filtered = await filterTasks(tasks.filter(task => task.tipo === 'diaria'), 'diaria');
+        setFilteredTasks(filtered);
+      } else if (currentTab === 2) {
+        const filtered = await filterTasks(tasks.filter(task => task.tipo === 'semanal'), 'semanal');
         setFilteredTasks(filtered);
       } else if (currentTab === 4) {
         const filtered = await filterTasks(tasks.filter(task => task.tipo === 'por_horario'), 'por_horario');
@@ -756,6 +858,8 @@ export default function Tasks() {
         } else if (taskData.tipo === 'por_horario') {
           changes.diasSemana = taskData.diasSemana;
           changes.horario = taskData.horario;
+        } else if (taskData.tipo === 'semanal') {
+          changes.ultimaExecucao = taskData.ultimaExecucao;
         } else {
           // For non-recurring tasks
           changes.responsavel = taskData.responsavel;
@@ -766,8 +870,11 @@ export default function Tasks() {
       } else if (action === 'update' && previousData) {
         // Compare and record only changed fields
         Object.keys(taskData).forEach(key => {
-          // Skip undefined or null values
+          // Skip undefined or null values and fields that don't apply to the task type
           if (taskData[key] === undefined || taskData[key] === null) return;
+          if (taskData.tipo === 'semanal' && (key === 'responsavel' || key === 'prazoLimite')) return;
+          if (taskData.tipo === 'diaria' && (key === 'responsavel' || key === 'prazoLimite')) return;
+          if (taskData.tipo === 'por_horario' && key === 'responsavel') return;
           
           // Only include the field if it has changed
           if (JSON.stringify(taskData[key]) !== JSON.stringify(previousData[key])) {
@@ -788,6 +895,9 @@ export default function Tasks() {
                 taskData.tipo === 'por_horario' ? { 
                   diasSemana: taskData.diasSemana,
                   horario: taskData.horario 
+                } : 
+                taskData.tipo === 'semanal' ? {
+                  ultimaExecucao: taskData.ultimaExecucao
                 } : { 
                   responsavel: taskData.responsavel,
                   prazoLimite: taskData.prazoLimite 
@@ -1249,6 +1359,115 @@ export default function Tasks() {
   );
   };
 
+  const renderWeeklyTasksTable = () => {
+    return (
+      <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <FormControl component="fieldset">
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Checkbox
+                checked={showCompletedTasks}
+                onChange={(e) => setShowCompletedTasks(e.target.checked)}
+                id="show-completed"
+              />
+              <Typography
+                component="label"
+                htmlFor="show-completed"
+                sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
+              >
+                Mostrar tarefas concluídas
+              </Typography>
+            </Box>
+          </FormControl>
+          
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setFormData({
+                ...formData,
+                tipo: 'semanal',
+                descricao: '',
+                observacoes: '',
+                status: 'Pendente'
+              });
+              handleOpenDialog();
+            }}
+          >
+            Nova Tarefa
+          </Button>
+        </Box>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Descrição</TableCell>
+                <TableCell>Últ. Execução</TableCell>
+                <TableCell>Observações</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredTasks.length > 0 ? (
+                filteredTasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell>{task.descricao}</TableCell>
+                    <TableCell>
+                      {task.ultimaExecucao ? 
+                        dayjs(task.ultimaExecucao.toDate()).format('DD/MM/YYYY HH:mm') : 
+                        'Nunca executada'}
+                    </TableCell>
+                    <TableCell>{task.observacoes}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={task.status || 'Pendente'}
+                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        size="small"
+                        disabled={updatingStatus}
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="Pendente">Pendente</MenuItem>
+                        <MenuItem value="Em andamento">Em andamento</MenuItem>
+                        <MenuItem value="Finalizada">Finalizada</MenuItem>
+                        <MenuItem value="Aguardando">Aguardando</MenuItem>
+                      </Select>
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        color="primary"
+                        onClick={() => handleOpenDialog(task)}
+                        size="small"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      {hasDeletePermission && (
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(task.id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhuma tarefa semanal encontrada
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </>
+    );
+  };
+
   return (
     <MainLayout title="Tarefas">
       <Box sx={{ p: 3 }}>
@@ -1276,9 +1495,7 @@ export default function Tasks() {
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
-          <Typography>
-            Funcionalidade de tarefas semanais será implementada em breve.
-          </Typography>
+          {renderWeeklyTasksTable()}
         </TabPanel>
 
         <TabPanel value={currentTab} index={3}>
@@ -1332,91 +1549,36 @@ export default function Tasks() {
                 </FormControl>
               )}
 
-              {currentTab !== 4 && currentTab !== 1 && (
-              <FormControl fullWidth required>
-                <InputLabel>Responsável</InputLabel>
-                <Select
-                    multiple
-                  value={formData.responsavel}
-                  onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
-                  label="Responsável"
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((value) => (
-                          <Chip
-                            key={value}
-                            label={users.find(user => user.id === value)?.name || value}
-                            size="small"
-                          />
-                        ))}
-                      </Box>
-                    )}
-                >
-                  {users.map((user) => (
-                    <MenuItem key={user.id} value={user.id}>
-                      {user.name || user.email}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-
-              {currentTab === 4 ? (
+              {currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && (
                 <>
                   <FormControl fullWidth required>
-                    <InputLabel>Dias da semana</InputLabel>
+                    <InputLabel>Responsável</InputLabel>
                     <Select
                       multiple
-                      value={formData.diasSemana || []}
-                      onChange={(e) => setFormData({ ...formData, diasSemana: e.target.value })}
-                      label="Dias da semana"
-                      renderValue={(selected) => (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {selected.map((value) => (
-                            <Chip
-                              key={value}
-                              label={diasSemanaOptions.find(opt => opt.value === value)?.label}
-                              size="small"
-                            />
-                          ))}
-                        </Box>
-                      )}
+                      value={formData.responsavel}
+                      onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
+                      label="Responsável"
                     >
-                      {diasSemanaOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                      {users.map((user) => (
+                        <MenuItem key={user.id} value={user.id}>
+                          {user.name || user.email}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
                   <TextField
                     fullWidth
-                    label="Horário"
-                    type="time"
-                    value={formData.horario || ''}
-                    onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                    label="Prazo Limite"
+                    type="date"
+                    value={formData.prazoLimite}
+                    onChange={(e) => setFormData({ ...formData, prazoLimite: e.target.value })}
                     InputLabelProps={{
                       shrink: true,
-                    }}
-                    inputProps={{
-                      step: 300 // 5 minutes
                     }}
                     required
                   />
                 </>
-              ) : currentTab !== 1 && (
-              <TextField
-                fullWidth
-                label="Prazo Limite"
-                type="date"
-                value={formData.prazoLimite}
-                onChange={(e) => setFormData({ ...formData, prazoLimite: e.target.value })}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-                required
-              />
               )}
 
               <TextField
@@ -1438,9 +1600,9 @@ export default function Tasks() {
               variant="contained"
               disabled={
                 !formData.descricao || 
-                (currentTab !== 4 && currentTab !== 1 && !formData.responsavel.length) || 
+                (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && !formData.responsavel.length) || 
                 (currentTab === 4 ? (!formData.diasSemana?.length || !formData.horario) : 
-                 currentTab !== 1 && !formData.prazoLimite)
+                 currentTab !== 1 && currentTab !== 2 && !formData.prazoLimite)
               }
             >
               {editingTask ? 'Salvar' : 'Criar'}
