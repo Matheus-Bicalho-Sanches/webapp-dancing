@@ -49,6 +49,7 @@ import {
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import FinancialReport from '../../components/reports/FinancialReport';
+import TaskReport from '../../components/reports/TaskReport';
 
 export default function Reports() {
   const [openDialog, setOpenDialog] = useState({
@@ -645,6 +646,8 @@ export default function Reports() {
                 renderEnrollmentReport()
               ) : category.id === 'financeiro' ? (
                 <FinancialReport />
+              ) : category.id === 'tarefas' ? (
+                <TaskReport />
               ) : (
                 <Typography>
                   Os relatórios de {category.title.toLowerCase()} serão implementados em breve.
