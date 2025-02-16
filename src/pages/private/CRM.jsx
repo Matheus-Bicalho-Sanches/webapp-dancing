@@ -168,16 +168,24 @@ export default function CRM() {
     handleStatusFilterClose();
   };
 
+  const [tempProxContatoFilter, setTempProxContatoFilter] = useState('');
+
   const handleProxContatoFilterClick = (event) => {
     setProxContatoAnchorEl(event.currentTarget);
+    setTempProxContatoFilter(proxContatoFilter || '');
   };
 
   const handleProxContatoFilterClose = () => {
     setProxContatoAnchorEl(null);
+    setTempProxContatoFilter('');
   };
 
   const handleProxContatoFilterChange = (date) => {
     setProxContatoFilter(date);
+  };
+
+  const applyProxContatoFilter = () => {
+    handleProxContatoFilterChange(tempProxContatoFilter);
     handleProxContatoFilterClose();
   };
 
@@ -186,21 +194,30 @@ export default function CRM() {
     handleProxContatoFilterClose();
   };
 
+  const [tempDataAEFilter, setTempDataAEFilter] = useState('');
+
+  // Atualizar o estado temporário quando o popover abrir
   const handleDataAEFilterClick = (event) => {
     setDataAEAnchorEl(event.currentTarget);
+    setTempDataAEFilter(dataAEFilter || '');
   };
 
   const handleDataAEFilterClose = () => {
     setDataAEAnchorEl(null);
+    setTempDataAEFilter('');
   };
 
   const handleDataAEFilterChange = (date) => {
     setDataAEFilter(date);
-    handleDataAEFilterClose();
   };
 
   const clearDataAEFilter = () => {
     setDataAEFilter(null);
+    handleDataAEFilterClose();
+  };
+
+  const applyDataAEFilter = () => {
+    handleDataAEFilterChange(tempDataAEFilter);
     handleDataAEFilterClose();
   };
 
@@ -1023,10 +1040,29 @@ export default function CRM() {
             <TextField
               type="date"
               size="small"
-              value={proxContatoFilter || ''}
-              onChange={(e) => handleProxContatoFilterChange(e.target.value)}
+              value={tempProxContatoFilter || ''}
+              onChange={(e) => setTempProxContatoFilter(e.target.value)}
               sx={{ minWidth: 200 }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: '2100-12-31' }}
             />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 1 }}>
+              <Button 
+                size="small" 
+                onClick={clearProxContatoFilter}
+                disabled={!proxContatoFilter}
+              >
+                Limpar Filtro
+              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button size="small" onClick={handleProxContatoFilterClose}>
+                  Cancelar
+                </Button>
+                <Button size="small" variant="contained" onClick={applyProxContatoFilter}>
+                  Aplicar
+                </Button>
+              </Box>
+            </Box>
             
             <Divider sx={{ my: 1 }} />
             
@@ -1063,10 +1099,29 @@ export default function CRM() {
             <TextField
               type="date"
               size="small"
-              value={dataAEFilter || ''}
-              onChange={(e) => handleDataAEFilterChange(e.target.value)}
+              value={tempDataAEFilter || ''}
+              onChange={(e) => setTempDataAEFilter(e.target.value)}
               sx={{ minWidth: 200 }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: '2100-12-31' }}
             />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 1 }}>
+              <Button 
+                size="small" 
+                onClick={clearDataAEFilter}
+                disabled={!dataAEFilter}
+              >
+                Limpar Filtro
+              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button size="small" onClick={handleDataAEFilterClose}>
+                  Cancelar
+                </Button>
+                <Button size="small" variant="contained" onClick={applyDataAEFilter}>
+                  Aplicar
+                </Button>
+              </Box>
+            </Box>
           </Box>
         </Popover>
 
