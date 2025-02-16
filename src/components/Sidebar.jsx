@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Drawer, 
   List, 
@@ -7,7 +7,8 @@ import {
   ListItemText,
   Box,
   Typography,
-  IconButton
+  IconButton,
+  CircularProgress
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -20,31 +21,64 @@ import {
   PeopleAlt as PeopleAltIcon,
   ChevronLeft as ChevronLeftIcon,
   People as PeopleIcon,
-  Restaurant as RestaurantIcon
+  Restaurant as RestaurantIcon,
+  CreditCard as CreditCardIcon,
+  Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const drawerWidth = 240;
 
 const Sidebar = ({ open, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { currentUser } = useAuth();
+  const [userType, setUserType] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadUserType = async () => {
+      if (currentUser?.uid) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            setUserType(userDoc.data().type);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar tipo do usuário:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadUserType();
+  }, [currentUser]);
+
   const menuItems = [
-    { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard' },
-    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas' },
-    { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm' },
-    { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos' },
-    { text: 'Matrículas', icon: <SchoolIcon />, path: '/admin/matriculas' },
-    { text: 'Turmas', icon: <SchoolIcon />, path: '/admin/turmas' },
-    { text: 'Frequência', icon: <AssignmentIcon />, path: '/admin/frequencia' },
-    { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas' },
-    { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa' },
-    { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios' },
-    { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios' },
-    { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina' },
-    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme' }
+    { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard', allowedTypes: ['master', 'administrative'] },
+    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas', allowedTypes: ['master', 'administrative', 'teacher'] },
+    { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm', allowedTypes: ['master', 'administrative', 'teacher'] },
+    { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos', allowedTypes: ['master', 'administrative'] },
+    { text: 'Matrículas', icon: <SchoolIcon />, path: '/admin/matriculas', allowedTypes: ['master', 'administrative'] },
+    { text: 'Turmas', icon: <SchoolIcon />, path: '/admin/turmas', allowedTypes: ['master', 'administrative'] },
+    { text: 'Frequência', icon: <AssignmentIcon />, path: '/admin/frequencia', allowedTypes: ['master', 'administrative'] },
+    { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas', allowedTypes: ['master', 'administrative', 'teacher'] },
+    { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa', allowedTypes: ['master', 'administrative'] },
+    { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios', allowedTypes: ['master', 'administrative'] },
+    { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios', allowedTypes: ['master'] },
+    { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina', allowedTypes: ['master', 'administrative'] },
+    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative'] },
+    { text: 'Assinaturas', icon: <CreditCardIcon />, path: '/admin/assinaturas', allowedTypes: ['master'] },
+    { text: 'Notificações', icon: <NotificationsIcon />, path: '/admin/notifications', allowedTypes: ['master', 'administrative', 'teacher'] }
   ];
+
+  const filteredMenuItems = userType
+    ? menuItems.filter(item => item.allowedTypes.includes(userType))
+    : menuItems;
 
   return (
     <Drawer
@@ -60,10 +94,6 @@ const Sidebar = ({ open, onClose }) => {
           backgroundColor: '#ffffff',
           color: '#333333',
           borderRight: '1px solid #e0e0e0',
-          transition: theme => theme.transitions.create('transform', {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.enteringScreen,
-          }),
         },
       }}
     >
@@ -117,37 +147,43 @@ const Sidebar = ({ open, onClose }) => {
             background: '#757575'
           }
         }}>
-          {menuItems.map((item) => (
-            <ListItem 
-              button 
-              key={item.text}
-              onClick={() => navigate(item.path)}
-              sx={{
-                margin: '4px 8px',
-                borderRadius: '8px',
-                backgroundColor: location.pathname === item.path ? '#f5f9ff' : 'transparent',
-                '&:hover': {
-                  backgroundColor: '#f5f9ff',
-                },
-              }}
-            >
-              <ListItemIcon sx={{ 
-                color: '#1976d2',
-                minWidth: '40px'
-              }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={item.text} 
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            filteredMenuItems.map((item) => (
+              <ListItem 
+                button 
+                key={item.text}
+                onClick={() => navigate(item.path)}
                 sx={{
-                  '& .MuiListItemText-primary': {
-                    fontSize: '0.95rem',
-                    fontWeight: 500,
-                  }
+                  margin: '4px 8px',
+                  borderRadius: '8px',
+                  backgroundColor: location.pathname === item.path ? '#f5f9ff' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: '#f5f9ff',
+                  },
                 }}
-              />
-            </ListItem>
-          ))}
+              >
+                <ListItemIcon sx={{ 
+                  color: '#1976d2',
+                  minWidth: '40px'
+                }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text} 
+                  sx={{
+                    '& .MuiListItemText-primary': {
+                      fontSize: '0.95rem',
+                      fontWeight: 500,
+                    }
+                  }}
+                />
+              </ListItem>
+            ))
+          )}
         </List>
       </Box>
     </Drawer>

@@ -25,6 +25,7 @@ import PaymentSuccess from './pages/public/PaymentSuccess';
 import CRM from './pages/private/CRM';
 import ConfigTest from './components/ConfigTest';
 import Uniform from './pages/admin/Uniform';
+import Subscriptions from './pages/admin/Subscriptions';
 
 function App() {
   return (
@@ -163,6 +164,11 @@ function App() {
               <MainLayout>
                 <Uniform />
               </MainLayout>
+            </PrivateRoute>
+          } />
+          <Route path="/admin/assinaturas" element={
+            <PrivateRoute>
+              <Subscriptions />
             </PrivateRoute>
           } />
           

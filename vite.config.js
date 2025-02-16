@@ -28,6 +28,51 @@ export default defineConfig({
     host: true,
     strictPort: true,
     proxy: {
+      '^/api/asaas/.*': {
+        target: 'https://sandbox.asaas.com/api/v3',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api\/asaas/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            proxyReq.setHeader('access_token', process.env.VITE_ASAAS_API_KEY || '$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmY3YjgwOGU1LWY0YzQtNGJkMi1iNjNmLTQwZTgzNTI2MmNhYzo6JGFhY2hfOTlmM2JlZTQtOWY0OS00ZGNlLTg4OTQtZTNmZDRkZDBlMmVk');
+            console.log('Sending Request to Asaas:', {
+              method: req.method,
+              url: req.url,
+              headers: proxyReq.getHeaders()
+            });
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from Asaas:', {
+              statusCode: proxyRes.statusCode,
+              url: req.url,
+              headers: proxyRes.headers
+            });
+            
+            if (proxyRes.statusCode >= 400) {
+              let body = '';
+              proxyRes.on('data', chunk => {
+                body += chunk;
+              });
+              proxyRes.on('end', () => {
+                try {
+                  const data = JSON.parse(body);
+                  console.error('Asaas API Error:', {
+                    status: proxyRes.statusCode,
+                    url: req.url,
+                    error: data
+                  });
+                } catch (e) {
+                  console.error('Failed to parse error response:', body);
+                }
+              });
+            }
+          });
+        }
+      },
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
@@ -55,6 +100,7 @@ export default defineConfig({
       VITE_FIREBASE_STORAGE_BUCKET: JSON.stringify("webapp-dancing.firebasestorage.app"),
       VITE_FIREBASE_MESSAGING_SENDER_ID: JSON.stringify("712270725563"),
       VITE_FIREBASE_APP_ID: JSON.stringify("1:712270725563:web:2156a6e2660b0b5218c49e"),
+      VITE_ASAAS_API_KEY: JSON.stringify("$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmY3YjgwOGU1LWY0YzQtNGJkMi1iNjNmLTQwZTgzNTI2MmNhYzo6JGFhY2hfOTlmM2JlZTQtOWY0OS00ZGNlLTg4OTQtZTNmZDRkZDBlMmVk"),
       MODE: JSON.stringify(process.env.NODE_ENV || 'development')
     }
   }
