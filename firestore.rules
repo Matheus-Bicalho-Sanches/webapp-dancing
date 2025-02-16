@@ -92,7 +92,7 @@ service cloud.firestore {
     
     // Regras para professores - permitir leitura pública
     match /professores/{professorId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isCurrentUserMaster();
     }
     
@@ -181,6 +181,18 @@ service cloud.firestore {
       
       // Permitir criação/atualização/exclusão para master ou administrativo
       allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+    }
+
+    // Regras para a coleção teacherSchedules e suas subcoleções
+    match /teacherSchedules/{professorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      
+      // Regras para a subcoleção slots
+      match /slots/{slotId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      }
     }
   }
 } 
