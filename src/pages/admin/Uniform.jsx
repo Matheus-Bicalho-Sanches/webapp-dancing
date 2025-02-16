@@ -298,15 +298,14 @@ export default function Uniform() {
         updatedAt: serverTimestamp()
       });
 
-      // Registrar a venda
-      await addDoc(collection(db, 'vendas'), {
+      // Registrar a venda na nova coleção uniform_sales
+      await addDoc(collection(db, 'uniform_sales'), {
         produtoId: uniform.id,
         produtoNome: uniform.nome,
         quantidade: saleData.quantity,
         valorUnitario: uniform.preco,
         valorTotal: saleData.total,
         formaPagamento: saleData.paymentMethod,
-        categoria: 'Uniforme',
         dataVenda: serverTimestamp(),
         createdBy: currentUser.uid,
         createdAt: serverTimestamp()

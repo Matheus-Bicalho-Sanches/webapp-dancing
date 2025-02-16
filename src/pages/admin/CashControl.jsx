@@ -112,20 +112,25 @@ export default function CashControl() {
       }));
 
       // Processar vendas da cantina e converter para o formato de movimentação
-      const salesData = salesSnapshot.docs.map(doc => {
-        const sale = doc.data();
-        return {
-          id: doc.id,
-          data: sale.dataVenda,
-          tipo: 'entrada',
-          descricao: `Venda Cantina: ${sale.quantidade}x ${sale.produtoNome}`,
-          valor: sale.valorTotal,
-          categoria: 'Cantina',
-          formaPagamento: sale.formaPagamento,
-          isEmployeeSale: sale.isEmployeeSale,
-          createdAt: sale.createdAt
-        };
-      });
+      const salesData = salesSnapshot.docs
+        .map(doc => {
+          const sale = doc.data();
+          // Incluir apenas vendas da cantina (que não têm categoria definida)
+          if (sale.categoria === 'Uniforme') return null;
+          
+          return {
+            id: doc.id,
+            data: sale.dataVenda,
+            tipo: 'entrada',
+            descricao: `Venda Cantina: ${sale.quantidade}x ${sale.produtoNome}`,
+            valor: sale.valorTotal,
+            categoria: 'Cantina',
+            formaPagamento: sale.formaPagamento,
+            isEmployeeSale: sale.isEmployeeSale,
+            createdAt: sale.createdAt
+          };
+        })
+        .filter(sale => sale !== null); // Remover vendas de uniforme (null)
 
       // Combinar movimentações e vendas
       const allMovements = [...movementsData, ...salesData].sort((a, b) => {
