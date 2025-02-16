@@ -677,7 +677,7 @@ export default function Tasks() {
       }
     }
 
-    // Reset weekly tasks status if they were completed more than 7 days ago
+    // Reset weekly tasks status if they were completed more than 5 days ago
     if (taskType === 'semanal') {
       const tasksToUpdate = [];
       filteredTasks = filteredTasks.map(task => {
@@ -686,7 +686,7 @@ export default function Tasks() {
           const today = dayjs().startOf('day');
           const daysSinceLastExecution = today.diff(lastExecution, 'day');
           
-          if (daysSinceLastExecution >= 7) {
+          if (daysSinceLastExecution >= 5) {
             tasksToUpdate.push({
               id: task.id,
               data: {
@@ -717,7 +717,7 @@ export default function Tasks() {
       }
     }
 
-    // Reset monthly tasks status if they were completed more than 30 days ago
+    // Reset monthly tasks status if they were completed more than 20 days ago
     if (taskType === 'mensal') {
       const tasksToUpdate = [];
       filteredTasks = filteredTasks.map(task => {
@@ -726,7 +726,7 @@ export default function Tasks() {
           const today = dayjs().startOf('day');
           const daysSinceLastExecution = today.diff(lastExecution, 'day');
           
-          if (daysSinceLastExecution >= 30) {
+          if (daysSinceLastExecution >= 20) {
             tasksToUpdate.push({
               id: task.id,
               data: {
