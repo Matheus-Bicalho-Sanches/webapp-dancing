@@ -229,6 +229,34 @@ export default function Tasks() {
       }
     );
 
+    // Query para tarefas mensais
+    const unsubscribeMonthly = onSnapshot(
+      query(
+        collection(db, 'tarefas'),
+        where('tipo', '==', 'mensal'),
+        orderBy('descricao', 'asc')
+      ),
+      (querySnapshot) => {
+        const monthlyTasks = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setTasks(currentTasks => {
+          const otherTasks = currentTasks.filter(task => task.tipo !== 'mensal');
+          return [...otherTasks, ...monthlyTasks];
+        });
+      },
+      (error) => {
+        console.error('Erro ao carregar tarefas mensais:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar tarefas mensais. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    );
+
     // Query para tarefas diárias
     const unsubscribeDaily = onSnapshot(
       query(
@@ -263,6 +291,7 @@ export default function Tasks() {
     return () => {
       unsubscribeNonDaily();
       unsubscribeWeekly();
+      unsubscribeMonthly();
       unsubscribeDaily();
     };
   }, []);
@@ -331,7 +360,7 @@ export default function Tasks() {
 
   const handleSubmit = async () => {
     try {
-      if (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && formData.responsavel.length === 0) {
+      if (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && currentTab !== 3 && formData.responsavel.length === 0) {
         setSnackbar({
           open: true,
           message: 'Selecione pelo menos um responsável.',
@@ -345,7 +374,8 @@ export default function Tasks() {
         status: 'Pendente',
         tipo: currentTab === 4 ? 'por_horario' : 
               currentTab === 1 ? 'diaria' :
-              currentTab === 2 ? 'semanal' : 'nao_recorrente',
+              currentTab === 2 ? 'semanal' :
+              currentTab === 3 ? 'mensal' : 'nao_recorrente',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
@@ -364,6 +394,13 @@ export default function Tasks() {
 
       // For weekly tasks, ensure ultimaExecucao field exists
       if (currentTab === 2) {
+        taskData.ultimaExecucao = null;
+        delete taskData.responsavel;
+        delete taskData.prazoLimite;
+      }
+
+      // For monthly tasks, ensure ultimaExecucao field exists
+      if (currentTab === 3) {
         taskData.ultimaExecucao = null;
         delete taskData.responsavel;
         delete taskData.prazoLimite;
@@ -447,6 +484,11 @@ export default function Tasks() {
 
       // If it's a weekly task being marked as completed, set the ultimaExecucao
       if (previousData.tipo === 'semanal' && newStatus === 'Finalizada') {
+        updateData.ultimaExecucao = serverTimestamp();
+      }
+
+      // If it's a monthly task being marked as completed, set the ultimaExecucao
+      if (previousData.tipo === 'mensal' && newStatus === 'Finalizada') {
         updateData.ultimaExecucao = serverTimestamp();
       }
 
@@ -675,6 +717,46 @@ export default function Tasks() {
       }
     }
 
+    // Reset monthly tasks status if they were completed more than 30 days ago
+    if (taskType === 'mensal') {
+      const tasksToUpdate = [];
+      filteredTasks = filteredTasks.map(task => {
+        if (task.status === 'Finalizada' && task.ultimaExecucao) {
+          const lastExecution = dayjs(task.ultimaExecucao.toDate());
+          const today = dayjs().startOf('day');
+          const daysSinceLastExecution = today.diff(lastExecution, 'day');
+          
+          if (daysSinceLastExecution >= 30) {
+            tasksToUpdate.push({
+              id: task.id,
+              data: {
+                status: 'Pendente',
+                updatedAt: serverTimestamp()
+              }
+            });
+            
+            return {
+              ...task,
+              status: 'Pendente'
+            };
+          }
+        }
+        return task;
+      });
+
+      // Update tasks in Firestore
+      for (const taskToUpdate of tasksToUpdate) {
+        try {
+          await updateDoc(
+            doc(db, 'tarefas', taskToUpdate.id),
+            taskToUpdate.data
+          );
+        } catch (error) {
+          console.error('Error updating monthly task status:', error);
+        }
+      }
+    }
+
     // Apply filters
     if (!showCompletedTasks) {
       filteredTasks = filteredTasks.filter(task => task.status !== 'Finalizada');
@@ -822,6 +904,9 @@ export default function Tasks() {
       } else if (currentTab === 2) {
         const filtered = await filterTasks(tasks.filter(task => task.tipo === 'semanal'), 'semanal');
         setFilteredTasks(filtered);
+      } else if (currentTab === 3) {
+        const filtered = await filterTasks(tasks.filter(task => task.tipo === 'mensal'), 'mensal');
+        setFilteredTasks(filtered);
       } else if (currentTab === 4) {
         const filtered = await filterTasks(tasks.filter(task => task.tipo === 'por_horario'), 'por_horario');
         setFilteredTasks(filtered);
@@ -860,6 +945,8 @@ export default function Tasks() {
           changes.horario = taskData.horario;
         } else if (taskData.tipo === 'semanal') {
           changes.ultimaExecucao = taskData.ultimaExecucao;
+        } else if (taskData.tipo === 'mensal') {
+          changes.ultimaExecucao = taskData.ultimaExecucao;
         } else {
           // For non-recurring tasks
           changes.responsavel = taskData.responsavel;
@@ -897,6 +984,9 @@ export default function Tasks() {
                   horario: taskData.horario 
                 } : 
                 taskData.tipo === 'semanal' ? {
+                  ultimaExecucao: taskData.ultimaExecucao
+                } :
+                taskData.tipo === 'mensal' ? {
                   ultimaExecucao: taskData.ultimaExecucao
                 } : { 
                   responsavel: taskData.responsavel,
@@ -1468,6 +1558,115 @@ export default function Tasks() {
     );
   };
 
+  const renderMonthlyTasksTable = () => {
+    return (
+      <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <FormControl component="fieldset">
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Checkbox
+                checked={showCompletedTasks}
+                onChange={(e) => setShowCompletedTasks(e.target.checked)}
+                id="show-completed"
+              />
+              <Typography
+                component="label"
+                htmlFor="show-completed"
+                sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
+              >
+                Mostrar tarefas concluídas
+              </Typography>
+            </Box>
+          </FormControl>
+          
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setFormData({
+                ...formData,
+                tipo: 'mensal',
+                descricao: '',
+                observacoes: '',
+                status: 'Pendente'
+              });
+              handleOpenDialog();
+            }}
+          >
+            Nova Tarefa
+          </Button>
+        </Box>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Descrição</TableCell>
+                <TableCell>Últ. Execução</TableCell>
+                <TableCell>Observações</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredTasks.length > 0 ? (
+                filteredTasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell>{task.descricao}</TableCell>
+                    <TableCell>
+                      {task.ultimaExecucao ? 
+                        dayjs(task.ultimaExecucao.toDate()).format('DD/MM/YYYY HH:mm') : 
+                        'Nunca executada'}
+                    </TableCell>
+                    <TableCell>{task.observacoes}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={task.status || 'Pendente'}
+                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        size="small"
+                        disabled={updatingStatus}
+                        sx={{ minWidth: 120 }}
+                      >
+                        <MenuItem value="Pendente">Pendente</MenuItem>
+                        <MenuItem value="Em andamento">Em andamento</MenuItem>
+                        <MenuItem value="Finalizada">Finalizada</MenuItem>
+                        <MenuItem value="Aguardando">Aguardando</MenuItem>
+                      </Select>
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        color="primary"
+                        onClick={() => handleOpenDialog(task)}
+                        size="small"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      {hasDeletePermission && (
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(task.id)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhuma tarefa mensal encontrada
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </>
+    );
+  };
+
   return (
     <MainLayout title="Tarefas">
       <Box sx={{ p: 3 }}>
@@ -1499,9 +1698,7 @@ export default function Tasks() {
         </TabPanel>
 
         <TabPanel value={currentTab} index={3}>
-          <Typography>
-            Funcionalidade de tarefas mensais será implementada em breve.
-          </Typography>
+          {renderMonthlyTasksTable()}
         </TabPanel>
 
         <TabPanel value={currentTab} index={4}>
@@ -1549,7 +1746,7 @@ export default function Tasks() {
                 </FormControl>
               )}
 
-              {currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && (
+              {currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && currentTab !== 3 && (
                 <>
                   <FormControl fullWidth required>
                     <InputLabel>Responsável</InputLabel>
@@ -1600,9 +1797,9 @@ export default function Tasks() {
               variant="contained"
               disabled={
                 !formData.descricao || 
-                (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && !formData.responsavel.length) || 
+                (currentTab !== 4 && currentTab !== 1 && currentTab !== 2 && currentTab !== 3 && !formData.responsavel.length) || 
                 (currentTab === 4 ? (!formData.diasSemana?.length || !formData.horario) : 
-                 currentTab !== 1 && currentTab !== 2 && !formData.prazoLimite)
+                 currentTab !== 1 && currentTab !== 2 && currentTab !== 3 && !formData.prazoLimite)
               }
             >
               {editingTask ? 'Salvar' : 'Criar'}
