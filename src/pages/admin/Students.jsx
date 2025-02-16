@@ -43,6 +43,7 @@ export default function Students() {
     nome: '',
     email: '',
     telefone: '',
+    telefone2: '',
     dataNascimento: '',
     nomePai: '',
     nomeMae: '',
@@ -95,6 +96,24 @@ export default function Students() {
     }
   };
 
+  // Função para obter o próximo número de matrícula
+  const getNextMatriculaNumber = async () => {
+    try {
+      const studentsQuery = query(collection(db, 'alunos'), orderBy('matricula', 'desc'));
+      const querySnapshot = await getDocs(studentsQuery);
+      
+      if (querySnapshot.empty) {
+        return 1; // Primeiro aluno
+      }
+      
+      const highestMatricula = querySnapshot.docs[0].data().matricula || 0;
+      return highestMatricula + 1;
+    } catch (error) {
+      console.error('Erro ao gerar número de matrícula:', error);
+      throw error;
+    }
+  };
+
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
   };
@@ -123,6 +142,7 @@ export default function Students() {
       nome: '',
       email: '',
       telefone: '',
+      telefone2: '',
       dataNascimento: '',
       nomePai: '',
       nomeMae: '',
@@ -165,6 +185,7 @@ export default function Students() {
       nome: student.nome,
       email: student.email,
       telefone: student.telefone,
+      telefone2: student.telefone2 || '',
       dataNascimento: student.dataNascimento || '',
       nomePai: student.nomePai || '',
       nomeMae: student.nomeMae || '',
@@ -210,6 +231,9 @@ export default function Students() {
         showNotification('Aluno atualizado com sucesso!');
         studentId = editingStudent.id;
       } else {
+        // Gerar novo número de matrícula apenas para novos alunos
+        const nextMatricula = await getNextMatriculaNumber();
+        studentData.matricula = nextMatricula;
         studentData.createdAt = serverTimestamp();
         const docRef = await addDoc(collection(db, 'alunos'), studentData);
         showNotification('Aluno cadastrado com sucesso!');
@@ -262,62 +286,73 @@ export default function Students() {
           </Button>
         </Box>
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Matrícula</TableCell>
+                <TableCell>Nome</TableCell>
+                <TableCell>Responsável</TableCell>
+                <TableCell>Telefone</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
                 <TableRow>
-                  <TableCell>Nome</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Telefone</TableCell>
-                  <TableCell>Data de Nascimento</TableCell>
-                  <TableCell align="right">Ações</TableCell>
+                  <TableCell colSpan={5} align="center">
+                    <CircularProgress />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredStudents.map((student) => (
-                  <TableRow 
+              ) : filteredStudents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    Nenhum aluno encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredStudents.map((student) => (
+                  <TableRow
                     key={student.id}
+                    hover
                     onClick={() => handleRowClick(student)}
-                    sx={{ 
-                      cursor: 'pointer',
-                      '&:hover': { 
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                      }
-                    }}
+                    sx={{ cursor: 'pointer' }}
                   >
+                    <TableCell>
+                      {student.matricula ? 
+                        String(student.matricula).padStart(4, '0') : 
+                        'N/A'}
+                    </TableCell>
                     <TableCell>{student.nome}</TableCell>
-                    <TableCell>{student.email}</TableCell>
+                    <TableCell>{student.responsavelFinanceiro || '-'}</TableCell>
                     <TableCell>{student.telefone}</TableCell>
-                    <TableCell>{student.dataNascimento}</TableCell>
                     <TableCell align="right">
-                      <IconButton 
-                        color="primary"
+                      <IconButton
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEditClick(student);
                         }}
+                        size="small"
                       >
                         <EditIcon />
                       </IconButton>
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(student);
+                        }}
+                        size="small"
+                        color="error"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
-                ))}
-                {filteredStudents.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      {searchTerm ? 'Nenhum aluno encontrado' : 'Nenhum aluno cadastrado'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         <Dialog 
           open={open} 
@@ -348,14 +383,27 @@ export default function Students() {
                   onChange={handleChange}
                   required
                 />
-                <TextField
-                  fullWidth
-                  label="Telefone"
-                  name="telefone"
-                  value={formData.telefone}
-                  onChange={handleChange}
-                  required
-                />
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Telefone"
+                      name="telefone"
+                      value={formData.telefone}
+                      onChange={handleChange}
+                      required
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Telefone 2"
+                      name="telefone2"
+                      value={formData.telefone2}
+                      onChange={handleChange}
+                    />
+                  </Grid>
+                </Grid>
                 <TextField
                   fullWidth
                   label="Data de Nascimento"
