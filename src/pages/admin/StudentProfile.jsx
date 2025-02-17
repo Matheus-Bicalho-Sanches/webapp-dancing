@@ -47,6 +47,7 @@ import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
 import { calculateAge } from '../../utils/dateUtils';
 import StudentHorariosTab from '../../components/tabs/StudentHorariosTab';
+import { asaasService } from '../../services/asaasService';
 
 // Componente TabPanel para renderizar o conteúdo de cada aba
 function TabPanel(props) {
@@ -1464,6 +1465,15 @@ export default function StudentProfile() {
         endereco: {
           ...prev.endereco,
           [enderecoField]: value
+        }
+      }));
+    } else if (name.startsWith('responsavelFinanceiro.')) {
+      const responsavelField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        responsavelFinanceiro: {
+          ...prev.responsavelFinanceiro,
+          [responsavelField]: value
         }
       }));
     } else {
