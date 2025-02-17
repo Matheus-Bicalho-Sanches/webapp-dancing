@@ -22,8 +22,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   People as PeopleIcon,
   Restaurant as RestaurantIcon,
-  CreditCard as CreditCardIcon,
-  Notifications as NotificationsIcon
+  CreditCard as CreditCardIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -72,8 +71,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios', allowedTypes: ['master'] },
     { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina', allowedTypes: ['master', 'administrative'] },
     { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative'] },
-    { text: 'Assinaturas', icon: <CreditCardIcon />, path: '/admin/assinaturas', allowedTypes: ['master'] },
-    { text: 'Notificações', icon: <NotificationsIcon />, path: '/admin/notifications', allowedTypes: ['master', 'administrative', 'teacher'] }
+    { text: 'Assinaturas', icon: <CreditCardIcon />, path: '/admin/assinaturas', allowedTypes: ['master'] }
   ];
 
   const filteredMenuItems = userType
