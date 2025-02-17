@@ -75,17 +75,17 @@ export const asaasService = {
   // Customer Management
   createCustomer: async (customerData) => {
     try {
-      if (!customerData.name || !customerData.email) {
-        throw new Error('Nome e email são obrigatórios');
+      if (!customerData.name || !customerData.email || !customerData.cpfCnpj) {
+        throw new Error('Nome, email e CPF/CNPJ são obrigatórios');
       }
 
       // Formatação dos dados conforme documentação
       const formattedData = {
         name: customerData.name,
         email: customerData.email,
+        cpfCnpj: customerData.cpfCnpj?.replace(/\D/g, ''),
         phone: customerData.phone?.replace(/\D/g, ''),
         mobilePhone: customerData.mobilePhone?.replace(/\D/g, ''),
-        cpfCnpj: customerData.cpfCnpj?.replace(/\D/g, ''),
         postalCode: customerData.postalCode?.replace(/\D/g, ''),
         address: customerData.address,
         addressNumber: customerData.addressNumber,

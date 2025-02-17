@@ -1269,7 +1269,12 @@ export default function StudentProfile() {
     dataNascimento: '',
     nomePai: '',
     nomeMae: '',
-    responsavelFinanceiro: '',
+    responsavelFinanceiro: {
+      nome: '',
+      email: '',
+      cpf: '',
+      telefone: ''
+    },
     endereco: {
       logradouro: '',
       numero: '',
@@ -1281,6 +1286,7 @@ export default function StudentProfile() {
     },
     observacoes: ''
   });
+  const [error, setError] = useState('');
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -1340,7 +1346,12 @@ export default function StudentProfile() {
           dataNascimento: studentData.dataNascimento || '',
           nomePai: studentData.nomePai || '',
           nomeMae: studentData.nomeMae || '',
-          responsavelFinanceiro: studentData.responsavelFinanceiro || '',
+          responsavelFinanceiro: {
+            nome: studentData.responsavelFinanceiro?.nome || '',
+            email: studentData.responsavelFinanceiro?.email || '',
+            cpf: studentData.responsavelFinanceiro?.cpf || '',
+            telefone: studentData.responsavelFinanceiro?.telefone || ''
+          },
           endereco: studentData.endereco || {
             logradouro: '',
             numero: '',
@@ -1372,14 +1383,65 @@ export default function StudentProfile() {
 
   const handleEditSubmit = async () => {
     try {
+      setLoading(true);
+
+      // Validação dos campos do responsável financeiro
+      if (!formData.responsavelFinanceiro.nome || 
+          !formData.responsavelFinanceiro.email || 
+          !formData.responsavelFinanceiro.cpf) {
+        setError('Nome, email e CPF do responsável financeiro são obrigatórios');
+        return;
+      }
+
+      // Validação do CPF
+      const cpfNumbers = formData.responsavelFinanceiro.cpf.replace(/\D/g, '');
+      if (cpfNumbers.length !== 11) {
+        setError('CPF do responsável financeiro inválido');
+        return;
+      }
+
+      // Validação do email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.responsavelFinanceiro.email)) {
+        setError('Email do responsável financeiro inválido');
+        return;
+      }
+
+      // Se o aluno já tem um ID do Asaas, atualiza os dados do cliente
+      if (student.asaasCustomerId) {
+        try {
+          await asaasService.updateCustomer(student.asaasCustomerId, {
+            name: formData.responsavelFinanceiro.nome,
+            email: formData.responsavelFinanceiro.email,
+            cpfCnpj: formData.responsavelFinanceiro.cpf,
+            phone: formData.responsavelFinanceiro.telefone,
+            mobilePhone: formData.telefone,
+            address: formData.endereco.logradouro,
+            addressNumber: formData.endereco.numero,
+            complement: formData.endereco.complemento,
+            province: formData.endereco.bairro,
+            postalCode: formData.endereco.cep,
+            observations: `Responsável financeiro do aluno: ${formData.nome}`
+          });
+        } catch (error) {
+          console.error('Erro ao atualizar cliente no Asaas:', error);
+          setError('Erro ao atualizar cliente no Asaas: ' + error.message);
+          return;
+        }
+      }
+
       await updateDoc(doc(db, 'alunos', id), {
         ...formData,
         updatedAt: serverTimestamp()
       });
+
       setOpenEditDialog(false);
       loadStudent();
     } catch (error) {
       console.error('Erro ao atualizar aluno:', error);
+      setError('Erro ao atualizar aluno: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1546,7 +1608,7 @@ export default function StudentProfile() {
                       <ListItem>
                         <ListItemText 
                           primary="Responsável Financeiro"
-                          secondary={student.responsavelFinanceiro || 'Não informado'}
+                          secondary={student.responsavelFinanceiro?.nome || 'Não informado'}
                         />
                       </ListItem>
                     </List>
@@ -1729,11 +1791,39 @@ export default function StudentProfile() {
                   value={formData.nomeMae}
                   onChange={handleChange}
                 />
+
+                <Divider textAlign="left">Responsável Financeiro</Divider>
+
                 <TextField
                   fullWidth
-                  label="Responsável Financeiro"
-                  name="responsavelFinanceiro"
-                  value={formData.responsavelFinanceiro}
+                  label="Nome do Responsável Financeiro"
+                  name="responsavelFinanceiro.nome"
+                  value={formData.responsavelFinanceiro.nome}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="Email do Responsável Financeiro"
+                  name="responsavelFinanceiro.email"
+                  type="email"
+                  value={formData.responsavelFinanceiro.email}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="CPF do Responsável Financeiro"
+                  name="responsavelFinanceiro.cpf"
+                  value={formData.responsavelFinanceiro.cpf}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  fullWidth
+                  label="Telefone do Responsável Financeiro"
+                  name="responsavelFinanceiro.telefone"
+                  value={formData.responsavelFinanceiro.telefone}
                   onChange={handleChange}
                 />
 

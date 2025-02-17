@@ -30,6 +30,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useNavigate } from 'react-router-dom';
+import { asaasService } from '../../services/asaasService';
 
 export default function Students() {
   const navigate = useNavigate();
@@ -47,7 +48,12 @@ export default function Students() {
     dataNascimento: '',
     nomePai: '',
     nomeMae: '',
-    responsavelFinanceiro: '',
+    responsavelFinanceiro: {
+      nome: '',
+      email: '',
+      cpf: '',
+      telefone: ''
+    },
     endereco: {
       logradouro: '',
       numero: '',
@@ -146,7 +152,12 @@ export default function Students() {
       dataNascimento: '',
       nomePai: '',
       nomeMae: '',
-      responsavelFinanceiro: '',
+      responsavelFinanceiro: {
+        nome: '',
+        email: '',
+        cpf: '',
+        telefone: ''
+      },
       endereco: {
         logradouro: '',
         numero: '',
@@ -171,6 +182,15 @@ export default function Students() {
           [enderecoField]: value
         }
       }));
+    } else if (name.startsWith('responsavelFinanceiro.')) {
+      const responsavelField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        responsavelFinanceiro: {
+          ...prev.responsavelFinanceiro,
+          [responsavelField]: value
+        }
+      }));
     } else {
       setFormData(prev => ({
         ...prev,
@@ -189,7 +209,12 @@ export default function Students() {
       dataNascimento: student.dataNascimento || '',
       nomePai: student.nomePai || '',
       nomeMae: student.nomeMae || '',
-      responsavelFinanceiro: student.responsavelFinanceiro || '',
+      responsavelFinanceiro: student.responsavelFinanceiro || {
+        nome: '',
+        email: '',
+        cpf: '',
+        telefone: ''
+      },
       endereco: student.endereco || {
         logradouro: '',
         numero: '',
@@ -220,6 +245,30 @@ export default function Students() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     try {
+      setLoading(true);
+
+      // Validação dos campos do responsável financeiro
+      if (!formData.responsavelFinanceiro.nome || 
+          !formData.responsavelFinanceiro.email || 
+          !formData.responsavelFinanceiro.cpf) {
+        showNotification('Nome, email e CPF do responsável financeiro são obrigatórios', 'error');
+        return;
+      }
+
+      // Validação do CPF
+      const cpfNumbers = formData.responsavelFinanceiro.cpf.replace(/\D/g, '');
+      if (cpfNumbers.length !== 11) {
+        showNotification('CPF do responsável financeiro inválido', 'error');
+        return;
+      }
+
+      // Validação do email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.responsavelFinanceiro.email)) {
+        showNotification('Email do responsável financeiro inválido', 'error');
+        return;
+      }
+
       const studentData = {
         ...formData,
         updatedAt: serverTimestamp()
@@ -235,6 +284,32 @@ export default function Students() {
         const nextMatricula = await getNextMatriculaNumber();
         studentData.matricula = nextMatricula;
         studentData.createdAt = serverTimestamp();
+        
+        // Criar cliente no Asaas
+        try {
+          const asaasCustomer = await asaasService.createCustomer({
+            name: formData.responsavelFinanceiro.nome,
+            email: formData.responsavelFinanceiro.email,
+            cpfCnpj: formData.responsavelFinanceiro.cpf,
+            phone: formData.responsavelFinanceiro.telefone,
+            mobilePhone: formData.telefone,
+            address: formData.endereco.logradouro,
+            addressNumber: formData.endereco.numero,
+            complement: formData.endereco.complemento,
+            province: formData.endereco.bairro,
+            postalCode: formData.endereco.cep,
+            notificationDisabled: false,
+            observations: `Responsável financeiro do aluno: ${formData.nome}`
+          });
+          
+          // Adicionar o ID do cliente Asaas aos dados do aluno
+          studentData.asaasCustomerId = asaasCustomer.id;
+        } catch (error) {
+          console.error('Erro ao criar cliente no Asaas:', error);
+          showNotification('Erro ao criar cliente no Asaas: ' + error.message, 'error');
+          return;
+        }
+
         const docRef = await addDoc(collection(db, 'alunos'), studentData);
         showNotification('Aluno cadastrado com sucesso!');
         studentId = docRef.id;
@@ -248,6 +323,8 @@ export default function Students() {
     } catch (error) {
       console.error('Erro ao salvar aluno:', error);
       showNotification('Erro ao salvar aluno', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -324,7 +401,7 @@ export default function Students() {
                         'N/A'}
                     </TableCell>
                     <TableCell>{student.nome}</TableCell>
-                    <TableCell>{student.responsavelFinanceiro || '-'}</TableCell>
+                    <TableCell>{student.responsavelFinanceiro?.nome || '-'}</TableCell>
                     <TableCell>{student.telefone}</TableCell>
                     <TableCell align="right">
                       <IconButton
@@ -435,8 +512,29 @@ export default function Students() {
                 <TextField
                   fullWidth
                   label="Responsável Financeiro"
-                  name="responsavelFinanceiro"
-                  value={formData.responsavelFinanceiro}
+                  name="responsavelFinanceiro.nome"
+                  value={formData.responsavelFinanceiro.nome}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Email do Responsável Financeiro"
+                  name="responsavelFinanceiro.email"
+                  value={formData.responsavelFinanceiro.email}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="CPF do Responsável Financeiro"
+                  name="responsavelFinanceiro.cpf"
+                  value={formData.responsavelFinanceiro.cpf}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Telefone do Responsável Financeiro"
+                  name="responsavelFinanceiro.telefone"
+                  value={formData.responsavelFinanceiro.telefone}
                   onChange={handleChange}
                 />
 

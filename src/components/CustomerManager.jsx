@@ -108,8 +108,8 @@ export default function CustomerManager({ onCustomerCreated }) {
       setError(null);
 
       // Validação dos campos obrigatórios
-      if (!customerData.name || !customerData.email) {
-        setError('Nome e email são obrigatórios');
+      if (!customerData.name || !customerData.email || !customerData.cpfCnpj) {
+        setError('Nome, email e CPF/CNPJ são obrigatórios');
         return;
       }
 
@@ -120,13 +120,11 @@ export default function CustomerManager({ onCustomerCreated }) {
         return;
       }
 
-      // Validação do CPF/CNPJ (se fornecido)
-      if (customerData.cpfCnpj) {
-        const cpfCnpjNumbers = customerData.cpfCnpj.replace(/\D/g, '');
-        if (cpfCnpjNumbers.length !== 11 && cpfCnpjNumbers.length !== 14) {
-          setError('CPF/CNPJ inválido');
-          return;
-        }
+      // Validação do CPF/CNPJ
+      const cpfCnpjNumbers = customerData.cpfCnpj.replace(/\D/g, '');
+      if (cpfCnpjNumbers.length !== 11 && cpfCnpjNumbers.length !== 14) {
+        setError('CPF/CNPJ inválido');
+        return;
       }
 
       // Validação do CEP (se fornecido)
@@ -230,6 +228,7 @@ export default function CustomerManager({ onCustomerCreated }) {
                   name="cpfCnpj"
                   value={customerData.cpfCnpj}
                   onChange={handleInputChange}
+                  required
                 />
               </Grid>
               <Grid item xs={12} md={6}>
