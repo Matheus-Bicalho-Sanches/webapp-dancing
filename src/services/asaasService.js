@@ -283,5 +283,36 @@ export const asaasService = {
       console.error('Erro ao criar webhook:', error);
       throw error;
     }
+  },
+
+  // Payment Processing
+  createPayment: async (data) => {
+    try {
+      const paymentData = {
+        customer: data.customerId,
+        billingType: 'CREDIT_CARD',
+        value: data.value,
+        dueDate: data.dueDate,
+        description: data.description,
+        creditCardToken: data.creditCardToken,
+        postalService: false,
+      };
+
+      // Remove campos undefined
+      Object.keys(paymentData).forEach(key => 
+        paymentData[key] === undefined && delete paymentData[key]
+      );
+
+      console.log('Criando pagamento:', {
+        ...paymentData,
+        creditCardToken: '****' // Ocultando token no log
+      });
+
+      const response = await api.post('/payments', paymentData);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao criar pagamento:', error);
+      throw error;
+    }
   }
 }; 

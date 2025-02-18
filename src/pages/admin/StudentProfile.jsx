@@ -637,43 +637,156 @@ function PaymentsTab({ studentId, student }) {
     try {
       if (receivingPayment) {
         // Single payment receive
-        const paymentUpdate = {
-          status: 'pago',
-          valorRecebido: parseFloat(receiveFormData.valor),
-          meioPagamento: receiveFormData.meioPagamento,
-          dataRecebimento: receiveFormData.dataRecebimento,
-          updatedAt: serverTimestamp()
-        };
+        if (receiveFormData.meioPagamento === 'Cartão cadastrado') {
+          if (!student?.creditCardToken) {
+            alert('Não há cartão cadastrado');
+            return;
+          }
 
-        await updateDoc(doc(db, 'pagamentos', receivingPayment.id), paymentUpdate);
-        await createCashMovement(receivingPayment, receiveFormData);
+          try {
+            const response = await asaasService.createPayment({
+              customerId: student.asaasCustomerId,
+              value: parseFloat(receiveFormData.valor),
+              dueDate: receiveFormData.dataRecebimento,
+              description: receivingPayment.descricao,
+              creditCardToken: student.creditCardToken
+            });
 
-      } else if (selectedPayments.length > 0) {
-        const batch = writeBatch(db);
-        const movimentacoesPromises = [];
+            if (response.status === 'CONFIRMED' || response.status === 'RECEIVED') {
+              // Atualizar o pagamento no Firestore
+              const paymentUpdate = {
+                status: 'pago',
+                valorRecebido: parseFloat(receiveFormData.valor),
+                meioPagamento: receiveFormData.meioPagamento,
+                dataRecebimento: receiveFormData.dataRecebimento,
+                asaasPaymentId: response.id,
+                updatedAt: serverTimestamp()
+              };
 
-        selectedPayments.forEach(paymentId => {
-          const payment = payments.find(p => p.id === paymentId);
-          const paymentRef = doc(db, 'pagamentos', paymentId);
-          
-          batch.update(paymentRef, {
+              await updateDoc(doc(db, 'pagamentos', receivingPayment.id), paymentUpdate);
+              await createCashMovement(receivingPayment, receiveFormData);
+
+              alert('Pagamento bem sucedido');
+            } else {
+              throw new Error('Status do pagamento: ' + response.status);
+            }
+          } catch (error) {
+            console.error('Erro ao processar pagamento:', error);
+            alert(error.message || 'Erro ao processar pagamento no cartão');
+            return;
+          }
+        } else {
+          // Processamento normal para outros meios de pagamento
+          const paymentUpdate = {
             status: 'pago',
-            valorRecebido: payment.valor,
+            valorRecebido: parseFloat(receiveFormData.valor),
             meioPagamento: receiveFormData.meioPagamento,
             dataRecebimento: receiveFormData.dataRecebimento,
             updatedAt: serverTimestamp()
+          };
+
+          await updateDoc(doc(db, 'pagamentos', receivingPayment.id), paymentUpdate);
+          await createCashMovement(receivingPayment, receiveFormData);
+        }
+      } else if (selectedPayments.length > 0) {
+        // Multiple payments receive
+        if (receiveFormData.meioPagamento === 'Cartão cadastrado') {
+          if (!student?.creditCardToken) {
+            alert('Não há cartão cadastrado');
+            return;
+          }
+
+          // Processar cada pagamento selecionado individualmente
+          const batch = writeBatch(db);
+          const movimentacoesPromises = [];
+          const paymentPromises = [];
+
+          for (const paymentId of selectedPayments) {
+            const payment = payments.find(p => p.id === paymentId);
+            
+            paymentPromises.push(
+              asaasService.createPayment({
+                customerId: student.asaasCustomerId,
+                value: payment.valor,
+                dueDate: receiveFormData.dataRecebimento,
+                description: payment.descricao,
+                creditCardToken: student.creditCardToken
+              })
+            );
+          }
+
+          try {
+            const responses = await Promise.all(paymentPromises);
+            
+            // Verificar se todos os pagamentos foram bem sucedidos
+            const failedPayments = responses.filter(r => 
+              r.status !== 'CONFIRMED' && r.status !== 'RECEIVED'
+            );
+
+            if (failedPayments.length > 0) {
+              throw new Error('Alguns pagamentos falharam. Por favor, tente novamente.');
+            }
+
+            // Atualizar todos os pagamentos no Firestore
+            responses.forEach((response, index) => {
+              const paymentId = selectedPayments[index];
+              const payment = payments.find(p => p.id === paymentId);
+              const paymentRef = doc(db, 'pagamentos', paymentId);
+              
+              batch.update(paymentRef, {
+                status: 'pago',
+                valorRecebido: payment.valor,
+                meioPagamento: receiveFormData.meioPagamento,
+                dataRecebimento: receiveFormData.dataRecebimento,
+                asaasPaymentId: response.id,
+                updatedAt: serverTimestamp()
+              });
+
+              movimentacoesPromises.push(
+                createCashMovement(payment, {
+                  ...receiveFormData,
+                  valor: payment.valor
+                })
+              );
+            });
+
+            await batch.commit();
+            await Promise.all(movimentacoesPromises);
+            
+            alert('Pagamentos processados com sucesso');
+          } catch (error) {
+            console.error('Erro ao processar pagamentos:', error);
+            alert(error.message || 'Erro ao processar pagamentos no cartão');
+            return;
+          }
+        } else {
+          // Processamento normal para outros meios de pagamento
+          const batch = writeBatch(db);
+          const movimentacoesPromises = [];
+
+          selectedPayments.forEach(paymentId => {
+            const payment = payments.find(p => p.id === paymentId);
+            const paymentRef = doc(db, 'pagamentos', paymentId);
+            
+            batch.update(paymentRef, {
+              status: 'pago',
+              valorRecebido: payment.valor,
+              meioPagamento: receiveFormData.meioPagamento,
+              dataRecebimento: receiveFormData.dataRecebimento,
+              updatedAt: serverTimestamp()
+            });
+
+            movimentacoesPromises.push(
+              createCashMovement(payment, {
+                ...receiveFormData,
+                valor: payment.valor
+              })
+            );
           });
 
-          movimentacoesPromises.push(
-            createCashMovement(payment, {
-              ...receiveFormData,
-              valor: payment.valor
-            })
-          );
-        });
-
-        await batch.commit();
-        await Promise.all(movimentacoesPromises);
+          await batch.commit();
+          await Promise.all(movimentacoesPromises);
+        }
       }
 
       setOpenReceiveDialog(false);
@@ -851,7 +964,8 @@ function PaymentsTab({ studentId, student }) {
     'Dinheiro',
     'PIX',
     'Débito',
-    'Crédito'
+    'Crédito',
+    ...(hasRegisteredCard ? ['Cartão cadastrado'] : [])
   ];
 
   const getStatusColor = (status, dataVencimento) => {
