@@ -78,12 +78,11 @@ export default function Dashboard() {
         : 0;
 
       // 3. Buscar alunos com pagamentos atrasados
-      const now = new Date();
       const paymentsRef = collection(db, 'pagamentos');
       const latePaymentsQuery = query(
         paymentsRef,
         where('status', '==', 'pendente'),
-        where('dataVencimento', '<', now)
+        where('dataVencimento', '<', dayjs().format('YYYY-MM-DD'))
       );
       const latePaymentsSnapshot = await getDocs(latePaymentsQuery);
       const latePayments = latePaymentsSnapshot.size;
