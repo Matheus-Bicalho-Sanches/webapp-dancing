@@ -34,7 +34,9 @@ import {
   orderBy,
   limit,
   startAfter,
-  endBefore
+  endBefore,
+  getDoc,
+  doc
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
@@ -90,8 +92,8 @@ export default function Dashboard() {
       const matriculasRef = collection(db, 'matriculas');
       const expiredEnrollmentsQuery = query(
         matriculasRef,
-        where('dataTermino', '<', now),
-        where('status', '==', 'ativa')
+        where('status', '==', 'ativa'),
+        where('dataTermino', '<', dayjs().format('YYYY-MM-DD'))
       );
       const expiredEnrollmentsSnapshot = await getDocs(expiredEnrollmentsQuery);
       const expiredEnrollments = expiredEnrollmentsSnapshot.size;
@@ -100,47 +102,45 @@ export default function Dashboard() {
       const studentsWithIssues = [];
       
       // 5.1 Processar pagamentos atrasados
-      for (const doc of latePaymentsSnapshot.docs) {
-        const paymentData = doc.data();
-        const studentDoc = await getDocs(query(
-          studentsRef,
-          where('id', '==', paymentData.alunoId)
-        ));
+      for (const docRef of latePaymentsSnapshot.docs) {
+        const paymentData = docRef.data();
+        const studentDoc = await getDoc(doc(db, 'alunos', paymentData.alunoId));
         
-        if (!studentDoc.empty) {
-          const studentData = studentDoc.docs[0].data();
-          const daysLate = dayjs().diff(dayjs(paymentData.dataVencimento.toDate()), 'day');
+        if (studentDoc.exists()) {
+          const studentData = studentDoc.data();
+          const daysLate = dayjs().diff(dayjs(paymentData.dataVencimento), 'day');
           
           studentsWithIssues.push({
-            id: doc.id,
+            id: docRef.id,
             studentId: paymentData.alunoId,
             name: studentData.nome,
             issue: 'Pagamento atrasado',
             daysLate,
-            type: 'payment'
+            type: 'payment',
+            value: paymentData.valor,
+            dueDate: paymentData.dataVencimento
           });
         }
       }
 
       // 5.2 Processar matrículas vencidas
-      for (const doc of expiredEnrollmentsSnapshot.docs) {
-        const enrollmentData = doc.data();
-        const studentDoc = await getDocs(query(
-          studentsRef,
-          where('id', '==', enrollmentData.alunoId)
-        ));
+      for (const docRef of expiredEnrollmentsSnapshot.docs) {
+        const enrollmentData = docRef.data();
+        const studentDoc = await getDoc(doc(db, 'alunos', enrollmentData.alunoId));
         
-        if (!studentDoc.empty) {
-          const studentData = studentDoc.docs[0].data();
-          const daysLate = dayjs().diff(dayjs(enrollmentData.dataTermino.toDate()), 'day');
+        if (studentDoc.exists()) {
+          const studentData = studentDoc.data();
+          const daysLate = dayjs().diff(dayjs(enrollmentData.dataTermino), 'day');
           
           studentsWithIssues.push({
-            id: doc.id,
+            id: docRef.id,
             studentId: enrollmentData.alunoId,
             name: studentData.nome,
             issue: 'Matrícula vencida',
             daysLate,
-            type: 'enrollment'
+            type: 'enrollment',
+            planName: enrollmentData.planoNome,
+            endDate: enrollmentData.dataTermino
           });
         }
       }
@@ -227,7 +227,7 @@ export default function Dashboard() {
     <MainLayout title="Dashboard">
       <Grid container spacing={3}>
         {/* Métricas principais */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <MetricCard
             title="Total de Alunos"
             value={metrics.totalStudents}
@@ -237,7 +237,7 @@ export default function Dashboard() {
             secondaryText="em relação ao mês anterior"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <MetricCard
             title="Pagamentos Atrasados"
             value={metrics.latePayments}
@@ -245,7 +245,7 @@ export default function Dashboard() {
             color="#f44336"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <MetricCard
             title="Matrículas Vencidas"
             value={metrics.expiredEnrollments}
@@ -253,34 +253,57 @@ export default function Dashboard() {
             color="#ff9800"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Taxa de Renovação"
-            value="85%"
-            icon={<TrendingUpIcon sx={{ color: '#4caf50' }} />}
-            color="#4caf50"
-            secondaryValue={5}
-            secondaryText="em relação ao mês anterior"
-          />
-        </Grid>
 
-        {/* Lista de alunos com pendências */}
+        {/* Lista de Pendências */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Alunos com Pendências
-            </Typography>
+          <Card>
+            <CardHeader title="Alunos com Pendências" />
+            <Divider />
             <List>
               {metrics.studentsWithIssues.map((student) => (
-                <React.Fragment key={student.id}>
+                <React.Fragment key={`${student.type}-${student.id}`}>
                   <ListItem>
                     <ListItemText
                       primary={student.name}
-                      secondary={`${student.issue} - ${student.daysLate} dias`}
+                      secondary={
+                        <>
+                          <Typography component="span" variant="body2" color="text.primary">
+                            {student.issue}
+                          </Typography>
+                          {student.type === 'payment' && (
+                            <>
+                              {' - '}
+                              <Typography component="span" variant="body2" color="error">
+                                {student.value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </Typography>
+                              {' - Vencimento: '}
+                              <Typography component="span" variant="body2">
+                                {dayjs(student.dueDate).format('DD/MM/YYYY')}
+                              </Typography>
+                            </>
+                          )}
+                          {student.type === 'enrollment' && (
+                            <>
+                              {' - '}
+                              <Typography component="span" variant="body2">
+                                {student.planName}
+                              </Typography>
+                              {' - Vencimento: '}
+                              <Typography component="span" variant="body2">
+                                {dayjs(student.endDate).format('DD/MM/YYYY')}
+                              </Typography>
+                            </>
+                          )}
+                          <br />
+                          <Typography component="span" variant="body2" color="error">
+                            {student.daysLate} {student.daysLate === 1 ? 'dia' : 'dias'} de atraso
+                          </Typography>
+                        </>
+                      }
                     />
                     <ListItemSecondaryAction>
-                      <Button 
-                        variant="outlined" 
+                      <Button
+                        variant="outlined"
                         size="small"
                         onClick={() => handleViewDetails(student)}
                       >
@@ -295,12 +318,12 @@ export default function Dashboard() {
                 <ListItem>
                   <ListItemText
                     primary="Nenhuma pendência encontrada"
-                    secondary="Todos os alunos estão em dia"
+                    secondary="Todos os alunos estão em dia com pagamentos e matrículas"
                   />
                 </ListItem>
               )}
             </List>
-          </Paper>
+          </Card>
         </Grid>
       </Grid>
     </MainLayout>
