@@ -29,7 +29,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '^/api/asaas/.*': {
-        target: 'https://api.asaas.com/v3',
+        target: 'https://sandbox.asaas.com/api/v3',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api\/asaas/, ''),
@@ -38,7 +38,7 @@ export default defineConfig({
             console.error('Proxy error:', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            proxyReq.setHeader('access_token', process.env.VITE_ASAAS_API_KEY || '$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjhkNmRmMjJlLWY3MDEtNDlhZC05ZWMwLTdlNDM4MGI1ZjA0NDo6JGFhY2hfZWNlNTYxZDEtYjMyYi00ZTg3LTkyNWUtNDMxNjJlNzc1ZGY2');
+            proxyReq.setHeader('access_token', process.env.VITE_ASAAS_API_KEY || '$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjBjNGYwMjI2LWVlZjAtNDQyMi04NzI3LWY4NGZkMWIyYzZmYjo6JGFhY2hfMjQ0MTQ3OGItYmRjOS00ODZmLTk1OWYtMWIxNDgyYTllYmE1');
             console.log('Sending Request to Asaas:', {
               method: req.method,
               url: req.url,
@@ -100,7 +100,7 @@ export default defineConfig({
       VITE_FIREBASE_STORAGE_BUCKET: JSON.stringify("webapp-dancing.firebasestorage.app"),
       VITE_FIREBASE_MESSAGING_SENDER_ID: JSON.stringify("712270725563"),
       VITE_FIREBASE_APP_ID: JSON.stringify("1:712270725563:web:2156a6e2660b0b5218c49e"),
-      VITE_ASAAS_API_KEY: JSON.stringify("$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjhkNmRmMjJlLWY3MDEtNDlhZC05ZWMwLTdlNDM4MGI1ZjA0NDo6JGFhY2hfZWNlNTYxZDEtYjMyYi00ZTg3LTkyNWUtNDMxNjJlNzc1ZGY2"),
+      VITE_ASAAS_API_KEY: JSON.stringify("$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjBjNGYwMjI2LWVlZjAtNDQyMi04NzI3LWY4NGZkMWIyYzZmYjo6JGFhY2hfMjQ0MTQ3OGItYmRjOS00ODZmLTk1OWYtMWIxNDgyYTllYmE1"),
       MODE: JSON.stringify(process.env.NODE_ENV || 'development')
     }
   }

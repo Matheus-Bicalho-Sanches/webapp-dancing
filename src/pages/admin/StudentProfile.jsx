@@ -35,12 +35,14 @@ import {
   InputAdornment,
   IconButton,
   Checkbox,
-  Stack
+  Stack,
+  FormControlLabel
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import { doc, getDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
@@ -482,12 +484,14 @@ function MatriculasTab({ studentId }) {
 }
 
 // Componente da aba de Pagamentos
-function PaymentsTab({ studentId }) {
+function PaymentsTab({ studentId, student }) {
   const { currentUser } = useAuth();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [openReceiveDialog, setOpenReceiveDialog] = useState(false);
+  const [openCreditCardDialog, setOpenCreditCardDialog] = useState(false);
+  const [hasRegisteredCard, setHasRegisteredCard] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [receivingPayment, setReceivingPayment] = useState(null);
   const [selectedPayments, setSelectedPayments] = useState([]);
@@ -496,6 +500,22 @@ function PaymentsTab({ studentId }) {
     tipo: '',
     valor: '',
     dataVencimento: dayjs().format('YYYY-MM-DD')
+  });
+  const [creditCardData, setCreditCardData] = useState({
+    holderName: '',
+    number: '',
+    expiryMonth: '',
+    expiryYear: '',
+    ccv: '',
+    holderInfo: {
+      name: '',
+      email: '',
+      cpfCnpj: '',
+      phone: '',
+      postalCode: '',
+      addressNumber: '',
+      addressComplement: ''
+    }
   });
   const [receiveFormData, setReceiveFormData] = useState({
     valor: '',
@@ -508,7 +528,11 @@ function PaymentsTab({ studentId }) {
 
   useEffect(() => {
     loadPayments();
-  }, [studentId]);
+    // Verificar se o aluno já tem cartão registrado
+    if (student?.creditCardToken) {
+      setHasRegisteredCard(true);
+    }
+  }, [studentId, student]);
 
   const loadPayments = async () => {
     try {
@@ -694,12 +718,6 @@ function PaymentsTab({ studentId }) {
       setOpenDialog(false);
       setEditingPayment(null);
       loadPayments();
-      setFormData({
-        descricao: '',
-        tipo: '',
-        valor: '',
-        dataVencimento: dayjs().format('YYYY-MM-DD')
-      });
     } catch (error) {
       console.error('Erro ao salvar pagamento:', error);
     }
@@ -728,6 +746,97 @@ function PaymentsTab({ studentId }) {
       dataRecebimento: dayjs().format('YYYY-MM-DD')
     });
     setOpenReceiveDialog(true);
+  };
+
+  const handleCreditCardSubmit = async () => {
+    try {
+      setLoading(true);
+      
+      // Verificar se o aluno existe e tem asaasCustomerId
+      if (!student?.asaasCustomerId) {
+        throw new Error('Este aluno não possui um cadastro válido no Asaas. Por favor, atualize os dados do aluno primeiro.');
+      }
+      
+      // Validar dados do cartão
+      if (!creditCardData.holderName || !creditCardData.number || 
+          !creditCardData.expiryMonth || !creditCardData.expiryYear || 
+          !creditCardData.ccv) {
+        throw new Error('Todos os campos do cartão são obrigatórios');
+      }
+
+      // Validar dados do titular
+      if (!creditCardData.holderInfo.name || !creditCardData.holderInfo.email || 
+          !creditCardData.holderInfo.cpfCnpj || !creditCardData.holderInfo.addressNumber) {
+        throw new Error('Nome, email, CPF e número do endereço do titular são obrigatórios');
+      }
+
+      const response = await asaasService.tokenizeCreditCard({
+        customer: student.asaasCustomerId,
+        creditCard: {
+          holderName: creditCardData.holderName,
+          number: creditCardData.number.replace(/\D/g, ''),
+          expiryMonth: creditCardData.expiryMonth.padStart(2, '0'),
+          expiryYear: creditCardData.expiryYear.length === 2 ? `20${creditCardData.expiryYear}` : creditCardData.expiryYear,
+          ccv: creditCardData.ccv
+        },
+        holderInfo: creditCardData.holderInfo
+      });
+
+      // Atualizar o documento do aluno com o token do cartão
+      await updateDoc(doc(db, 'alunos', studentId), {
+        creditCardToken: response.creditCardToken,
+        updatedAt: serverTimestamp()
+      });
+
+      // Atualizar o estado local
+      setHasRegisteredCard(true);
+
+      // Limpar formulário e fechar dialog
+      setCreditCardData({
+        holderName: '',
+        number: '',
+        expiryMonth: '',
+        expiryYear: '',
+        ccv: '',
+        holderInfo: {
+          name: '',
+          email: '',
+          cpfCnpj: '',
+          phone: '',
+          postalCode: '',
+          addressNumber: '',
+          addressComplement: ''
+        }
+      });
+      setOpenCreditCardDialog(false);
+      
+      // Mostrar mensagem de sucesso
+      alert('Cartão cadastrado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao cadastrar cartão:', error);
+      alert(error.message || 'Erro ao cadastrar cartão');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreditCardChange = (event) => {
+    const { name, value } = event.target;
+    if (name.startsWith('holderInfo.')) {
+      const field = name.split('.')[1];
+      setCreditCardData(prev => ({
+        ...prev,
+        holderInfo: {
+          ...prev.holderInfo,
+          [field]: value
+        }
+      }));
+    } else {
+      setCreditCardData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const tiposPagamento = [
@@ -761,15 +870,37 @@ function PaymentsTab({ studentId }) {
   return (
     <Box>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-        <Button
-          variant="contained"
-          color="success"
-          disabled={selectedPayments.length === 0}
-          onClick={handleReceiveSelectedClick}
-          startIcon={<AttachMoneyIcon />}
-        >
-          Receber Selecionados ({selectedPayments.length})
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={selectedPayments.length === 0}
+            onClick={handleReceiveSelectedClick}
+            startIcon={<AttachMoneyIcon />}
+          >
+            Receber Selecionados ({selectedPayments.length})
+          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setOpenCreditCardDialog(true)}
+              startIcon={<CreditCardIcon />}
+            >
+              Cadastrar Cartão
+            </Button>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={hasRegisteredCard}
+                  disabled
+                  color="success"
+                />
+              }
+              label="Cartão cadastrado"
+            />
+          </Box>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -1038,6 +1169,148 @@ function PaymentsTab({ studentId }) {
             disabled={!receiveFormData.valor || !receiveFormData.meioPagamento || !receiveFormData.dataRecebimento}
           >
             Confirmar Recebimento
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Cadastro de Cartão */}
+      <Dialog
+        open={openCreditCardDialog}
+        onClose={() => setOpenCreditCardDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Cadastrar Cartão de Crédito</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Dados do Cartão
+            </Typography>
+            <TextField
+              fullWidth
+              label="Nome no Cartão"
+              name="holderName"
+              value={creditCardData.holderName}
+              onChange={handleCreditCardChange}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Número do Cartão"
+              name="number"
+              value={creditCardData.number}
+              onChange={handleCreditCardChange}
+              required
+            />
+            <Grid container spacing={2}>
+              <Grid item xs={4}>
+                <TextField
+                  fullWidth
+                  label="Mês"
+                  name="expiryMonth"
+                  value={creditCardData.expiryMonth}
+                  onChange={handleCreditCardChange}
+                  required
+                />
+              </Grid>
+              <Grid item xs={4}>
+                <TextField
+                  fullWidth
+                  label="Ano"
+                  name="expiryYear"
+                  value={creditCardData.expiryYear}
+                  onChange={handleCreditCardChange}
+                  required
+                />
+              </Grid>
+              <Grid item xs={4}>
+                <TextField
+                  fullWidth
+                  label="CCV"
+                  name="ccv"
+                  value={creditCardData.ccv}
+                  onChange={handleCreditCardChange}
+                  required
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+              Dados do Titular
+            </Typography>
+            <TextField
+              fullWidth
+              label="Nome do Titular"
+              name="holderInfo.name"
+              value={creditCardData.holderInfo.name}
+              onChange={handleCreditCardChange}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Email"
+              name="holderInfo.email"
+              type="email"
+              value={creditCardData.holderInfo.email}
+              onChange={handleCreditCardChange}
+              required
+            />
+            <TextField
+              fullWidth
+              label="CPF/CNPJ"
+              name="holderInfo.cpfCnpj"
+              value={creditCardData.holderInfo.cpfCnpj}
+              onChange={handleCreditCardChange}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Telefone"
+              name="holderInfo.phone"
+              value={creditCardData.holderInfo.phone}
+              onChange={handleCreditCardChange}
+            />
+            <TextField
+              fullWidth
+              label="CEP"
+              name="holderInfo.postalCode"
+              value={creditCardData.holderInfo.postalCode}
+              onChange={handleCreditCardChange}
+            />
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Número"
+                  name="holderInfo.addressNumber"
+                  value={creditCardData.holderInfo.addressNumber}
+                  onChange={handleCreditCardChange}
+                  required
+                  helperText="Campo obrigatório"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Complemento"
+                  name="holderInfo.addressComplement"
+                  value={creditCardData.holderInfo.addressComplement}
+                  onChange={handleCreditCardChange}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCreditCardDialog(false)}>
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleCreditCardSubmit}
+            variant="contained"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Cadastrar'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1698,7 +1971,7 @@ export default function StudentProfile() {
           </TabPanel>
 
           <TabPanel value={currentTab} index={3}>
-            <PaymentsTab studentId={id} />
+            <PaymentsTab studentId={id} student={student} />
           </TabPanel>
 
           <TabPanel value={currentTab} index={4}>
