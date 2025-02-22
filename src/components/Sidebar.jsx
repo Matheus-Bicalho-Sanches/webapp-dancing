@@ -70,8 +70,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios', allowedTypes: ['master', 'administrative'] },
     { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios', allowedTypes: ['master'] },
     { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina', allowedTypes: ['master', 'administrative'] },
-    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative'] },
-    { text: 'Assinaturas', icon: <CreditCardIcon />, path: '/admin/assinaturas', allowedTypes: ['master'] }
+    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative'] }
   ];
 
   const filteredMenuItems = userType

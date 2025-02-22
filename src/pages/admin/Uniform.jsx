@@ -64,6 +64,13 @@ export default function Uniform() {
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
+  // Add new state variables for history filters
+  const [dateFilter, setDateFilter] = useState('all');
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [actionFilter, setActionFilter] = useState('all');
+  const [filteredLogs, setFilteredLogs] = useState([]);
+
   const [formData, setFormData] = useState({
     nome: '',
     descricao: '',
@@ -136,6 +143,50 @@ export default function Uniform() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const filterLogs = () => {
+      let filtered = [...logs];
+
+      // Apply action filter
+      if (actionFilter !== 'all') {
+        filtered = filtered.filter(log => log.action === actionFilter);
+      }
+
+      // Apply date filter
+      if (dateFilter === 'custom' && startDate && endDate) {
+        filtered = filtered.filter(log => {
+          const logDate = log.createdAt?.toDate();
+          return logDate >= startDate && logDate <= endDate;
+        });
+      } else if (dateFilter === 'today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(log => {
+          const logDate = log.createdAt?.toDate();
+          return logDate >= today;
+        });
+      } else if (dateFilter === 'week') {
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        filtered = filtered.filter(log => {
+          const logDate = log.createdAt?.toDate();
+          return logDate >= weekAgo;
+        });
+      } else if (dateFilter === 'month') {
+        const monthAgo = new Date();
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        filtered = filtered.filter(log => {
+          const logDate = log.createdAt?.toDate();
+          return logDate >= monthAgo;
+        });
+      }
+
+      setFilteredLogs(filtered);
+    };
+
+    filterLogs();
+  }, [logs, dateFilter, startDate, endDate, actionFilter]);
 
   const handleOpenDialog = (uniform = null) => {
     if (uniform) {
@@ -556,60 +607,124 @@ export default function Uniform() {
             </Table>
           </TableContainer>
         ) : (
-          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data/Hora</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: '#666' }}>Ação</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: '#666' }}>Usuário</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: '#666' }}>Detalhes</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id} hover>
-                    <TableCell>{formatLogDate(log.createdAt)}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {getLogIcon(log.action)}
-                        <Chip
-                          label={log.action === 'new_sale' ? 'Venda' : 
-                                log.action === 'create_uniform' ? 'Novo Uniforme' :
-                                log.action === 'update_uniform' ? 'Atualização' : 'Outro'}
-                          color={log.action === 'new_sale' ? 'success' :
-                                log.action === 'create_uniform' ? 'primary' :
-                                log.action === 'update_uniform' ? 'warning' : 'default'}
-                          size="small"
-                          sx={{ borderRadius: 1 }}
-                        />
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={log.userName}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <PersonIcon fontSize="small" sx={{ color: 'primary.main' }} />
-                          <Typography variant="body2">
-                            {log.userName.includes('@') ? log.userName.split('@')[0] : log.userName}
-                          </Typography>
-                        </Box>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{getLogMessage(log)}</TableCell>
-                  </TableRow>
-                ))}
-                {logs.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                      <Typography variant="body2" color="textSecondary">
-                        Nenhum registro encontrado
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
+          <>
+            <Box sx={{ mb: 3 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Filtrar por Data</InputLabel>
+                    <Select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value)}
+                      label="Filtrar por Data"
+                    >
+                      <MenuItem value="all">Todas as datas</MenuItem>
+                      <MenuItem value="today">Hoje</MenuItem>
+                      <MenuItem value="week">Última semana</MenuItem>
+                      <MenuItem value="month">Último mês</MenuItem>
+                      <MenuItem value="custom">Personalizado</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                {dateFilter === 'custom' && (
+                  <>
+                    <Grid item xs={12} md={3}>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        label="Data Inicial"
+                        size="small"
+                        value={startDate ? startDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setStartDate(new Date(e.target.value))}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        label="Data Final"
+                        size="small"
+                        value={endDate ? endDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => setEndDate(new Date(e.target.value))}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Grid>
+                  </>
                 )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                <Grid item xs={12} md={dateFilter === 'custom' ? 3 : 3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Filtrar por Ação</InputLabel>
+                    <Select
+                      value={actionFilter}
+                      onChange={(e) => setActionFilter(e.target.value)}
+                      label="Filtrar por Ação"
+                    >
+                      <MenuItem value="all">Todas as ações</MenuItem>
+                      <MenuItem value="new_sale">Vendas</MenuItem>
+                      <MenuItem value="create_uniform">Novos Uniformes</MenuItem>
+                      <MenuItem value="update_uniform">Atualizações</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data/Hora</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Ação</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Usuário</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Detalhes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).map((log) => (
+                    <TableRow key={log.id} hover>
+                      <TableCell>{formatLogDate(log.createdAt)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {getLogIcon(log.action)}
+                          <Chip
+                            label={log.action === 'new_sale' ? 'Venda' : 
+                                  log.action === 'create_uniform' ? 'Novo Uniforme' :
+                                  log.action === 'update_uniform' ? 'Atualização' : 'Outro'}
+                            color={log.action === 'new_sale' ? 'success' :
+                                  log.action === 'create_uniform' ? 'primary' :
+                                  log.action === 'update_uniform' ? 'warning' : 'default'}
+                            size="small"
+                            sx={{ borderRadius: 1 }}
+                          />
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={log.userName}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon fontSize="small" sx={{ color: 'primary.main' }} />
+                            <Typography variant="body2">
+                              {log.userName.includes('@') ? log.userName.split('@')[0] : log.userName}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>{getLogMessage(log)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {logs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Nenhum registro encontrado
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
         )}
       </Paper>
 
