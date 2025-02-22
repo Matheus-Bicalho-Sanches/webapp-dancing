@@ -40,7 +40,8 @@ import {
   ShoppingCart as ShoppingCartIcon,
   History as HistoryIcon,
   Person as PersonIcon,
-  AttachMoney as MoneyIcon
+  AttachMoney as MoneyIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -451,6 +452,40 @@ export default function Uniform() {
     });
   };
 
+  // Add function to calculate total sales
+  const calculateTotalSales = (logsToCalculate) => {
+    return logsToCalculate
+      .filter(log => log.action === 'new_sale')
+      .reduce((total, log) => total + (log.details?.total || 0), 0);
+  };
+
+  // Add print function
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Add print styles
+  const printStyles = `
+    @media print {
+      @page { size: landscape; }
+      body * {
+        visibility: hidden;
+      }
+      #printable-area, #printable-area * {
+        visibility: visible;
+      }
+      #printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  `;
+
   if (loading || loadingLogs) {
     return (
       <MainLayout>
@@ -463,6 +498,7 @@ export default function Uniform() {
 
   return (
     <Box sx={{ p: 3 }}>
+      <style>{printStyles}</style>
       <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: '#fff' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -617,6 +653,7 @@ export default function Uniform() {
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
                       label="Filtrar por Data"
+                      className="no-print"
                     >
                       <MenuItem value="all">Todas as datas</MenuItem>
                       <MenuItem value="today">Hoje</MenuItem>
@@ -659,6 +696,7 @@ export default function Uniform() {
                       value={actionFilter}
                       onChange={(e) => setActionFilter(e.target.value)}
                       label="Filtrar por Ação"
+                      className="no-print"
                     >
                       <MenuItem value="all">Todas as ações</MenuItem>
                       <MenuItem value="new_sale">Vendas</MenuItem>
@@ -667,63 +705,95 @@ export default function Uniform() {
                     </Select>
                   </FormControl>
                 </Grid>
+                <Grid item xs={12} md={3}>
+                  <Button
+                    variant="outlined"
+                    onClick={handlePrint}
+                    className="no-print"
+                    startIcon={<PrintIcon />}
+                    fullWidth
+                  >
+                    Imprimir Relatório
+                  </Button>
+                </Grid>
               </Grid>
             </Box>
 
-            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data/Hora</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Ação</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Usuário</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#666' }}>Detalhes</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).map((log) => (
-                    <TableRow key={log.id} hover>
-                      <TableCell>{formatLogDate(log.createdAt)}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {getLogIcon(log.action)}
-                          <Chip
-                            label={log.action === 'new_sale' ? 'Venda' : 
-                                  log.action === 'create_uniform' ? 'Novo Uniforme' :
-                                  log.action === 'update_uniform' ? 'Atualização' : 'Outro'}
-                            color={log.action === 'new_sale' ? 'success' :
-                                  log.action === 'create_uniform' ? 'primary' :
-                                  log.action === 'update_uniform' ? 'warning' : 'default'}
-                            size="small"
-                            sx={{ borderRadius: 1 }}
-                          />
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={log.userName}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <PersonIcon fontSize="small" sx={{ color: 'primary.main' }} />
-                            <Typography variant="body2">
-                              {log.userName.includes('@') ? log.userName.split('@')[0] : log.userName}
-                            </Typography>
-                          </Box>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>{getLogMessage(log)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {logs.length === 0 && (
+            <Box id="printable-area">
+              <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}>
+                Relatório de Histórico de Uniformes
+              </Typography>
+              {(dateFilter !== 'all' || actionFilter !== 'all') && (
+                <Typography variant="subtitle2" sx={{ mb: 2, textAlign: 'center', color: 'text.secondary' }}>
+                  Filtros aplicados: {dateFilter !== 'all' && `Data: ${dateFilter === 'custom' ? `${startDate?.toLocaleDateString()} até ${endDate?.toLocaleDateString()}` : dateFilter}`}
+                  {actionFilter !== 'all' && ` | Ação: ${actionFilter === 'new_sale' ? 'Vendas' : actionFilter === 'create_uniform' ? 'Novos Uniformes' : 'Atualizações'}`}
+                </Typography>
+              )}
+              
+              <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
+                <Table>
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                        <Typography variant="body2" color="textSecondary">
-                          Nenhum registro encontrado
-                        </Typography>
-                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data/Hora</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#666' }}>Ação</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#666' }}>Usuário</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: '#666' }}>Detalhes</TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).map((log) => (
+                      <TableRow key={log.id} hover>
+                        <TableCell>{formatLogDate(log.createdAt)}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {getLogIcon(log.action)}
+                            <Chip
+                              label={log.action === 'new_sale' ? 'Venda' : 
+                                    log.action === 'create_uniform' ? 'Novo Uniforme' :
+                                    log.action === 'update_uniform' ? 'Atualização' : 'Outro'}
+                              color={log.action === 'new_sale' ? 'success' :
+                                    log.action === 'create_uniform' ? 'primary' :
+                                    log.action === 'update_uniform' ? 'warning' : 'default'}
+                              size="small"
+                              sx={{ borderRadius: 1 }}
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={log.userName}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <PersonIcon fontSize="small" sx={{ color: 'primary.main' }} />
+                              <Typography variant="body2">
+                                {log.userName.includes('@') ? log.userName.split('@')[0] : log.userName}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>{getLogMessage(log)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {logs.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                          <Typography variant="body2" color="textSecondary">
+                            Nenhum registro encontrado
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Add total sales summary */}
+              {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).some(log => log.action === 'new_sale') && (
+                <Box sx={{ mt: 2, textAlign: 'right' }}>
+                  <Typography variant="h6">
+                    Total em Vendas: {formatCurrency(calculateTotalSales(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs))}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </>
         )}
       </Paper>
