@@ -28,6 +28,7 @@ import {
   Tabs,
   Tab,
   Checkbox,
+  Grid,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -62,6 +63,13 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+  
+  // Adicionar estados para filtros
+  const [responsibleFilter, setResponsibleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [deadlineSort, setDeadlineSort] = useState('asc'); // 'asc' ou 'desc'
+  const [filteredTasks, setFilteredTasks] = useState([]);
+  
   const [formData, setFormData] = useState({
     descricao: '',
     responsavel: [],
@@ -114,6 +122,39 @@ export default function Tasks() {
 
     return () => unsubscribe();
   }, []);
+
+  // Adicionar useEffect para filtrar tarefas
+  useEffect(() => {
+    let filtered = [...tasks];
+    
+    // Filtrar por responsável
+    if (responsibleFilter !== 'all') {
+      filtered = filtered.filter(task => 
+        Array.isArray(task.responsavel) 
+          ? task.responsavel.includes(responsibleFilter)
+          : task.responsavel === responsibleFilter
+      );
+    }
+    
+    // Filtrar por status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(task => task.status === statusFilter);
+    }
+    
+    // Filtrar tarefas finalizadas se necessário
+    if (!showCompletedTasks) {
+      filtered = filtered.filter(task => task.status !== 'Finalizada');
+    }
+    
+    // Ordenar por prazo
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.prazoLimite);
+      const dateB = new Date(b.prazoLimite);
+      return deadlineSort === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+    
+    setFilteredTasks(filtered);
+  }, [tasks, responsibleFilter, statusFilter, deadlineSort, showCompletedTasks]);
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -334,6 +375,58 @@ export default function Tasks() {
         </Button>
       </Box>
 
+      {/* Adicionar filtros */}
+      <Box sx={{ mb: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Filtrar por Responsável</InputLabel>
+              <Select
+                value={responsibleFilter}
+                onChange={(e) => setResponsibleFilter(e.target.value)}
+                label="Filtrar por Responsável"
+              >
+                <MenuItem value="all">Todos os responsáveis</MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.name || user.email}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Filtrar por Status</InputLabel>
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                label="Filtrar por Status"
+              >
+                <MenuItem value="all">Todos os status</MenuItem>
+                <MenuItem value="Pendente">Pendente</MenuItem>
+                <MenuItem value="Em andamento">Em andamento</MenuItem>
+                <MenuItem value="Finalizada">Finalizada</MenuItem>
+                <MenuItem value="Aguardando">Aguardando</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Ordenar por Prazo</InputLabel>
+              <Select
+                value={deadlineSort}
+                onChange={(e) => setDeadlineSort(e.target.value)}
+                label="Ordenar por Prazo"
+              >
+                <MenuItem value="asc">Mais próximo primeiro</MenuItem>
+                <MenuItem value="desc">Mais distante primeiro</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </Box>
+
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
@@ -347,9 +440,7 @@ export default function Tasks() {
             </TableRow>
           </TableHead>
           <TableBody>
-                  {tasks
-                    .filter(task => showCompletedTasks || task.status !== 'Finalizada')
-                    .map((task) => (
+                  {filteredTasks.map((task) => (
               <TableRow key={task.id}>
                     <TableCell>{task.descricao}</TableCell>
                 <TableCell>
@@ -411,7 +502,7 @@ export default function Tasks() {
                     </TableCell>
                   </TableRow>
                     ))}
-                  {tasks.filter(task => showCompletedTasks || task.status !== 'Finalizada').length === 0 && (
+                  {filteredTasks.length === 0 && (
                 <TableRow>
                       <TableCell colSpan={6} align="center">
                         Nenhuma tarefa encontrada
