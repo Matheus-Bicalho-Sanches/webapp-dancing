@@ -94,6 +94,18 @@ export default function Tasks() {
     status: 'Pendente'
   });
 
+  // Estados para tarefas semanais
+  const [weeklyTasks, setWeeklyTasks] = useState([]);
+  const [weeklyTasksLoading, setWeeklyTasksLoading] = useState(true);
+  const [openWeeklyDialog, setOpenWeeklyDialog] = useState(false);
+  const [editingWeeklyTask, setEditingWeeklyTask] = useState(null);
+  const [weeklyFormData, setWeeklyFormData] = useState({
+    descricao: '',
+    diaDaSemana: 1, // 1-7 (Segunda a Domingo)
+    status: 'Pendente',
+    ultimaExecucao: null
+  });
+
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
 
@@ -207,13 +219,87 @@ export default function Tasks() {
         }));
       setDailyTasks(tasksData);
       setDailyTasksLoading(false);
+      
+      // Verificar e resetar tarefas finalizadas quando os dados são carregados
+      resetFinishedDailyTasks(tasksData);
     }, (error) => {
       console.error('Erro ao carregar tarefas diárias:', error);
       setDailyTasksLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
+
+  // Função para resetar tarefas diárias finalizadas
+  const resetFinishedDailyTasks = async (tasks) => {
+    try {
+      // Verificar se o usuário está autenticado
+      if (!currentUser) {
+        console.log('Usuário não autenticado, não é possível resetar tarefas');
+        return;
+      }
+      
+      // Obter a data da última atualização do localStorage
+      const lastResetDate = localStorage.getItem('lastDailyTasksResetDate');
+      const today = dayjs().format('YYYY-MM-DD');
+      
+      // Se não houver data salva ou se a data for diferente da atual, resetar as tarefas
+      if (!lastResetDate || lastResetDate !== today) {
+        console.log('Resetando tarefas diárias finalizadas...');
+        
+        // Filtrar apenas as tarefas com status "Finalizada"
+        const finishedTasks = tasks.filter(task => task.status === 'Finalizada');
+        
+        // Atualizar cada tarefa finalizada para "Pendente"
+        for (const task of finishedTasks) {
+          const taskRef = doc(db, 'tarefas_diarias', task.id);
+          
+          await updateDoc(taskRef, { 
+            status: 'Pendente',
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUser.uid,
+            resetedAt: serverTimestamp()
+          });
+          
+          // Registrar log de atualização automática de status
+          await addTaskLog('status-change', {
+            ...task,
+            oldStatus: 'Finalizada',
+            newStatus: 'Pendente',
+            taskType: 'diaria',
+            automatic: true
+          }, task.id);
+        }
+        
+        // Salvar a data atual no localStorage
+        localStorage.setItem('lastDailyTasksResetDate', today);
+        
+        if (finishedTasks.length > 0) {
+          setSnackbar({
+            open: true,
+            message: `${finishedTasks.length} tarefa(s) diária(s) resetada(s) para "Pendente"`,
+            severity: 'info'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao resetar tarefas diárias:', error);
+    }
+  };
+
+  // Verificar periodicamente se a data mudou para resetar tarefas diárias
+  useEffect(() => {
+    const currentTab = getCurrentTab();
+    // Só executar se estiver na aba de tarefas diárias e houver tarefas carregadas
+    if (currentTab === 1 && !dailyTasksLoading && dailyTasks.length > 0) {
+      // Verificar a cada 5 minutos se a data mudou
+      const intervalId = setInterval(() => {
+        resetFinishedDailyTasks(dailyTasks);
+      }, 5 * 60 * 1000); // 5 minutos em milissegundos
+      
+      return () => clearInterval(intervalId);
+    }
+  }, [location, dailyTasksLoading, dailyTasks, currentUser]);
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -248,6 +334,14 @@ export default function Tasks() {
   // Função para registrar o log
   const addTaskLog = async (action, taskData, taskId = null) => {
     try {
+      console.log(`[DEBUG] addTaskLog - action: ${action}, taskType: ${taskData.taskType}`);
+      console.log('[DEBUG] taskData:', JSON.stringify({
+        descricao: taskData.descricao,
+        oldStatus: taskData.oldStatus,
+        newStatus: taskData.newStatus,
+        status: taskData.status
+      }, null, 2));
+      
       const logEntry = {
         action, // 'create', 'update', 'delete' ou 'status-change'
         taskId,
@@ -258,12 +352,25 @@ export default function Tasks() {
         taskType: taskData?.taskType || 'regular' // Identificar o tipo de tarefa (regular ou diária)
       };
       
-      // Adicionar informações sobre mudança de status
+      // Incluir oldStatus e newStatus no log independentemente da ação
+      if (taskData.oldStatus && taskData.newStatus) {
+        logEntry.oldStatus = taskData.oldStatus;
+        logEntry.newStatus = taskData.newStatus;
+      }
+      
+      // Processo padrão para action === 'status-change'
       if (action === 'status-change' && taskData) {
         // Verificar o tipo de tarefa e buscar a tarefa original correspondente
         if (taskData.taskType === 'diaria') {
           // Para tarefas diárias
           const originalTask = dailyTasks.find(task => task.id === taskId);
+          if (originalTask) {
+            logEntry.oldStatus = originalTask.status;
+            logEntry.newStatus = taskData.newStatus || taskData.status;
+          }
+        } else if (taskData.taskType === 'semanal') {
+          // Para tarefas semanais
+          const originalTask = weeklyTasks.find(task => task.id === taskId);
           if (originalTask) {
             logEntry.oldStatus = originalTask.status;
             logEntry.newStatus = taskData.newStatus || taskData.status;
@@ -317,7 +424,12 @@ export default function Tasks() {
           }, editingTask.id);
         } else {
           // Atualização normal sem mudança de status
-          await addTaskLog('update', taskData, editingTask.id);
+          await addTaskLog('update', {
+            ...taskData,
+            // Incluir status atual mesmo que não tenha mudado, para consistência nos logs
+            oldStatus: editingTask.status,
+            newStatus: formData.status
+          }, editingTask.id);
         }
         
         setSnackbar({
@@ -473,20 +585,46 @@ export default function Tasks() {
 
   // Função para obter o nome da ação
   const getActionName = (action, log) => {
-    const taskTypeLabel = log.taskType === 'diaria' ? 'Tarefa Diária' : 'Tarefa';
+    let taskTypeLabel = 'Tarefa';
     
+    if (log.taskType === 'diaria') {
+      taskTypeLabel = 'Tarefa Diária';
+    } else if (log.taskType === 'semanal') {
+      taskTypeLabel = 'Tarefa Semanal';
+    }
+    
+    // Se temos informações sobre o status anterior e novo, exibi-los sempre
+    if (log.oldStatus && log.newStatus) {
+      if (action === 'update') {
+        return `Editou ${taskTypeLabel} - Status: ${log.oldStatus} → ${log.newStatus}`;
+      }
+      
+      if (action === 'status-change') {
+        // Verificar se foi uma atualização automática
+        if (log.automatic) {
+          if (log.taskType === 'diaria') {
+            return `Reset automático: ${log.oldStatus} → ${log.newStatus}`;
+          } else if (log.taskType === 'semanal') {
+            return `Reset semanal automático: ${log.oldStatus} → ${log.newStatus}`;
+          }
+          return `Reset automático: ${log.oldStatus} → ${log.newStatus}`;
+        }
+        
+        // Mostrar alteração de status com a transição
+        return `Alterou o status da ${taskTypeLabel}: ${log.oldStatus} → ${log.newStatus}`;
+      }
+    }
+    
+    // Casos onde não temos informações de status ou outros tipos de ação
     switch (action) {
       case 'create': 
-        return log.taskType === 'diaria' ? 'Criou Tarefa Diária' : 'Criou';
+        return `Criou ${taskTypeLabel}`;
       case 'update': 
-        return log.taskType === 'diaria' ? 'Editou Tarefa Diária' : 'Editou';
+        return `Editou ${taskTypeLabel}`;
       case 'delete': 
-        return log.taskType === 'diaria' ? 'Excluiu Tarefa Diária' : 'Excluiu';
-      case 'status-change': 
-        if (log.oldStatus && log.newStatus) {
-          return `Alterou o status ${log.taskType === 'diaria' ? 'da Tarefa Diária' : ''}: ${log.oldStatus} → ${log.newStatus}`;
-        }
-        return log.taskType === 'diaria' ? 'Alterou o status da Tarefa Diária' : 'Alterou o status';
+        return `Excluiu ${taskTypeLabel}`;
+      case 'status-change':
+        return `Alterou o status da ${taskTypeLabel}`;
       default: 
         return action;
     }
@@ -555,7 +693,10 @@ export default function Tasks() {
         } else {
           await addTaskLog('update', {
             ...taskData, 
-            taskType: 'diaria'
+            taskType: 'diaria',
+            // Incluir status atual mesmo que não tenha mudado, para consistência nos logs
+            oldStatus: editingDailyTask.status,
+            newStatus: dailyFormData.status
           }, editingDailyTask.id);
         }
         
@@ -645,6 +786,309 @@ export default function Tasks() {
         oldStatus: oldStatus,
         newStatus: newStatus,
         taskType: 'diaria'
+      }, taskId);
+      
+      setSnackbar({
+        open: true,
+        message: 'Status atualizado com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar status. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // Carregar tarefas semanais
+  useEffect(() => {
+    const q = query(
+      collection(db, 'tarefas_semanais'), 
+      orderBy('descricao', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setWeeklyTasks(tasksData);
+      setWeeklyTasksLoading(false);
+      
+      // Verificar e resetar tarefas semanais se necessário
+      checkWeeklyTasksReset(tasksData);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas semanais:', error);
+      setWeeklyTasksLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Função para verificar e resetar tarefas semanais
+  const checkWeeklyTasksReset = async (tasks) => {
+    try {
+      // Verificar se o usuário está autenticado
+      if (!currentUser) {
+        console.log('Usuário não autenticado, não é possível resetar tarefas semanais');
+        return;
+      }
+      
+      // Obter o dia da semana atual (1-7, onde 1 é Segunda-feira)
+      const hoje = new Date();
+      const diaDaSemana = hoje.getDay() === 0 ? 7 : hoje.getDay(); // Converter 0 (Domingo) para 7
+      
+      // Filtrar tarefas que correspondem ao dia da semana atual e estão com status "Finalizada"
+      const tasksThatNeedReset = tasks.filter(task => 
+        task.diaDaSemana === diaDaSemana && 
+        task.status === 'Finalizada' &&
+        (!task.ultimaExecucao || 
+          (task.ultimaExecucao.toDate && dayjs(task.ultimaExecucao.toDate()).format('YYYY-MM-DD') !== dayjs().format('YYYY-MM-DD')))
+      );
+      
+      if (tasksThatNeedReset.length === 0) return;
+      
+      console.log(`Resetando ${tasksThatNeedReset.length} tarefas semanais para o dia ${getDiaSemanaTexto(diaDaSemana)}`);
+      
+      // Atualizar cada tarefa para "Pendente"
+      for (const task of tasksThatNeedReset) {
+        const taskRef = doc(db, 'tarefas_semanais', task.id);
+        
+        await updateDoc(taskRef, { 
+          status: 'Pendente',
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser.uid,
+          resetedAt: serverTimestamp()
+        });
+        
+        // Registrar log de atualização automática
+        await addTaskLog('status-change', {
+          ...task,
+          oldStatus: 'Finalizada',
+          newStatus: 'Pendente',
+          taskType: 'semanal',
+          automatic: true
+        }, task.id);
+      }
+      
+      if (tasksThatNeedReset.length > 0) {
+        setSnackbar({
+          open: true,
+          message: `${tasksThatNeedReset.length} tarefa(s) semanal(is) resetada(s) para "Pendente"`,
+          severity: 'info'
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao resetar tarefas semanais:', error);
+    }
+  };
+
+  // Verificar periodicamente se é necessário resetar tarefas semanais
+  useEffect(() => {
+    const currentTab = getCurrentTab();
+    // Só executar se estiver na aba de tarefas semanais e houver tarefas carregadas
+    if (currentTab === 2 && !weeklyTasksLoading && weeklyTasks.length > 0) {
+      // Verificar a cada 5 minutos
+      const intervalId = setInterval(() => {
+        checkWeeklyTasksReset(weeklyTasks);
+      }, 5 * 60 * 1000); // 5 minutos em milissegundos
+      
+      return () => clearInterval(intervalId);
+    }
+  }, [location, weeklyTasksLoading, weeklyTasks, currentUser]);
+
+  // Funções para tarefas semanais
+  const handleOpenWeeklyDialog = (task = null) => {
+    if (task) {
+      setEditingWeeklyTask(task);
+      setWeeklyFormData({
+        descricao: task.descricao,
+        diaDaSemana: task.diaDaSemana || 1,
+        status: task.status || 'Pendente',
+        ultimaExecucao: task.ultimaExecucao || null
+      });
+    } else {
+      setEditingWeeklyTask(null);
+      setWeeklyFormData({
+        descricao: '',
+        diaDaSemana: 1,
+        status: 'Pendente',
+        ultimaExecucao: null
+      });
+    }
+    setOpenWeeklyDialog(true);
+  };
+
+  const handleCloseWeeklyDialog = () => {
+    setOpenWeeklyDialog(false);
+    setEditingWeeklyTask(null);
+  };
+
+  const getDiaSemanaTexto = (diaDaSemana) => {
+    const diasSemana = [
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+      'Domingo'
+    ];
+    return diasSemana[diaDaSemana - 1] || 'Dia inválido';
+  };
+
+  const formatUltimaExecucao = (timestamp) => {
+    if (!timestamp) return 'Nunca executada';
+    
+    if (timestamp.toDate) {
+      return dayjs(timestamp.toDate()).format('DD/MM/YYYY');
+    }
+    
+    return dayjs(timestamp).format('DD/MM/YYYY');
+  };
+
+  const handleWeeklySubmit = async () => {
+    try {
+      if (!weeklyFormData.descricao) {
+        setSnackbar({
+          open: true,
+          message: 'Preencha a descrição da tarefa',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const taskData = {
+        ...weeklyFormData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      if (editingWeeklyTask) {
+        // Verificar se o status foi alterado
+        const statusChanged = editingWeeklyTask.status !== weeklyFormData.status;
+        
+        console.log(`[DEBUG] Editando tarefa semanal - ID: ${editingWeeklyTask.id}, statusChanged: ${statusChanged}`);
+        console.log(`[DEBUG] Status atual: ${editingWeeklyTask.status}, Novo status: ${weeklyFormData.status}`);
+        
+        await updateDoc(doc(db, 'tarefas_semanais', editingWeeklyTask.id), taskData);
+        
+        // Registrar log de atualização
+        if (statusChanged) {
+          await addTaskLog('status-change', {
+            ...taskData,
+            oldStatus: editingWeeklyTask.status,
+            newStatus: weeklyFormData.status,
+            taskType: 'semanal'
+          }, editingWeeklyTask.id);
+        } else {
+          await addTaskLog('update', {
+            ...taskData, 
+            taskType: 'semanal',
+            // Incluir status atual mesmo que não tenha mudado, para consistência nos logs
+            oldStatus: editingWeeklyTask.status,
+            newStatus: weeklyFormData.status
+          }, editingWeeklyTask.id);
+        }
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa semanal atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        taskData.createdAt = serverTimestamp();
+        taskData.createdBy = currentUser.uid;
+        const docRef = await addDoc(collection(db, 'tarefas_semanais'), taskData);
+        
+        // Registrar log de criação
+        await addTaskLog('create', {
+          ...taskData, 
+          taskType: 'semanal'
+        }, docRef.id);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa semanal criada com sucesso!',
+          severity: 'success'
+        });
+      }
+
+      handleCloseWeeklyDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa semanal:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa semanal. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleWeeklyDelete = async (taskId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa semanal?')) {
+      try {
+        const taskToDelete = weeklyTasks.find(task => task.id === taskId);
+        await deleteDoc(doc(db, 'tarefas_semanais', taskId));
+        
+        // Registrar log de exclusão
+        await addTaskLog('delete', {
+          ...taskToDelete, 
+          taskType: 'semanal'
+        }, taskId);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa semanal excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa semanal:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa semanal. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleWeeklyStatusChange = async (taskId, newStatus) => {
+    try {
+      const taskRef = doc(db, 'tarefas_semanais', taskId);
+      const taskToUpdate = weeklyTasks.find(task => task.id === taskId);
+      
+      if (!taskToUpdate) {
+        throw new Error('Tarefa semanal não encontrada');
+      }
+      
+      // Salvar o status anterior antes de atualizar
+      const oldStatus = taskToUpdate.status;
+      
+      console.log(`[DEBUG] Alterando status da tarefa semanal - ID: ${taskId}, oldStatus: ${oldStatus}, newStatus: ${newStatus}`);
+      
+      // Se o status mudar para "Finalizada", registrar a data atual como última execução
+      const updateData = { 
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+      
+      if (newStatus === 'Finalizada') {
+        updateData.ultimaExecucao = serverTimestamp();
+      }
+      
+      await updateDoc(taskRef, updateData);
+      
+      // Registrar log de atualização de status
+      await addTaskLog('status-change', {
+        ...taskToUpdate,
+        oldStatus: oldStatus,
+        newStatus: newStatus,
+        taskType: 'semanal'
       }, taskId);
       
       setSnackbar({
@@ -935,6 +1379,88 @@ export default function Tasks() {
           </>
         )}
 
+        {/* Aba de Tarefas Semanais */}
+        {getCurrentTab() === 2 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenWeeklyDialog()}
+              >
+                Nova Tarefa Semanal
+              </Button>
+            </Box>
+
+            {weeklyTasksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Dia da Semana</TableCell>
+                      <TableCell>Feito em</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {weeklyTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell>{task.descricao}</TableCell>
+                        <TableCell>{getDiaSemanaTexto(task.diaDaSemana)}</TableCell>
+                        <TableCell>{formatUltimaExecucao(task.ultimaExecucao)}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={task.status || 'Pendente'}
+                            onChange={(e) => handleWeeklyStatusChange(task.id, e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 120 }}
+                          >
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                            <MenuItem value="Em andamento">Em andamento</MenuItem>
+                            <MenuItem value="Finalizada">Finalizada</MenuItem>
+                            <MenuItem value="Aguardando">Aguardando</MenuItem>
+                          </Select>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenWeeklyDialog(task)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          {hasDeletePermission && (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleWeeklyDelete(task.id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {weeklyTasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          Nenhuma tarefa semanal encontrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
+
         {/* Aba de Logs */}
         {getCurrentTab() === 5 && (
           <>
@@ -1147,6 +1673,74 @@ export default function Tasks() {
               disabled={!dailyFormData.descricao}
             >
               {editingDailyTask ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog para adicionar/editar tarefa semanal */}
+        <Dialog
+          open={openWeeklyDialog}
+          onClose={handleCloseWeeklyDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingWeeklyTask ? 'Editar Tarefa Semanal' : 'Nova Tarefa Semanal'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                value={weeklyFormData.descricao}
+                onChange={(e) => setWeeklyFormData({ ...weeklyFormData, descricao: e.target.value })}
+                required
+                multiline
+                rows={2}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Dia da Semana</InputLabel>
+                <Select
+                  value={weeklyFormData.diaDaSemana}
+                  onChange={(e) => setWeeklyFormData({ ...weeklyFormData, diaDaSemana: e.target.value })}
+                  label="Dia da Semana"
+                >
+                  <MenuItem value={1}>Segunda-feira</MenuItem>
+                  <MenuItem value={2}>Terça-feira</MenuItem>
+                  <MenuItem value={3}>Quarta-feira</MenuItem>
+                  <MenuItem value={4}>Quinta-feira</MenuItem>
+                  <MenuItem value={5}>Sexta-feira</MenuItem>
+                  <MenuItem value={6}>Sábado</MenuItem>
+                  <MenuItem value={7}>Domingo</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={weeklyFormData.status}
+                  onChange={(e) => setWeeklyFormData({ ...weeklyFormData, status: e.target.value })}
+                  label="Status"
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseWeeklyDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleWeeklySubmit}
+              variant="contained"
+              disabled={!weeklyFormData.descricao}
+            >
+              {editingWeeklyTask ? 'Salvar' : 'Criar'}
             </Button>
           </DialogActions>
         </Dialog>

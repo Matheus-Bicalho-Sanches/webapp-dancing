@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Reset de Tarefas Diárias</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .card {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #output {
+            background-color: #f1f1f1;
+            border-left: 4px solid #27ae60;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de Reset Automático de Tarefas Diárias</h1>
+    
+    <div class="card">
+        <h2>Instruções</h2>
+        <p>Esta página permite testar a funcionalidade de reset automático das tarefas diárias sem precisar esperar a mudança real de dia.</p>
+        <p>Use os botões abaixo para simular diferentes cenários e depois acesse a aplicação para ver o comportamento.</p>
+    </div>
+    
+    <div>
+        <button onclick="setYesterdayAsLastResetDate()">Simular Reset de Ontem</button>
+        <button onclick="checkCurrentResetDate()">Verificar Data Atual</button>
+        <button onclick="clearResetDate()">Limpar Data de Reset</button>
+    </div>
+    
+    <div id="output">Os resultados aparecerão aqui...</div>
+    
+    <script>
+        // Redirecionar saída do console para a div de output
+        const outputDiv = document.getElementById('output');
+        const originalConsoleLog = console.log;
+        
+        console.log = function() {
+            const args = Array.from(arguments);
+            outputDiv.textContent = args.join('\n');
+            originalConsoleLog.apply(console, arguments);
+        };
+        
+        // 1. Função para simular uma data anterior
+        function setYesterdayAsLastResetDate() {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const formattedDate = yesterday.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+            
+            localStorage.setItem('lastDailyTasksResetDate', formattedDate);
+            console.log(`Data de último reset definida para: ${formattedDate}\n\nAgora acesse a aplicação na aba "Diária" para ver o reset automático acontecer.`);
+        }
+
+        // 2. Função para verificar a data atual de reset
+        function checkCurrentResetDate() {
+            const currentDate = localStorage.getItem('lastDailyTasksResetDate');
+            let output = `Data atual de último reset: ${currentDate || 'Não definida'}\n`;
+            
+            const today = new Date().toISOString().split('T')[0];
+            output += `Data de hoje: ${today}\n\n`;
+            
+            if (currentDate === today) {
+                output += 'O reset já foi executado hoje';
+            } else {
+                output += 'O reset ainda não foi executado hoje ou está com data incorreta';
+            }
+            
+            console.log(output);
+        }
+
+        // 3. Função para limpar a data de reset (forçará um reset na próxima vez)
+        function clearResetDate() {
+            localStorage.removeItem('lastDailyTasksResetDate');
+            console.log('Data de último reset removida.\n\nO reset será executado na próxima vez que a aplicação for carregada na aba "Diária".');
+        }
+        
+        // Mostrar instruções iniciais
+        console.log(`INSTRUÇÕES DE TESTE:
+
+1. Clique em "Simular Reset de Ontem" para definir a data de último reset como ontem
+   (isso forçará um reset quando você acessar a aplicação)
+
+2. Clique em "Verificar Data Atual" para ver a data atual de último reset
+
+3. Clique em "Limpar Data de Reset" para remover a data de último reset
+   (isso também forçará um reset na próxima vez)
+
+4. Após usar um dos botões, acesse a aplicação na aba "Diária" para ver o comportamento do reset automático.`);
+    </script>
+</body>
+</html> 
