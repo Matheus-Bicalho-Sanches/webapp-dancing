@@ -29,6 +29,8 @@ import {
   Tab,
   Checkbox,
   Grid,
+  Avatar,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -78,6 +80,9 @@ export default function Tasks() {
     status: 'Pendente',
     tipo: 'nao_recorrente'
   });
+
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(true);
 
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
@@ -156,6 +161,28 @@ export default function Tasks() {
     setFilteredTasks(filtered);
   }, [tasks, responsibleFilter, statusFilter, deadlineSort, showCompletedTasks]);
 
+  // Carregar logs
+  useEffect(() => {
+    const q = query(
+        collection(db, 'task_logs'), 
+        orderBy('timestamp', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const logsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setLogs(logsData);
+      setLogsLoading(false);
+    }, (error) => {
+      console.error('Erro ao carregar logs:', error);
+      setLogsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handleOpenDialog = (task = null) => {
     if (task) {
       setEditingTask(task);
@@ -186,6 +213,34 @@ export default function Tasks() {
     setEditingTask(null);
   };
 
+  // Função para registrar o log
+  const addTaskLog = async (action, taskData, taskId = null) => {
+    try {
+      const logEntry = {
+        action, // 'create', 'update', 'delete' ou 'status-change'
+        taskId,
+        taskDescription: taskData?.descricao,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email,
+        timestamp: serverTimestamp()
+      };
+      
+      // Adicionar informações sobre mudança de status
+      if (action === 'status-change' && taskData) {
+        // Encontrar a tarefa original para obter o status anterior
+        const originalTask = tasks.find(task => task.id === taskId);
+        if (originalTask) {
+          logEntry.oldStatus = originalTask.status;
+          logEntry.newStatus = taskData.status;
+        }
+      }
+      
+      await addDoc(collection(db, 'task_logs'), logEntry);
+    } catch (error) {
+      console.error('Erro ao registrar log:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       if (!formData.descricao || !formData.responsavel.length || !formData.prazoLimite) {
@@ -204,7 +259,24 @@ export default function Tasks() {
       };
 
       if (editingTask) {
+        // Verificar se o status foi alterado
+        const statusChanged = editingTask.status !== formData.status;
+        
         await updateDoc(doc(db, 'tarefas', editingTask.id), taskData);
+        
+        // Registrar log de atualização
+        if (statusChanged) {
+          // Se houve mudança de status, registrar com ação específica
+          await addTaskLog('status-change', {
+            ...taskData,
+            oldStatus: editingTask.status,
+            newStatus: formData.status
+          }, editingTask.id);
+        } else {
+          // Atualização normal sem mudança de status
+          await addTaskLog('update', taskData, editingTask.id);
+        }
+        
         setSnackbar({
           open: true,
           message: 'Tarefa atualizada com sucesso!',
@@ -213,7 +285,9 @@ export default function Tasks() {
       } else {
         taskData.createdAt = serverTimestamp();
         taskData.createdBy = currentUser.uid;
-        await addDoc(collection(db, 'tarefas'), taskData);
+        const docRef = await addDoc(collection(db, 'tarefas'), taskData);
+        // Registrar log de criação
+        await addTaskLog('create', taskData, docRef.id);
         setSnackbar({
           open: true,
           message: 'Tarefa criada com sucesso!',
@@ -235,7 +309,10 @@ export default function Tasks() {
   const handleDelete = async (taskId) => {
     if (window.confirm('Tem certeza que deseja excluir esta tarefa?')) {
       try {
+        const taskToDelete = tasks.find(task => task.id === taskId);
         await deleteDoc(doc(db, 'tarefas', taskId));
+        // Registrar log de exclusão
+        await addTaskLog('delete', taskToDelete, taskId);
         setSnackbar({
           open: true,
           message: 'Tarefa excluída com sucesso!',
@@ -254,12 +331,29 @@ export default function Tasks() {
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'tarefas', taskId), {
+      const taskRef = doc(db, 'tarefas', taskId);
+      const taskToUpdate = tasks.find(task => task.id === taskId);
+      
+      if (!taskToUpdate) {
+        throw new Error('Tarefa não encontrada');
+      }
+      
+      // Salvar o status anterior antes de atualizar
+      const oldStatus = taskToUpdate.status;
+      
+      await updateDoc(taskRef, { 
         status: newStatus,
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       });
-
+      
+      // Registrar log de atualização de status com informações de status anterior e novo
+      await addTaskLog('status-change', {
+        ...taskToUpdate,
+        oldStatus: oldStatus,
+        newStatus: newStatus
+      }, taskId);
+      
       setSnackbar({
         open: true,
         message: 'Status atualizado com sucesso!',
@@ -318,6 +412,45 @@ export default function Tasks() {
       '/admin/tarefas?tab=logs'
     ];
     navigate(tabPaths[newValue]);
+  };
+
+  // Função para formatar data e hora para exibição nos logs
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'Data não disponível';
+    
+    // Se for um timestamp do Firestore
+    if (timestamp.toDate) {
+      const date = timestamp.toDate();
+      return dayjs(date).format('DD/MM/YYYY HH:mm');
+    }
+    
+    // Se for uma data normal
+    return dayjs(timestamp).format('DD/MM/YYYY HH:mm');
+  };
+
+  // Função para obter o nome da ação
+  const getActionName = (action, log) => {
+    switch (action) {
+      case 'create': 
+        return 'Criou';
+      case 'update': 
+        return 'Editou';
+      case 'delete': 
+        return 'Excluiu';
+      case 'status-change': 
+        if (log.oldStatus && log.newStatus) {
+          return `Alterou o status: ${log.oldStatus} → ${log.newStatus}`;
+        }
+        return 'Alterou o status';
+      default: 
+        return action;
+    }
+  };
+
+  // Função para encontrar informações do usuário pelo ID
+  const getUserInfo = (userId) => {
+    const user = users.find(u => u.id === userId);
+    return user || { name: 'Usuário desconhecido', profilePicture: null };
   };
 
   if (loading) {
@@ -513,6 +646,57 @@ export default function Tasks() {
           </Table>
         </TableContainer>
       </>
+        )}
+
+        {/* Aba de Logs */}
+        {getCurrentTab() === 5 && (
+          <>
+            {logsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : logs.length === 0 ? (
+              <Alert severity="info">Nenhum registro de log encontrado.</Alert>
+            ) : (
+              <TableContainer component={Paper} sx={{ mb: 4 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Colaborador</TableCell>
+                      <TableCell>Ação</TableCell>
+                      <TableCell>Tarefa</TableCell>
+                      <TableCell>Data e Hora</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar 
+                              src={getUserInfo(log.userId)?.profilePicture} 
+                              sx={{ width: 30, height: 30 }}
+                            >
+                              {(getUserInfo(log.userId)?.name || log.userName || 'U')[0]}
+                            </Avatar>
+                            <Typography>
+                              {getUserInfo(log.userId)?.name || 
+                                (log.userName && log.userName.includes('@') 
+                                  ? log.userName.split('@')[0] 
+                                  : log.userName)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{getActionName(log.action, log)}</TableCell>
+                        <TableCell>{log.taskDescription || '(Tarefa excluída)'}</TableCell>
+                        <TableCell>{formatDateTime(log.timestamp)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
         )}
 
         {/* Dialog para adicionar/editar tarefa */}
