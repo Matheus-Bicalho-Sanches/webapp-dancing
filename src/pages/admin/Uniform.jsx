@@ -88,21 +88,35 @@ export default function Uniform() {
     paymentMethod: ''
   });
 
-  const tamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG'];
+  const tamanhos = ['Não há', '1', '2', '3', 'PP', 'P', 'M', 'G', 'GG', 'XG'];
   const categorias = ['Uniforme Treino', 'Uniforme Competição', 'Acessórios'];
 
   useEffect(() => {
     const q = query(
       collection(db, 'uniforms'),
-      orderBy('createdAt', 'desc')
+      orderBy('nome', 'asc')
     );
 
     const unsubscribe = onSnapshot(q, 
       (querySnapshot) => {
-        const uniformsData = querySnapshot.docs.map(doc => ({
+        let uniformsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        // Ordenação adicional para uniformes com o mesmo nome (por tamanho)
+        uniformsData.sort((a, b) => {
+          // Se nomes são diferentes, mantém a ordenação alfabética
+          if (a.nome !== b.nome) {
+            return a.nome.localeCompare(b.nome);
+          }
+          
+          // Se nomes são iguais, ordena por tamanho na sequência específica
+          const tamanhoOrderA = tamanhos.indexOf(a.tamanho);
+          const tamanhoOrderB = tamanhos.indexOf(b.tamanho);
+          return tamanhoOrderA - tamanhoOrderB;
+        });
+        
         setUniforms(uniformsData);
         setLoading(false);
       },
