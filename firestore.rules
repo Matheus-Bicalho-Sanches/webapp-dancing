@@ -109,6 +109,13 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
+    // Regras para a coleção tarefas_diarias
+    match /tarefas_diarias/{tarefaId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
     // Regras para a coleção movimentacoes
     match /movimentacoes/{movimentacaoId} {
       allow read: if isAuthenticated();

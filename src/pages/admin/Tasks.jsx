@@ -84,6 +84,16 @@ export default function Tasks() {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(true);
 
+  // Estados para tarefas diárias
+  const [dailyTasks, setDailyTasks] = useState([]);
+  const [dailyTasksLoading, setDailyTasksLoading] = useState(true);
+  const [openDailyDialog, setOpenDailyDialog] = useState(false);
+  const [editingDailyTask, setEditingDailyTask] = useState(null);
+  const [dailyFormData, setDailyFormData] = useState({
+    descricao: '',
+    status: 'Pendente'
+  });
+
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
 
@@ -183,6 +193,28 @@ export default function Tasks() {
     return () => unsubscribe();
   }, []);
 
+  // Carregar tarefas diárias
+  useEffect(() => {
+    const q = query(
+        collection(db, 'tarefas_diarias'), 
+        orderBy('descricao', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setDailyTasks(tasksData);
+      setDailyTasksLoading(false);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas diárias:', error);
+      setDailyTasksLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handleOpenDialog = (task = null) => {
     if (task) {
       setEditingTask(task);
@@ -222,16 +254,27 @@ export default function Tasks() {
         taskDescription: taskData?.descricao,
         userId: currentUser.uid,
         userName: currentUser.displayName || currentUser.email,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        taskType: taskData?.taskType || 'regular' // Identificar o tipo de tarefa (regular ou diária)
       };
       
       // Adicionar informações sobre mudança de status
       if (action === 'status-change' && taskData) {
-        // Encontrar a tarefa original para obter o status anterior
-        const originalTask = tasks.find(task => task.id === taskId);
-        if (originalTask) {
-          logEntry.oldStatus = originalTask.status;
-          logEntry.newStatus = taskData.status;
+        // Verificar o tipo de tarefa e buscar a tarefa original correspondente
+        if (taskData.taskType === 'diaria') {
+          // Para tarefas diárias
+          const originalTask = dailyTasks.find(task => task.id === taskId);
+          if (originalTask) {
+            logEntry.oldStatus = originalTask.status;
+            logEntry.newStatus = taskData.newStatus || taskData.status;
+          }
+        } else {
+          // Para tarefas regulares
+          const originalTask = tasks.find(task => task.id === taskId);
+          if (originalTask) {
+            logEntry.oldStatus = originalTask.status;
+            logEntry.newStatus = taskData.newStatus || taskData.status;
+          }
         }
       }
       
@@ -430,18 +473,20 @@ export default function Tasks() {
 
   // Função para obter o nome da ação
   const getActionName = (action, log) => {
+    const taskTypeLabel = log.taskType === 'diaria' ? 'Tarefa Diária' : 'Tarefa';
+    
     switch (action) {
       case 'create': 
-        return 'Criou';
+        return log.taskType === 'diaria' ? 'Criou Tarefa Diária' : 'Criou';
       case 'update': 
-        return 'Editou';
+        return log.taskType === 'diaria' ? 'Editou Tarefa Diária' : 'Editou';
       case 'delete': 
-        return 'Excluiu';
+        return log.taskType === 'diaria' ? 'Excluiu Tarefa Diária' : 'Excluiu';
       case 'status-change': 
         if (log.oldStatus && log.newStatus) {
-          return `Alterou o status: ${log.oldStatus} → ${log.newStatus}`;
+          return `Alterou o status ${log.taskType === 'diaria' ? 'da Tarefa Diária' : ''}: ${log.oldStatus} → ${log.newStatus}`;
         }
-        return 'Alterou o status';
+        return log.taskType === 'diaria' ? 'Alterou o status da Tarefa Diária' : 'Alterou o status';
       default: 
         return action;
     }
@@ -451,6 +496,170 @@ export default function Tasks() {
   const getUserInfo = (userId) => {
     const user = users.find(u => u.id === userId);
     return user || { name: 'Usuário desconhecido', profilePicture: null };
+  };
+
+  // Funções para tarefas diárias
+  const handleOpenDailyDialog = (task = null) => {
+    if (task) {
+      setEditingDailyTask(task);
+      setDailyFormData({
+        descricao: task.descricao,
+        status: task.status || 'Pendente'
+      });
+    } else {
+      setEditingDailyTask(null);
+      setDailyFormData({
+        descricao: '',
+        status: 'Pendente'
+      });
+    }
+    setOpenDailyDialog(true);
+  };
+
+  const handleCloseDailyDialog = () => {
+    setOpenDailyDialog(false);
+    setEditingDailyTask(null);
+  };
+
+  const handleDailySubmit = async () => {
+    try {
+      if (!dailyFormData.descricao) {
+        setSnackbar({
+          open: true,
+          message: 'Preencha a descrição da tarefa',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const taskData = {
+        ...dailyFormData,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      if (editingDailyTask) {
+        // Verificar se o status foi alterado
+        const statusChanged = editingDailyTask.status !== dailyFormData.status;
+        
+        await updateDoc(doc(db, 'tarefas_diarias', editingDailyTask.id), taskData);
+        
+        // Registrar log de atualização
+        if (statusChanged) {
+          await addTaskLog('status-change', {
+            ...taskData,
+            oldStatus: editingDailyTask.status,
+            newStatus: dailyFormData.status,
+            taskType: 'diaria'
+          }, editingDailyTask.id);
+        } else {
+          await addTaskLog('update', {
+            ...taskData, 
+            taskType: 'diaria'
+          }, editingDailyTask.id);
+        }
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa diária atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        taskData.createdAt = serverTimestamp();
+        taskData.createdBy = currentUser.uid;
+        const docRef = await addDoc(collection(db, 'tarefas_diarias'), taskData);
+        
+        // Registrar log de criação
+        await addTaskLog('create', {
+          ...taskData, 
+          taskType: 'diaria'
+        }, docRef.id);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa diária criada com sucesso!',
+          severity: 'success'
+        });
+      }
+
+      handleCloseDailyDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa diária:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa diária. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDailyDelete = async (taskId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa diária?')) {
+      try {
+        const taskToDelete = dailyTasks.find(task => task.id === taskId);
+        await deleteDoc(doc(db, 'tarefas_diarias', taskId));
+        
+        // Registrar log de exclusão
+        await addTaskLog('delete', {
+          ...taskToDelete, 
+          taskType: 'diaria'
+        }, taskId);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa diária excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa diária:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa diária. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleDailyStatusChange = async (taskId, newStatus) => {
+    try {
+      const taskRef = doc(db, 'tarefas_diarias', taskId);
+      const taskToUpdate = dailyTasks.find(task => task.id === taskId);
+      
+      if (!taskToUpdate) {
+        throw new Error('Tarefa diária não encontrada');
+      }
+      
+      // Salvar o status anterior antes de atualizar
+      const oldStatus = taskToUpdate.status;
+      
+      await updateDoc(taskRef, { 
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+      
+      // Registrar log de atualização de status
+      await addTaskLog('status-change', {
+        ...taskToUpdate,
+        oldStatus: oldStatus,
+        newStatus: newStatus,
+        taskType: 'diaria'
+      }, taskId);
+      
+      setSnackbar({
+        open: true,
+        message: 'Status atualizado com sucesso!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao atualizar status. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
   };
 
   if (loading) {
@@ -648,6 +857,84 @@ export default function Tasks() {
       </>
         )}
 
+        {/* Aba de Tarefas Diárias */}
+        {getCurrentTab() === 1 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDailyDialog()}
+              >
+                Nova Tarefa Diária
+              </Button>
+            </Box>
+
+            {dailyTasksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {dailyTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell>{task.descricao}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={task.status || 'Pendente'}
+                            onChange={(e) => handleDailyStatusChange(task.id, e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 120 }}
+                          >
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                            <MenuItem value="Em andamento">Em andamento</MenuItem>
+                            <MenuItem value="Finalizada">Finalizada</MenuItem>
+                            <MenuItem value="Aguardando">Aguardando</MenuItem>
+                          </Select>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenDailyDialog(task)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          {hasDeletePermission && (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleDailyDelete(task.id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {dailyTasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center">
+                          Nenhuma tarefa diária encontrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
+
         {/* Aba de Logs */}
         {getCurrentTab() === 5 && (
           <>
@@ -812,6 +1099,57 @@ export default function Tasks() {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Dialog para adicionar/editar tarefa diária */}
+        <Dialog
+          open={openDailyDialog}
+          onClose={handleCloseDailyDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingDailyTask ? 'Editar Tarefa Diária' : 'Nova Tarefa Diária'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                value={dailyFormData.descricao}
+                onChange={(e) => setDailyFormData({ ...dailyFormData, descricao: e.target.value })}
+                required
+                multiline
+                rows={2}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={dailyFormData.status}
+                  onChange={(e) => setDailyFormData({ ...dailyFormData, status: e.target.value })}
+                  label="Status"
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDailyDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleDailySubmit}
+              variant="contained"
+              disabled={!dailyFormData.descricao}
+            >
+              {editingDailyTask ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </MainLayout>
   );
