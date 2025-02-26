@@ -515,6 +515,7 @@ export default function Students() {
                   name="responsavelFinanceiro.nome"
                   value={formData.responsavelFinanceiro.nome}
                   onChange={handleChange}
+                  required
                 />
                 <TextField
                   fullWidth
@@ -522,6 +523,7 @@ export default function Students() {
                   name="responsavelFinanceiro.email"
                   value={formData.responsavelFinanceiro.email}
                   onChange={handleChange}
+                  required
                 />
                 <TextField
                   fullWidth
@@ -529,6 +531,7 @@ export default function Students() {
                   name="responsavelFinanceiro.cpf"
                   value={formData.responsavelFinanceiro.cpf}
                   onChange={handleChange}
+                  required
                 />
                 <TextField
                   fullWidth

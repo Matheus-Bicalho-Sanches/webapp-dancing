@@ -88,7 +88,7 @@ export default function Uniform() {
     paymentMethod: ''
   });
 
-  const tamanhos = ['Não há', '1', '2', '3', 'PP', 'P', 'M', 'G', 'GG', 'XG'];
+  const tamanhos = ['Não há', '1', '2', '3', '10', '12', '14', '16', 'PP', 'P', 'M', 'G', 'GG', 'XG'];
   const categorias = ['Uniforme Treino', 'Uniforme Competição', 'Acessórios'];
 
   useEffect(() => {
