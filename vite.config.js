@@ -28,48 +28,19 @@ export default defineConfig({
     host: true,
     strictPort: true,
     proxy: {
-      '^/api/asaas/.*': {
-        target: 'https://sandbox.asaas.com/api/v3',
+      '/api/asaas': {
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api\/asaas/, ''),
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.error('Proxy error:', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            proxyReq.setHeader('access_token', process.env.VITE_ASAAS_API_KEY || '$aact_MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjBjNGYwMjI2LWVlZjAtNDQyMi04NzI3LWY4NGZkMWIyYzZmYjo6JGFhY2hfMjQ0MTQ3OGItYmRjOS00ODZmLTk1OWYtMWIxNDgyYTllYmE1');
-            console.log('Sending Request to Asaas:', {
-              method: req.method,
-              url: req.url,
-              headers: proxyReq.getHeaders()
-            });
+            console.log('Sending Request to API Server:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from Asaas:', {
-              statusCode: proxyRes.statusCode,
-              url: req.url,
-              headers: proxyRes.headers
-            });
-            
-            if (proxyRes.statusCode >= 400) {
-              let body = '';
-              proxyRes.on('data', chunk => {
-                body += chunk;
-              });
-              proxyRes.on('end', () => {
-                try {
-                  const data = JSON.parse(body);
-                  console.error('Asaas API Error:', {
-                    status: proxyRes.statusCode,
-                    url: req.url,
-                    error: data
-                  });
-                } catch (e) {
-                  console.error('Failed to parse error response:', body);
-                }
-              });
-            }
+            console.log('Received Response from API Server:', proxyRes.statusCode, req.url);
           });
         }
       },
