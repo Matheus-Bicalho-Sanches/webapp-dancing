@@ -69,8 +69,9 @@ export default function Uniform() {
   const [dateFilter, setDateFilter] = useState('all');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [actionFilter, setActionFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
   const [filteredLogs, setFilteredLogs] = useState([]);
+  const [uniqueUsers, setUniqueUsers] = useState([]);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -143,13 +144,21 @@ export default function Uniform() {
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const logsData = [];
+      const users = new Set();
+      
       querySnapshot.forEach((doc) => {
         const log = doc.data();
-        if (log.details && (log.details.categoria === 'Uniforme' || log.action === 'create_uniform' || log.action === 'update_uniform')) {
+        if (log.details && log.action === 'new_sale' && log.details.categoria === 'Uniforme') {
           logsData.push({ id: doc.id, ...log });
+          
+          if (log.userName) {
+            users.add(log.userName);
+          }
         }
       });
+      
       setLogs(logsData);
+      setUniqueUsers(Array.from(users).sort());
       setLoadingLogs(false);
     }, (error) => {
       console.error("Erro ao buscar logs:", error);
@@ -163,12 +172,10 @@ export default function Uniform() {
     const filterLogs = () => {
       let filtered = [...logs];
 
-      // Apply action filter
-      if (actionFilter !== 'all') {
-        filtered = filtered.filter(log => log.action === actionFilter);
+      if (userFilter !== 'all') {
+        filtered = filtered.filter(log => log.userName === userFilter);
       }
 
-      // Apply date filter
       if (dateFilter === 'custom' && startDate && endDate) {
         filtered = filtered.filter(log => {
           const logDate = log.createdAt?.toDate();
@@ -201,7 +208,7 @@ export default function Uniform() {
     };
 
     filterLogs();
-  }, [logs, dateFilter, startDate, endDate, actionFilter]);
+  }, [logs, dateFilter, startDate, endDate, userFilter]);
 
   const handleOpenDialog = (uniform = null) => {
     if (uniform) {
@@ -705,17 +712,19 @@ export default function Uniform() {
                 )}
                 <Grid item xs={12} md={dateFilter === 'custom' ? 3 : 3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Filtrar por Ação</InputLabel>
+                    <InputLabel>Filtrar por Usuário</InputLabel>
                     <Select
-                      value={actionFilter}
-                      onChange={(e) => setActionFilter(e.target.value)}
-                      label="Filtrar por Ação"
+                      value={userFilter}
+                      onChange={(e) => setUserFilter(e.target.value)}
+                      label="Filtrar por Usuário"
                       className="no-print"
                     >
-                      <MenuItem value="all">Todas as ações</MenuItem>
-                      <MenuItem value="new_sale">Vendas</MenuItem>
-                      <MenuItem value="create_uniform">Novos Uniformes</MenuItem>
-                      <MenuItem value="update_uniform">Atualizações</MenuItem>
+                      <MenuItem value="all">Todos os usuários</MenuItem>
+                      {uniqueUsers.map(user => (
+                        <MenuItem key={user} value={user}>
+                          {user.includes('@') ? user.split('@')[0] : user}
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -735,12 +744,12 @@ export default function Uniform() {
 
             <Box id="printable-area">
               <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}>
-                Relatório de Histórico de Uniformes
+                Relatório de Vendas de Uniformes
               </Typography>
-              {(dateFilter !== 'all' || actionFilter !== 'all') && (
+              {(dateFilter !== 'all' || userFilter !== 'all') && (
                 <Typography variant="subtitle2" sx={{ mb: 2, textAlign: 'center', color: 'text.secondary' }}>
                   Filtros aplicados: {dateFilter !== 'all' && `Data: ${dateFilter === 'custom' ? `${startDate?.toLocaleDateString()} até ${endDate?.toLocaleDateString()}` : dateFilter}`}
-                  {actionFilter !== 'all' && ` | Ação: ${actionFilter === 'new_sale' ? 'Vendas' : actionFilter === 'create_uniform' ? 'Novos Uniformes' : 'Atualizações'}`}
+                  {userFilter !== 'all' && ` | Usuário: ${userFilter.includes('@') ? userFilter.split('@')[0] : userFilter}`}
                 </Typography>
               )}
               
@@ -755,19 +764,15 @@ export default function Uniform() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).map((log) => (
+                    {(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs).map((log) => (
                       <TableRow key={log.id} hover>
                         <TableCell>{formatLogDate(log.createdAt)}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getLogIcon(log.action)}
+                            <MoneyIcon color="success" />
                             <Chip
-                              label={log.action === 'new_sale' ? 'Venda' : 
-                                    log.action === 'create_uniform' ? 'Novo Uniforme' :
-                                    log.action === 'update_uniform' ? 'Atualização' : 'Outro'}
-                              color={log.action === 'new_sale' ? 'success' :
-                                    log.action === 'create_uniform' ? 'primary' :
-                                    log.action === 'update_uniform' ? 'warning' : 'default'}
+                              label="Venda"
+                              color="success"
                               size="small"
                               sx={{ borderRadius: 1 }}
                             />
@@ -800,10 +805,10 @@ export default function Uniform() {
               </TableContainer>
 
               {/* Add total sales summary */}
-              {(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs).some(log => log.action === 'new_sale') && (
+              {(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs).length > 0 && (
                 <Box sx={{ mt: 2, textAlign: 'right' }}>
                   <Typography variant="h6">
-                    Total em Vendas: {formatCurrency(calculateTotalSales(dateFilter === 'all' && actionFilter === 'all' ? logs : filteredLogs))}
+                    Total em Vendas: {formatCurrency(calculateTotalSales(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs))}
                   </Typography>
                 </Box>
               )}
