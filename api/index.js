@@ -157,6 +157,150 @@ app.post('/api/asaas/customers/:id', async (req, res) => {
   }
 });
 
+// Rota para tokenizar cartão de crédito
+app.post('/api/asaas/creditCard/tokenize', async (req, res) => {
+  try {
+    console.log('Recebendo requisição para tokenizar cartão:');
+    console.log('- Headers:', { 
+      ...req.headers, 
+      'access_token': req.headers['access_token'] ? `${req.headers['access_token'].substring(0, 10)}...` : 'não definido' 
+    });
+    console.log('- Body:', {
+      ...req.body,
+      creditCard: req.body.creditCard ? {
+        ...req.body.creditCard,
+        number: req.body.creditCard.number ? '****' : undefined,
+        ccv: req.body.creditCard.ccv ? '***' : undefined
+      } : undefined
+    });
+    
+    const response = await asaasRequest('post', '/creditCard/tokenize', req.body, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro detalhado ao tokenizar cartão:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
+// Rota para criar assinaturas
+app.post('/api/asaas/subscriptions', async (req, res) => {
+  try {
+    console.log('Recebendo requisição para criar assinatura:', {
+      body: req.body,
+      token: '****'
+    });
+    
+    const response = await asaasRequest('post', '/subscriptions', req.body, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro ao criar assinatura:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
+// Rota para buscar assinaturas de um cliente
+app.get('/api/asaas/subscriptions', async (req, res) => {
+  try {
+    const response = await asaasRequest('get', '/subscriptions', null, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro ao buscar assinaturas:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
+// Rota para cancelar assinatura
+app.delete('/api/asaas/subscriptions/:id', async (req, res) => {
+  try {
+    const response = await asaasRequest('delete', `/subscriptions/${req.params.id}`, req.body, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro ao cancelar assinatura:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
+// Rota para criar pagamento
+app.post('/api/asaas/payments', async (req, res) => {
+  try {
+    console.log('Recebendo requisição para criar pagamento:', {
+      body: req.body,
+      token: '****'
+    });
+    
+    const response = await asaasRequest('post', '/payments', req.body, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro ao criar pagamento:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
+// Rota para buscar pagamento
+app.get('/api/asaas/payments/:id', async (req, res) => {
+  try {
+    const response = await asaasRequest('get', `/payments/${req.params.id}`, null, req.asaasToken);
+    res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Erro ao buscar pagamento:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
+    }
+  }
+});
+
 // Rota de teste para Asaas
 app.get('/api/asaas/test', (req, res) => {
   try {
@@ -174,16 +318,18 @@ app.get('/api/asaas/test', (req, res) => {
   }
 });
 
-// Inicializa o servidor
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log('Variáveis de ambiente carregadas:');
-  console.log(`- ASAAS_API_URL: ${process.env.ASAAS_API_URL}`);
-  console.log(`- ASAAS_API_KEY: ${process.env.ASAAS_API_KEY ? `${process.env.ASAAS_API_KEY.substring(0, 10)}...` : 'não definida'}`);
-  console.log(`- asaasBaseUrl: ${asaasBaseUrl}`);
-  console.log(`- asaasApiKey: ${asaasApiKey ? `${asaasApiKey.substring(0, 10)}...` : 'não definida'}`);
-});
+// Inicializa o servidor apenas em ambiente de desenvolvimento
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log('Variáveis de ambiente carregadas:');
+    console.log(`- ASAAS_API_URL: ${process.env.ASAAS_API_URL}`);
+    console.log(`- ASAAS_API_KEY: ${process.env.ASAAS_API_KEY ? `${process.env.ASAAS_API_KEY.substring(0, 10)}...` : 'não definida'}`);
+    console.log(`- asaasBaseUrl: ${asaasBaseUrl}`);
+    console.log(`- asaasApiKey: ${asaasApiKey ? `${asaasApiKey.substring(0, 10)}...` : 'não definida'}`);
+  });
+}
 
 // Exporta o handler para o Vercel
 export default app; 

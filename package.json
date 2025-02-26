@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start-vite": "vite --port 3000 --host",
-    "dev": "npm run start-vite",
+    "start-api": "node api/index.js",
+    "dev": "concurrently \"npm run start-vite\" \"npm run start-api\"",
     "build": "vite build",
     "vercel-build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
