@@ -596,8 +596,8 @@ export default function CRM() {
 
   if (loading) {
     return (
-      <MainLayout title="CRM" sx={{ maxWidth: '100vw', overflowX: 'hidden' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+      <MainLayout title="CRM">
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', py: 4 }}>
           <CircularProgress />
         </Box>
       </MainLayout>
@@ -605,9 +605,16 @@ export default function CRM() {
   }
 
   return (
-    <MainLayout title="CRM" sx={{ maxWidth: '100vw', overflowX: 'hidden' }}>
-      <Box sx={{ p: { xs: 0.5, sm: 1 }, overflow: 'hidden', maxWidth: '100vw' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+    <MainLayout title="CRM">
+      <Box sx={{ 
+        overflow: 'hidden',
+        maxWidth: '100%',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100vh - 120px)'
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, px: 0.25 }}>
           <Typography variant="h5" sx={{ color: '#000', fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>
             Gestão de Leads
           </Typography>
@@ -616,6 +623,7 @@ export default function CRM() {
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog()}
             size="small"
+            sx={{ height: '28px', fontSize: '0.8rem' }}
           >
             Novo Lead
           </Button>
@@ -624,19 +632,25 @@ export default function CRM() {
         <TableContainer component={Paper} sx={{ 
           maxWidth: '100%', 
           width: '100%', 
-          overflow: 'hidden', 
-          boxSizing: 'border-box',
-          '&::-webkit-scrollbar': {
-            display: 'none'
-          },
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none'
+          overflow: 'auto', 
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: 'none',
+          border: 'none',
+          '&::-webkit-scrollbar': { width: '6px', height: '6px' },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '6px' }
         }}>
-          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
+          <Table size="small" stickyHeader sx={{ 
+            tableLayout: 'fixed', 
+            width: '100%', 
+            borderSpacing: 0,
+            flex: '1 0 auto'
+          }}>
             <TableHead>
               <TableRow>
-                <TableCell width="15%" sx={{ minWidth: 110, maxWidth: 130, py: 1 }}>Nome</TableCell>
-                <TableCell width="10%" sx={{ minWidth: 90, maxWidth: 100, py: 1 }}>
+                <TableCell width="16%" sx={{ minWidth: 110, maxWidth: 130, py: 1, px: 0.5 }}>Nome</TableCell>
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Status
                     <IconButton 
@@ -660,9 +674,9 @@ export default function CRM() {
                     )}
                   </Box>
                 </TableCell>
-                <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1 }}>WhatsApp</TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>Últ.</TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1, px: 0.5 }}>WhatsApp</TableCell>
+                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>Últ.</TableCell>
+                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Próx.
                     <IconButton 
@@ -686,7 +700,7 @@ export default function CRM() {
                     )}
                   </Box>
                 </TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Data
                     <IconButton 
@@ -710,7 +724,7 @@ export default function CRM() {
                     )}
                   </Box>
                 </TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Turma
                     <IconButton 
@@ -734,9 +748,9 @@ export default function CRM() {
                     )}
                   </Box>
                 </TableCell>
-                <TableCell width="15%" sx={{ minWidth: 100, maxWidth: 120, py: 1 }}>Obs.</TableCell>
-                <TableCell width="10%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>Origem</TableCell>
-                <TableCell width="5%" sx={{ minWidth: 60, maxWidth: 70, py: 1 }} align="right">Ações</TableCell>
+                <TableCell width="17%" sx={{ minWidth: 100, maxWidth: 120, py: 1, px: 0.5 }}>Obs.</TableCell>
+                <TableCell width="12%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>Origem</TableCell>
+                <TableCell width="5%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }} align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -745,16 +759,24 @@ export default function CRM() {
                 : filteredLeads
               ).map((lead) => (
                 <TableRow key={lead.id}>
-                  <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {lead.nome}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 100, p: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 80, p: 0.25 }}>
                     <FormControl size="small" fullWidth>
                       <Select
                         value={lead.status}
                         onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
                         size="small"
-                        sx={{ minWidth: 70, fontSize: '0.75rem', height: '1.8rem' }}
+                        sx={{ 
+                          minWidth: 50, 
+                          fontSize: '0.75rem', 
+                          height: '1.8rem',
+                          '& .MuiSelect-select': { 
+                            padding: '2px 4px',
+                            paddingRight: '24px' 
+                          }
+                        }}
                         renderValue={(value) => (
                           <Chip
                             label={value}
@@ -768,27 +790,44 @@ export default function CRM() {
                             }
                             size="small"
                             sx={{ 
-                              height: '18px', 
+                              height: '16px', 
                               '& .MuiChip-label': { 
-                                px: 0.4, 
-                                fontSize: '0.65rem' 
+                                px: 0.3, 
+                                fontSize: '0.6rem' 
                               } 
                             }}
                           />
                         )}
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              maxHeight: 200,
+                              width: '70px'
+                            }
+                          }
+                        }}
                       >
                         {statusOptions.map((status) => (
-                          <MenuItem key={status} value={status}>
+                          <MenuItem 
+                            key={status} 
+                            value={status}
+                            sx={{ 
+                              fontSize: '0.7rem',
+                              py: 0.25,
+                              px: 0.5,
+                              minHeight: '24px'
+                            }}
+                          >
                             {status}
                           </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {lead.whatsapp}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {editingCell === lead.id ? (
                       <TextField
                         type="date"
@@ -813,7 +852,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {editingCell === `${lead.id}-prox` ? (
                       <TextField
                         type="date"
@@ -841,7 +880,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {editingCell === `${lead.id}-ae` ? (
                       <TextField
                         type="date"
@@ -869,7 +908,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     <FormControl size="small" fullWidth>
                       <Select
                         value={lead.turmaAE || ''}
@@ -889,7 +928,7 @@ export default function CRM() {
                       </Select>
                     </FormControl>
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {editingCell === `${lead.id}-obs` ? (
                       <TextField
                         fullWidth
@@ -916,7 +955,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                     {editingCell === `${lead.id}-origem` ? (
                       <TextField
                         fullWidth
@@ -978,7 +1017,13 @@ export default function CRM() {
               '& .MuiTablePagination-toolbar': { minHeight: '36px', p: 0.5 },
               '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
                 fontSize: '0.75rem'
-              }
+              },
+              borderTop: '1px solid rgba(224, 224, 224, 1)',
+              marginTop: 'auto',
+              position: 'sticky',
+              bottom: 0,
+              backgroundColor: 'white',
+              zIndex: 1
             }}
           />
         </TableContainer>
@@ -1010,7 +1055,16 @@ export default function CRM() {
                   label="Status"
                 >
                   {statusOptions.map((status) => (
-                    <MenuItem key={status} value={status}>
+                    <MenuItem 
+                      key={status} 
+                      value={status}
+                      sx={{ 
+                        fontSize: '0.7rem',
+                        py: 0.25,
+                        px: 0.5,
+                        minHeight: '24px'
+                      }}
+                    >
                       {status}
                     </MenuItem>
                   ))}
@@ -1121,7 +1175,16 @@ export default function CRM() {
               >
                 <MenuItem value="">Todos</MenuItem>
                 {statusOptions.map((status) => (
-                  <MenuItem key={status} value={status}>
+                  <MenuItem 
+                    key={status} 
+                    value={status}
+                    sx={{ 
+                      fontSize: '0.7rem',
+                      py: 0.25,
+                      px: 0.5,
+                      minHeight: '24px'
+                    }}
+                  >
                     {status}
                   </MenuItem>
                 ))}
@@ -1284,7 +1347,7 @@ export default function CRM() {
           open={snackbar.open}
           autoHideDuration={6000}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
           <Alert
             onClose={() => setSnackbar({ ...snackbar, open: false })}
