@@ -643,309 +643,184 @@ export default function CRM() {
           </Button>
         </Box>
 
-        <TableContainer component={Paper} sx={{ 
-          maxWidth: '100%', 
-          width: '100%', 
-          overflow: 'auto', 
-          flexGrow: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: 'none',
-          border: 'none',
-          '&::-webkit-scrollbar': { width: '6px', height: '6px' },
-          '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '6px' }
-        }}>
-          <Table size="small" stickyHeader sx={{ 
-            tableLayout: 'fixed', 
-            width: '100%', 
-            borderSpacing: 0,
-            flex: '1 0 auto'
-          }}>
-            <TableHead>
-              <TableRow>
-                <TableCell width="16%" sx={{ minWidth: 110, maxWidth: 130, py: 1, px: 0.5 }}>Nome</TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Status
-                    <IconButton 
-                      size="small" 
-                      onClick={handleStatusFilterClick}
-                      sx={{ 
-                        p: 0.3,
-                        color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
-                      }}
-                    >
-                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
-                    </IconButton>
-                    {statusFilter && (
+        <Paper sx={{ width: "100%", mb: 2, borderRadius: 2 }}>
+          <TableContainer
+            sx={{
+              maxWidth: "calc(100vw - 32px)",
+              overflowX: "auto",
+              "&::-webkit-scrollbar": {
+                height: "10px",
+                width: "10px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                backgroundColor: "#bdbdbd",
+                borderRadius: "5px",
+              },
+              "&::-webkit-scrollbar-track": {
+                backgroundColor: "#f5f5f5",
+              },
+              maxHeight: "450px",  // Set fixed height for container
+              overflowY: "auto",   // Enable vertical scrolling
+            }}
+          >
+            <Table size="small" stickyHeader sx={{ 
+              tableLayout: 'fixed', 
+              width: '100%', 
+              borderSpacing: 0
+            }}>
+              <TableHead>
+                <TableRow sx={{ height: '40px' }}>
+                  <TableCell width="16%" sx={{ minWidth: 110, maxWidth: 130, py: 1, px: 0.5 }}>Nome</TableCell>
+                  <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      Status
                       <IconButton 
                         size="small" 
-                        onClick={clearStatusFilter}
-                        sx={{ p: 0.3 }}
-                      >
-                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
-                      </IconButton>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1, px: 0.5 }}>WhatsApp</TableCell>
-                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>Últ.</TableCell>
-                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Próx.
-                    <IconButton 
-                      size="small" 
-                      onClick={handleProxContatoFilterClick}
-                      sx={{ 
-                        p: 0.3,
-                        color: (proxContatoFilter || proxContatoSort === 'desc') ? 'primary.main' : 'inherit'
-                      }}
-                    >
-                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
-                    </IconButton>
-                    {proxContatoFilter && (
-                      <IconButton 
-                        size="small" 
-                        onClick={clearProxContatoFilter}
-                        sx={{ p: 0.3 }}
-                      >
-                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
-                      </IconButton>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Data
-                    <IconButton 
-                      size="small" 
-                      onClick={handleDataAEFilterClick}
-                      sx={{ 
-                        p: 0.3,
-                        color: dataAEFilter ? 'primary.main' : 'inherit'
-                      }}
-                    >
-                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
-                    </IconButton>
-                    {dataAEFilter && (
-                      <IconButton 
-                        size="small" 
-                        onClick={clearDataAEFilter}
-                        sx={{ p: 0.3 }}
-                      >
-                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
-                      </IconButton>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Turma
-                    <IconButton 
-                      size="small" 
-                      onClick={handleTurmaAEFilterClick}
-                      sx={{ 
-                        p: 0.3,
-                        color: turmaAEFilter ? 'primary.main' : 'inherit'
-                      }}
-                    >
-                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
-                    </IconButton>
-                    {turmaAEFilter && (
-                      <IconButton 
-                        size="small" 
-                        onClick={clearTurmaAEFilter}
-                        sx={{ p: 0.3 }}
-                      >
-                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
-                      </IconButton>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell width="17%" sx={{ minWidth: 100, maxWidth: 120, py: 1, px: 0.5 }}>Obs.</TableCell>
-                <TableCell width="12%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>Origem</TableCell>
-                <TableCell width="5%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }} align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(rowsPerPage > 0
-                ? filteredLeads.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                : filteredLeads
-              ).map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {lead.nome}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 80, p: 0.25 }}>
-                    <FormControl size="small" fullWidth>
-                      <Select
-                        value={lead.status}
-                        onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
-                        size="small"
+                        onClick={handleStatusFilterClick}
                         sx={{ 
-                          minWidth: 60, 
-                          fontSize: '0.8rem', 
-                          height: '2rem',
-                          '& .MuiSelect-select': { 
-                            padding: '4px 6px',
-                            paddingRight: '24px' 
-                          }
-                        }}
-                        renderValue={(value) => (
-                          <Chip
-                            label={value}
-                            color={
-                              value === 'Matrícula' ? 'success' :
-                              value === 'Inativo' ? 'error' :
-                              value === 'AE Agend' ? 'warning' :
-                              value === 'AE Feita' ? 'info' :
-                              value === 'Barra' ? 'secondary' :
-                              'default'
-                            }
-                            size="small"
-                            sx={{ 
-                              height: '20px', 
-                              '& .MuiChip-label': { 
-                                px: 0.8, 
-                                fontSize: '0.75rem',
-                                fontWeight: 500
-                              } 
-                            }}
-                          />
-                        )}
-                        MenuProps={{
-                          PaperProps: {
-                            style: {
-                              maxHeight: 200
-                            }
-                          }
+                          p: 0.3,
+                          color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
                         }}
                       >
-                        {statusOptions.map((option) => (
-                          <MenuItem 
-                            key={option} 
-                            value={option}
-                            sx={{ 
-                              fontSize: '0.8rem',
-                              minHeight: '30px', 
-                              py: 0.5 
-                            }}
-                          >
-                            {option}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                        <FilterListIcon sx={{ fontSize: '0.8rem' }} />
+                      </IconButton>
+                      {statusFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearStatusFilter}
+                          sx={{ p: 0.3 }}
+                        >
+                          <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                        </IconButton>
+                      )}
+                    </Box>
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {lead.whatsapp}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {editingCell === lead.id ? (
-                      <TextField
-                        type="date"
-                        fullWidth
-                        variant="standard"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'ultimoContato')}
-                        onBlur={() => handleSaveEdit(lead.id, 'ultimoContato')}
-                        autoFocus
-                        size="small"
-                        InputProps={{
-                          style: { fontSize: '0.875rem' }
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        onClick={() => handleStartEditing(lead.id, lead.ultimoContato)}
-                        style={{ cursor: 'pointer', minHeight: '20px' }}
-                      >
-                        {lead.ultimoContato ? formatDateForDisplay(lead.ultimoContato) : ''}
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {editingCell === `${lead.id}-prox` ? (
-                      <TextField
-                        type="date"
-                        fullWidth
-                        variant="standard"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'proximoContato')}
-                        onBlur={() => handleSaveEdit(lead.id, 'proximoContato')}
-                        autoFocus
-                        size="small"
-                        InputProps={{
-                          style: { fontSize: '0.875rem' }
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        onClick={() => {
-                          setEditingCell(`${lead.id}-prox`);
-                          setEditValue(formatDateForInput(lead.proximoContato));
-                        }}
-                        style={{ cursor: 'pointer', minHeight: '20px' }}
-                      >
-                        {lead.proximoContato ? formatDateForDisplay(lead.proximoContato) : '-'}
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {editingCell === `${lead.id}-ae` ? (
-                      <TextField
-                        type="date"
-                        fullWidth
-                        variant="standard"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'dataAE')}
-                        onBlur={() => handleSaveEdit(lead.id, 'dataAE')}
-                        autoFocus
-                        size="small"
-                        InputProps={{
-                          style: { fontSize: '0.875rem' }
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        onClick={() => {
-                          setEditingCell(`${lead.id}-ae`);
-                          setEditValue(formatDateForInput(lead.dataAE));
-                        }}
-                        style={{ cursor: 'pointer', minHeight: '20px' }}
-                      >
-                        {lead.dataAE ? formatDateForDisplay(lead.dataAE) : '-'}
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    <FormControl size="small" fullWidth>
-                      <Select
-                        value={lead.turmaAE || ''}
-                        onChange={(e) => handleTurmaUpdate(lead.id, e.target.value)}
-                        size="small"
-                        displayEmpty
+                  <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1, px: 0.5 }}>WhatsApp</TableCell>
+                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>Últ.</TableCell>
+                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      Próx.
+                      <IconButton 
+                        size="small" 
+                        onClick={handleProxContatoFilterClick}
                         sx={{ 
-                          fontSize: '0.8rem', 
-                          height: '2rem',
-                          '& .MuiSelect-select': { 
-                            padding: '4px 6px',
-                            paddingRight: '24px' 
-                          }
+                          p: 0.3,
+                          color: (proxContatoFilter || proxContatoSort === 'desc') ? 'primary.main' : 'inherit'
                         }}
-                        renderValue={(value) => (
-                          value ? (
+                      >
+                        <FilterListIcon sx={{ fontSize: '0.8rem' }} />
+                      </IconButton>
+                      {proxContatoFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearProxContatoFilter}
+                          sx={{ p: 0.3 }}
+                        >
+                          <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      Data
+                      <IconButton 
+                        size="small" 
+                        onClick={handleDataAEFilterClick}
+                        sx={{ 
+                          p: 0.3,
+                          color: dataAEFilter ? 'primary.main' : 'inherit'
+                        }}
+                      >
+                        <FilterListIcon sx={{ fontSize: '0.8rem' }} />
+                      </IconButton>
+                      {dataAEFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearDataAEFilter}
+                          sx={{ p: 0.3 }}
+                        >
+                          <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      Turma
+                      <IconButton 
+                        size="small" 
+                        onClick={handleTurmaAEFilterClick}
+                        sx={{ 
+                          p: 0.3,
+                          color: turmaAEFilter ? 'primary.main' : 'inherit'
+                        }}
+                      >
+                        <FilterListIcon sx={{ fontSize: '0.8rem' }} />
+                      </IconButton>
+                      {turmaAEFilter && (
+                        <IconButton 
+                          size="small" 
+                          onClick={clearTurmaAEFilter}
+                          sx={{ p: 0.3 }}
+                        >
+                          <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell width="17%" sx={{ minWidth: 100, maxWidth: 120, py: 1, px: 0.5 }}>Obs.</TableCell>
+                  <TableCell width="12%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>Origem</TableCell>
+                  <TableCell width="5%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }} align="right">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody sx={{ '& tr': { height: '36px !important' } }}>
+                {(rowsPerPage > 0
+                  ? filteredLeads.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  : filteredLeads
+                ).map((lead) => (
+                  <TableRow key={lead.id} sx={{ 
+                    height: '36px !important', 
+                    maxHeight: '36px !important', 
+                    minHeight: '36px !important', 
+                    '& .MuiTableCell-root': { 
+                      height: '36px !important',
+                      py: 0.5, 
+                      px: 0.5 
+                    } 
+                  }}>
+                    <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {lead.nome}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 80, p: 0.25 }}>
+                      <FormControl size="small" fullWidth>
+                        <Select
+                          value={lead.status}
+                          onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
+                          size="small"
+                          sx={{ 
+                            minWidth: 60, 
+                            fontSize: '0.8rem', 
+                            height: '2rem',
+                            '& .MuiSelect-select': { 
+                              padding: '4px 6px',
+                              paddingRight: '24px' 
+                            }
+                          }}
+                          renderValue={(value) => (
                             <Chip
                               label={value}
-                              color="default"
+                              color={
+                                value === 'Matrícula' ? 'success' :
+                                value === 'Inativo' ? 'error' :
+                                value === 'AE Agend' ? 'warning' :
+                                value === 'AE Feita' ? 'info' :
+                                value === 'Barra' ? 'secondary' :
+                                'default'
+                              }
                               size="small"
                               sx={{ 
-                                height: '20px',
-                                bgcolor: turmaColorMap[value] || '#757575',
-                                color: 'white',
+                                height: '20px', 
                                 '& .MuiChip-label': { 
                                   px: 0.8, 
                                   fontSize: '0.75rem',
@@ -953,123 +828,260 @@ export default function CRM() {
                                 } 
                               }}
                             />
-                          ) : (
-                            <em style={{ fontSize: '0.75rem', opacity: 0.7 }}>Sem turma</em>
-                          )
-                        )}
-                        MenuProps={{
-                          PaperProps: {
-                            style: {
-                              maxHeight: 200
+                          )}
+                          MenuProps={{
+                            PaperProps: {
+                              style: {
+                                maxHeight: 200
+                              }
                             }
-                          }
-                        }}
-                      >
-                        <MenuItem value="">
-                          <em>Sem turma</em>
-                        </MenuItem>
-                        {turmaOptions.map((turma) => (
-                          <MenuItem 
-                            key={turma} 
-                            value={turma}
-                            sx={{ 
-                              fontSize: '0.8rem',
-                              minHeight: '30px', 
-                              py: 0.5 
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                              <Box 
+                          }}
+                        >
+                          {statusOptions.map((option) => (
+                            <MenuItem 
+                              key={option} 
+                              value={option}
+                            >
+                              {option}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {lead.whatsapp}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {editingCell === lead.id ? (
+                        <TextField
+                          type="date"
+                          fullWidth
+                          variant="standard"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleKeyPress(e, lead.id, 'ultimoContato')}
+                          onBlur={() => handleSaveEdit(lead.id, 'ultimoContato')}
+                          autoFocus
+                          size="small"
+                          InputProps={{
+                            style: { fontSize: '0.875rem' }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onClick={() => handleStartEditing(lead.id, lead.ultimoContato)}
+                          style={{ cursor: 'pointer', minHeight: '20px' }}
+                        >
+                          {lead.ultimoContato ? formatDateForDisplay(lead.ultimoContato) : ''}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {editingCell === `${lead.id}-prox` ? (
+                        <TextField
+                          type="date"
+                          fullWidth
+                          variant="standard"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleKeyPress(e, lead.id, 'proximoContato')}
+                          onBlur={() => handleSaveEdit(lead.id, 'proximoContato')}
+                          autoFocus
+                          size="small"
+                          InputProps={{
+                            style: { fontSize: '0.875rem' }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onClick={() => {
+                            setEditingCell(`${lead.id}-prox`);
+                            setEditValue(formatDateForInput(lead.proximoContato));
+                          }}
+                          style={{ cursor: 'pointer', minHeight: '20px' }}
+                        >
+                          {lead.proximoContato ? formatDateForDisplay(lead.proximoContato) : '-'}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {editingCell === `${lead.id}-ae` ? (
+                        <TextField
+                          type="date"
+                          fullWidth
+                          variant="standard"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleKeyPress(e, lead.id, 'dataAE')}
+                          onBlur={() => handleSaveEdit(lead.id, 'dataAE')}
+                          autoFocus
+                          size="small"
+                          InputProps={{
+                            style: { fontSize: '0.875rem' }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onClick={() => {
+                            setEditingCell(`${lead.id}-ae`);
+                            setEditValue(formatDateForInput(lead.dataAE));
+                          }}
+                          style={{ cursor: 'pointer', minHeight: '20px' }}
+                        >
+                          {lead.dataAE ? formatDateForDisplay(lead.dataAE) : '-'}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      <FormControl size="small" fullWidth>
+                        <Select
+                          value={lead.turmaAE || ''}
+                          onChange={(e) => handleTurmaUpdate(lead.id, e.target.value)}
+                          size="small"
+                          displayEmpty
+                          sx={{ 
+                            fontSize: '0.8rem', 
+                            height: '2rem',
+                            '& .MuiSelect-select': { 
+                              padding: '4px 6px',
+                              paddingRight: '24px' 
+                            }
+                          }}
+                          renderValue={(value) => (
+                            value ? (
+                              <Chip
+                                label={value}
+                                color="default"
+                                size="small"
                                 sx={{ 
-                                  width: 14, 
-                                  height: 14, 
-                                  borderRadius: '50%', 
-                                  bgcolor: turmaColorMap[turma] || '#757575' 
-                                }} 
+                                  height: '20px',
+                                  bgcolor: turmaColorMap[value] || '#757575',
+                                  color: 'white',
+                                  '& .MuiChip-label': { 
+                                    px: 0.8, 
+                                    fontSize: '0.75rem',
+                                    fontWeight: 500
+                                  } 
+                                }}
                               />
-                              {turma}
-                            </Box>
+                            ) : (
+                              <em style={{ fontSize: '0.75rem', opacity: 0.7 }}>Sem turma</em>
+                            )
+                          )}
+                          MenuProps={{
+                            PaperProps: {
+                              style: {
+                                maxHeight: 200
+                              }
+                            }
+                          }}
+                        >
+                          <MenuItem value="">
+                            <em>Sem turma</em>
                           </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {editingCell === `${lead.id}-obs` ? (
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'observacoes')}
-                        onBlur={() => handleSaveEdit(lead.id, 'observacoes')}
-                        autoFocus
-                        size="small"
-                        InputProps={{
-                          style: { fontSize: '0.875rem' }
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        onClick={() => {
-                          setEditingCell(`${lead.id}-obs`);
-                          setEditValue(lead.observacoes || '');
-                        }}
-                        style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {lead.observacoes || '-'}
+                          {turmaOptions.map((turma) => (
+                            <MenuItem 
+                              key={turma} 
+                              value={turma}
+                              sx={{ 
+                                fontSize: '0.8rem',
+                                minHeight: '30px', 
+                                py: 0.5 
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                <Box 
+                                  sx={{ 
+                                    width: 14, 
+                                    height: 14, 
+                                    borderRadius: '50%', 
+                                    bgcolor: turmaColorMap[turma] || '#757575' 
+                                  }} 
+                                />
+                                {turma}
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {editingCell === `${lead.id}-obs` ? (
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleKeyPress(e, lead.id, 'observacoes')}
+                          onBlur={() => handleSaveEdit(lead.id, 'observacoes')}
+                          autoFocus
+                          size="small"
+                          InputProps={{
+                            style: { fontSize: '0.875rem' }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onClick={() => {
+                            setEditingCell(`${lead.id}-obs`);
+                            setEditValue(lead.observacoes || '');
+                          }}
+                          style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                          {lead.observacoes || '-'}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                      {editingCell === `${lead.id}-origem` ? (
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => handleKeyPress(e, lead.id, 'origemLead')}
+                          onBlur={() => handleSaveEdit(lead.id, 'origemLead')}
+                          autoFocus
+                          size="small"
+                          InputProps={{
+                            style: { fontSize: '0.875rem' }
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          onClick={() => {
+                            setEditingCell(`${lead.id}-origem`);
+                            setEditValue(lead.origemLead || '');
+                          }}
+                          style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                          {lead.origemLead || '-'}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell align="right" sx={{ maxWidth: 70, p: 0.5 }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleOpenDialog(lead)}
+                          size="small"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(lead.id)}
+                          size="small"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
                       </Box>
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                    {editingCell === `${lead.id}-origem` ? (
-                      <TextField
-                        fullWidth
-                        variant="standard"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'origemLead')}
-                        onBlur={() => handleSaveEdit(lead.id, 'origemLead')}
-                        autoFocus
-                        size="small"
-                        InputProps={{
-                          style: { fontSize: '0.875rem' }
-                        }}
-                      />
-                    ) : (
-                      <Box
-                        onClick={() => {
-                          setEditingCell(`${lead.id}-origem`);
-                          setEditValue(lead.origemLead || '');
-                        }}
-                        style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {lead.origemLead || '-'}
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell align="right" sx={{ maxWidth: 70, p: 0.5 }}>
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenDialog(lead)}
-                        size="small"
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDelete(lead.id)}
-                        size="small"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
           <TablePagination
             rowsPerPageOptions={[50]}
             component="div"
@@ -1092,7 +1104,7 @@ export default function CRM() {
               zIndex: 1
             }}
           />
-        </TableContainer>
+        </Paper>
 
         <Dialog
           open={openDialog}
