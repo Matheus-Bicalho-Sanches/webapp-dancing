@@ -1,8 +1,32 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
+import fs from 'fs'
+
+// Plugin para copiar o arquivo _redirects para a pasta dist durante o build
+const copyRedirectsPlugin = () => {
+  return {
+    name: 'copy-redirects',
+    closeBundle: () => {
+      const publicDir = resolve(__dirname, 'public')
+      const distDir = resolve(__dirname, 'dist')
+      
+      // Verifica se o arquivo _redirects existe na pasta public
+      const redirectsPath = resolve(publicDir, '_redirects')
+      if (fs.existsSync(redirectsPath)) {
+        // Copia o arquivo para a pasta dist
+        fs.copyFileSync(redirectsPath, resolve(distDir, '_redirects'))
+        console.log('✅ Arquivo _redirects copiado para a pasta dist')
+      }
+    }
+  }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    copyRedirectsPlugin()
+  ],
   build: {
     outDir: 'dist',
     commonjsOptions: {
