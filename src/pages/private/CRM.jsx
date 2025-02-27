@@ -32,7 +32,8 @@ import {
   FormGroup,
   FormControlLabel,
   FormLabel,
-  Checkbox
+  Checkbox,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,7 +41,8 @@ import {
   Delete as DeleteIcon,
   WhatsApp as WhatsAppIcon,
   FilterList as FilterListIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -59,6 +61,7 @@ export default function CRM() {
   const [filteredLeads, setFilteredLeads] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
@@ -271,6 +274,15 @@ export default function CRM() {
   const filterLeads = (leadsToFilter) => {
     let result = [...leadsToFilter];
 
+    // Apply search term filter
+    if (searchTerm) {
+      const normalizedSearchTerm = searchTerm.toLowerCase().trim();
+      result = result.filter(lead => 
+        (lead.nome && lead.nome.toLowerCase().includes(normalizedSearchTerm)) || 
+        (lead.whatsapp && lead.whatsapp.toLowerCase().includes(normalizedSearchTerm))
+      );
+    }
+
     // Filter by status (if any selected)
     if (selectedStatuses.length > 0) {
       result = result.filter(lead => selectedStatuses.includes(lead.status));
@@ -351,7 +363,7 @@ export default function CRM() {
     const filtered = filterLeads(leads);
     setFilteredLeads(filtered);
   }, [leads, statusFilter, selectedStatuses, proxContatoFilter, dataAEFilter, turmaAEFilter,
-      statusSort, proxContatoSort]);
+      statusSort, proxContatoSort, searchTerm]);
 
   useEffect(() => {
     setLoading(true);
@@ -661,6 +673,37 @@ export default function CRM() {
           >
             Novo Lead
           </Button>
+        </Box>
+        
+        {/* Campo de pesquisa */}
+        <Box sx={{ mb: 1, px: 0.25 }}>
+          <TextField
+            placeholder="Pesquisar por nome ou WhatsApp..."
+            variant="outlined"
+            fullWidth
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => setSearchTerm('')}
+                    sx={{ p: 0.5 }}
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+              sx: { borderRadius: 1, height: '36px' }
+            }}
+          />
         </Box>
 
         <Paper sx={{ width: "100%", mb: 2, borderRadius: 2 }}>
