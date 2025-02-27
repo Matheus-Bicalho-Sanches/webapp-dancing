@@ -528,8 +528,19 @@ export default function CRM() {
   const handleSaveEdit = async (leadId, field) => {
     try {
       const leadRef = doc(db, 'leads', leadId);
+      
+      // Tratamento diferenciado conforme o tipo de campo
+      let valueToSave;
+      if (['ultimoContato', 'proximoContato', 'dataAE'].includes(field)) {
+        // Formata como data apenas os campos que são datas
+        valueToSave = formatDateForSave(editValue);
+      } else {
+        // Para campos de texto, usa o valor como está
+        valueToSave = editValue;
+      }
+      
       await updateDoc(leadRef, {
-        [field]: formatDateForSave(editValue),
+        [field]: valueToSave,
         updatedAt: serverTimestamp(),
       });
 
@@ -539,18 +550,30 @@ export default function CRM() {
           ? 'Último contato atualizado com sucesso!'
           : field === 'proximoContato'
           ? 'Próximo contato atualizado com sucesso!'
-          : 'Data da aula experimental atualizada com sucesso!',
+          : field === 'dataAE'
+          ? 'Data da aula experimental atualizada com sucesso!'
+          : field === 'observacoes'
+          ? 'Observações atualizadas com sucesso!'
+          : field === 'origemLead'
+          ? 'Origem do lead atualizada com sucesso!'
+          : 'Campo atualizado com sucesso!',
         severity: 'success'
       });
     } catch (error) {
-      console.error('Error updating contact:', error);
+      console.error('Error updating field:', error);
       setSnackbar({
         open: true,
         message: field === 'ultimoContato'
           ? 'Erro ao atualizar último contato'
           : field === 'proximoContato'
           ? 'Erro ao atualizar próximo contato'
-          : 'Erro ao atualizar data da aula experimental',
+          : field === 'dataAE'
+          ? 'Erro ao atualizar data da aula experimental'
+          : field === 'observacoes'
+          ? 'Erro ao atualizar observações'
+          : field === 'origemLead'
+          ? 'Erro ao atualizar origem do lead'
+          : 'Erro ao atualizar campo',
         severity: 'error'
       });
     }
