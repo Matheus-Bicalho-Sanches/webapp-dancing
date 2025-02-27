@@ -79,6 +79,15 @@ export const updateUser = async (userId, userData) => {
   try {
     const userRef = doc(db, USERS_COLLECTION, userId);
     
+    // Obter os dados atuais do usuário
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error('Usuário não encontrado');
+    }
+    
+    const user = userDoc.data();
+    
     // Dados a serem atualizados
     const updateData = {
       name: userData.name,
@@ -88,22 +97,38 @@ export const updateUser = async (userId, userData) => {
     };
 
     // Se uma nova senha foi fornecida, atualizar no Authentication
-    if (userData.password) {
-      // Primeiro, precisamos fazer login como o usuário para atualizar a senha
-      const userDoc = await getDocs(query(
-        collection(db, USERS_COLLECTION),
-        where('id', '==', userId)
-      ));
+    if (userData.password && userData.password.trim() !== '') {
+      console.log('Tentando atualizar senha do usuário:', userId);
       
-      if (!userDoc.empty) {
-        const user = userDoc.docs[0].data();
-        await signInWithEmailAndPassword(auth, user.email, userData.currentPassword);
-        await updatePassword(auth.currentUser, userData.password);
+      try {
+        // Usar a API de redefinição de senha do Firebase Admin
+        // Ou, se não estiver usando o Admin SDK, fazer o usuário logar novamente
+        // e depois atualizar a senha
+        
+        // Se o usuário logado for o mesmo que está sendo editado
+        if (auth.currentUser && auth.currentUser.uid === userId) {
+          console.log('Atualizando senha do usuário atual');
+          await updatePassword(auth.currentUser, userData.password);
+        } else {
+          // Se está atualizando outro usuário, use o método apropriado para administradores
+          // Neste caso, precisamos usar o Firebase Admin SDK em uma função do Cloud Functions
+          // ou enviar um email de redefinição de senha
+          console.log('Precisa implementar a atualização de senha via Admin SDK ou outro método');
+          
+          // Temporariamente, vamos registrar que a senha não foi atualizada
+          throw new Error('A atualização de senha de outros usuários requer implementação adicional');
+        }
+        
+        console.log('Senha atualizada com sucesso no Firebase Authentication');
+      } catch (authError) {
+        console.error('Erro ao atualizar senha no Authentication:', authError);
+        throw new Error(`Erro ao atualizar senha: ${authError.message}`);
       }
     }
 
     // Atualizar dados no Firestore
     await updateDoc(userRef, updateData);
+    console.log('Dados do usuário atualizados no Firestore com sucesso');
 
     return {
       id: userId,

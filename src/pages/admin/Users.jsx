@@ -156,7 +156,19 @@ export default function Users() {
           throw new Error('Apenas usuários Master podem editar usuários Master');
         }
 
-        await updateUser(selectedUser.id, formData);
+        // Verificar se está tentando mudar a senha de outro usuário
+        if (formData.password && formData.password.trim() !== '' && selectedUser.id !== currentUser?.uid) {
+          // Exibir mensagem de aviso, mas continuar com a atualização dos outros dados
+          setError('Aviso: A senha só pode ser alterada pelo próprio usuário. Outros dados foram atualizados.');
+          
+          // Remover a senha dos dados a serem atualizados
+          const { password, ...dataWithoutPassword } = formData;
+          await updateUser(selectedUser.id, dataWithoutPassword);
+        } else {
+          // Atualizar normalmente, incluindo a senha se fornecida
+          await updateUser(selectedUser.id, formData);
+        }
+        
         setSuccess('Usuário atualizado com sucesso!');
       }
 
@@ -257,6 +269,13 @@ export default function Users() {
         required={!openEditDialog}
         disabled={loading}
       />
+      {openEditDialog && (
+        <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+          Nota: Por questões de segurança, você só pode alterar sua própria senha. 
+          Administradores não podem alterar senhas de outros usuários diretamente.
+          Se outro usuário precisar de uma nova senha, utilize a função "Esqueci minha senha" na tela de login.
+        </Alert>
+      )}
     </form>
   );
 
