@@ -44,7 +44,7 @@ const Sidebar = ({ open, onClose }) => {
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (userDoc.exists()) {
-            setUserType(userDoc.data().type);
+            setUserType(userDoc.data().userType);
           }
         } catch (error) {
           console.error('Erro ao carregar tipo do usuário:', error);
@@ -59,9 +59,9 @@ const Sidebar = ({ open, onClose }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard', allowedTypes: ['master', 'administrative'] },
-    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative'] },
-    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas', allowedTypes: ['master', 'administrative', 'teacher'] },
     { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm', allowedTypes: ['master', 'administrative', 'teacher'] },
+    { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative', 'atelier'] },
+    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas', allowedTypes: ['master', 'administrative', 'teacher'] },
     { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos', allowedTypes: ['master', 'administrative'] },
     { text: 'Matrículas', icon: <SchoolIcon />, path: '/admin/matriculas', allowedTypes: ['master', 'administrative'] },
     { text: 'Turmas', icon: <SchoolIcon />, path: '/admin/turmas', allowedTypes: ['master', 'administrative'] },

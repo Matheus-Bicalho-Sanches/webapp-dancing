@@ -47,7 +47,9 @@ export default function Students() {
     telefone2: '',
     dataNascimento: '',
     nomePai: '',
+    profissaoPai: '',
     nomeMae: '',
+    profissaoMae: '',
     responsavelFinanceiro: {
       nome: '',
       email: '',
@@ -151,7 +153,9 @@ export default function Students() {
       telefone2: '',
       dataNascimento: '',
       nomePai: '',
+      profissaoPai: '',
       nomeMae: '',
+      profissaoMae: '',
       responsavelFinanceiro: {
         nome: '',
         email: '',
@@ -208,7 +212,9 @@ export default function Students() {
       telefone2: student.telefone2 || '',
       dataNascimento: student.dataNascimento || '',
       nomePai: student.nomePai || '',
+      profissaoPai: student.profissaoPai || '',
       nomeMae: student.nomeMae || '',
+      profissaoMae: student.profissaoMae || '',
       responsavelFinanceiro: student.responsavelFinanceiro || {
         nome: '',
         email: '',
@@ -504,9 +510,23 @@ export default function Students() {
                 />
                 <TextField
                   fullWidth
+                  label="Profissão do Pai"
+                  name="profissaoPai"
+                  value={formData.profissaoPai}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
                   label="Nome da Mãe"
                   name="nomeMae"
                   value={formData.nomeMae}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Profissão da Mãe"
+                  name="profissaoMae"
+                  value={formData.profissaoMae}
                   onChange={handleChange}
                 />
                 <TextField

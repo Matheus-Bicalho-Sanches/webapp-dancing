@@ -34,7 +34,8 @@ import { useAuth } from '../../contexts/AuthContext';
 const USER_TYPES = {
   master: 'Master',
   administrative: 'Administrativo',
-  teacher: 'Professor'
+  teacher: 'Professor',
+  atelier: 'Ateliê'
 };
 
 export default function Users() {

@@ -1656,7 +1656,9 @@ export default function StudentProfile() {
     telefone: '',
     dataNascimento: '',
     nomePai: '',
+    profissaoPai: '',
     nomeMae: '',
+    profissaoMae: '',
     responsavelFinanceiro: {
       nome: '',
       email: '',
@@ -1733,7 +1735,9 @@ export default function StudentProfile() {
           telefone: studentData.telefone || '',
           dataNascimento: studentData.dataNascimento || '',
           nomePai: studentData.nomePai || '',
+          profissaoPai: studentData.profissaoPai || '',
           nomeMae: studentData.nomeMae || '',
+          profissaoMae: studentData.profissaoMae || '',
           responsavelFinanceiro: {
             nome: studentData.responsavelFinanceiro?.nome || '',
             email: studentData.responsavelFinanceiro?.email || '',
@@ -1998,8 +2002,20 @@ export default function StudentProfile() {
                       </ListItem>
                       <ListItem>
                         <ListItemText 
+                          primary="Profissão do Pai"
+                          secondary={student.profissaoPai || 'Não informada'}
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText 
                           primary="Nome da Mãe"
                           secondary={student.nomeMae || 'Não informado'}
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemText 
+                          primary="Profissão da Mãe"
+                          secondary={student.profissaoMae || 'Não informada'}
                         />
                       </ListItem>
                       <ListItem>
@@ -2183,9 +2199,23 @@ export default function StudentProfile() {
                 />
                 <TextField
                   fullWidth
+                  label="Profissão do Pai"
+                  name="profissaoPai"
+                  value={formData.profissaoPai}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
                   label="Nome da Mãe"
                   name="nomeMae"
                   value={formData.nomeMae}
+                  onChange={handleChange}
+                />
+                <TextField
+                  fullWidth
+                  label="Profissão da Mãe"
+                  name="profissaoMae"
+                  value={formData.profissaoMae}
                   onChange={handleChange}
                 />
 

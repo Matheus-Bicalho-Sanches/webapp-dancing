@@ -18,6 +18,12 @@ service cloud.firestore {
       return userDoc != null && userDoc.data.userType == 'administrative';
     }
     
+    // Função auxiliar para verificar se o usuário é do tipo ateliê
+    function isAtelierUser(userId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(userId));
+      return userDoc != null && userDoc.data.userType == 'atelier';
+    }
+    
     // Função auxiliar para verificar se o usuário atual é master
     function isCurrentUserMaster() {
       return isAuthenticated() && isMasterUser(request.auth.uid);
@@ -27,6 +33,12 @@ service cloud.firestore {
     function isCurrentUserMasterOrAdmin() {
       return isAuthenticated() && 
         (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid));
+    }
+    
+    // Função auxiliar para verificar se o usuário atual é master, administrativo ou ateliê
+    function isCurrentUserMasterOrAdminOrAtelier() {
+      return isAuthenticated() && 
+        (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid) || isAtelierUser(request.auth.uid));
     }
 
     // Regras para a coleção users
@@ -177,21 +189,21 @@ service cloud.firestore {
     // Regras para a coleção uniforms
     match /uniforms/{uniformId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdminOrAtelier();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
 
     // Regras para a coleção vendas
     match /vendas/{vendaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdminOrAtelier();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
 
     // Regras para a coleção uniform_sales
     match /uniform_sales/{saleId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdminOrAtelier();
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
 
@@ -200,8 +212,8 @@ service cloud.firestore {
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação/atualização/exclusão para master ou administrativo
-      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      // Permitir criação/atualização/exclusão para master, administrativo ou ateliê
+      allow write: if isAuthenticated() && isCurrentUserMasterOrAdminOrAtelier();
     }
 
     // Regras para a coleção teacherSchedules e suas subcoleções
