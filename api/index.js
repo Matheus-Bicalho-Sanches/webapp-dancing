@@ -35,8 +35,20 @@ app.get('/api/test', (req, res) => {
 });
 
 // Configuração da API do Asaas
-const asaasBaseUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api/v3';
+const asaasBaseUrl = process.env.ASAAS_API_URL || 'https://api.asaas.com/v3';
 const asaasApiKey = process.env.ASAAS_API_KEY;
+
+// Verificação das variáveis de ambiente
+console.log('🔍 Verificando variáveis de ambiente:');
+console.log(`- ASAAS_API_URL: ${process.env.ASAAS_API_URL || 'não definida, usando padrão'}`);
+console.log(`- ASAAS_API_KEY: ${process.env.ASAAS_API_KEY ? `${process.env.ASAAS_API_KEY.substring(0, 10)}...` : 'não definida ⚠️'}`);
+console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'não definido'}`);
+console.log(`- asaasBaseUrl: ${asaasBaseUrl}`);
+console.log(`- asaasApiKey configurada: ${!!asaasApiKey}`);
+
+if (!asaasApiKey) {
+  console.error('⚠️ ATENÇÃO: ASAAS_API_KEY não está configurada. As requisições para o Asaas falharão.');
+}
 
 // Middleware para validar token do Asaas
 const validateAsaasToken = (req, res, next) => {
@@ -56,7 +68,13 @@ app.use('/api/asaas', validateAsaasToken);
 
 // Função helper para requisições ao Asaas
 const asaasRequest = async (method, endpoint, data = null, token) => {
-  console.log(`Sending Request to Asaas: ${method} ${endpoint} with token: ${token ? token.substring(0, 10) + '...' : 'undefined'}`);
+  console.log(`🚀 Enviando requisição para Asaas: ${method.toUpperCase()} ${endpoint}`);
+  console.log(`🔑 Token: ${token ? token.substring(0, 10) + '...' : 'undefined'}`);
+  
+  if (!token) {
+    console.error('⚠️ Token não fornecido para requisição ao Asaas');
+    throw new Error('Token de autenticação não fornecido');
+  }
   
   const config = {
     method,
@@ -73,11 +91,11 @@ const asaasRequest = async (method, endpoint, data = null, token) => {
   }
   
   try {
-    console.log('Request Config:', {
+    console.log('📝 Configuração da requisição:', {
       method: config.method,
       url: config.url,
       baseURL: asaasBaseUrl,
-      data: config.data,
+      data: config.data ? JSON.stringify(config.data).substring(0, 500) + (JSON.stringify(config.data).length > 500 ? '...' : '') : null,
       headers: { 
         ...config.headers, 
         'access_token': token ? `${token.substring(0, 10)}...` : 'undefined'
@@ -86,14 +104,14 @@ const asaasRequest = async (method, endpoint, data = null, token) => {
     
     const response = await axios(config);
     
-    console.log('Response from Asaas:', {
+    console.log('✅ Resposta do Asaas:', {
       status: response.status,
       data: response.data
     });
     
     return response;
   } catch (error) {
-    console.error('Error from Asaas:', {
+    console.error('❌ Erro do Asaas:', {
       status: error.response?.status,
       data: error.response?.data,
       message: error.message,
@@ -101,7 +119,8 @@ const asaasRequest = async (method, endpoint, data = null, token) => {
       headers: error.config?.headers ? {
         ...error.config.headers,
         'access_token': token ? `${token.substring(0, 10)}...` : 'undefined'
-      } : 'No headers available'
+      } : 'No headers available',
+      stack: error.stack
     });
     throw error;
   }
@@ -160,12 +179,13 @@ app.post('/api/asaas/customers/:id', async (req, res) => {
 // Rota para tokenizar cartão de crédito
 app.post('/api/asaas/creditCard/tokenize', async (req, res) => {
   try {
-    console.log('Recebendo requisição para tokenizar cartão:');
-    console.log('- Headers:', { 
+    console.log('🔄 Recebendo requisição para tokenizar cartão em', process.env.NODE_ENV);
+    console.log('📌 URL da requisição:', req.originalUrl);
+    console.log('📋 Headers:', { 
       ...req.headers, 
       'access_token': req.headers['access_token'] ? `${req.headers['access_token'].substring(0, 10)}...` : 'não definido' 
     });
-    console.log('- Body:', {
+    console.log('📦 Body:', {
       ...req.body,
       creditCard: req.body.creditCard ? {
         ...req.body.creditCard,
@@ -175,12 +195,16 @@ app.post('/api/asaas/creditCard/tokenize', async (req, res) => {
     });
     
     const response = await asaasRequest('post', '/creditCard/tokenize', req.body, req.asaasToken);
+    console.log('✅ Tokenização bem-sucedida:', {
+      token: response.data?.creditCardToken ? `${response.data.creditCardToken.substring(0, 10)}...` : 'não retornado'
+    });
     res.status(200).json(response.data);
   } catch (error) {
-    console.error('Erro detalhado ao tokenizar cartão:', {
+    console.error('❌ Erro detalhado ao tokenizar cartão:', {
       status: error.response?.status,
       data: error.response?.data,
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
     
     if (error.response) {
@@ -298,6 +322,26 @@ app.get('/api/asaas/payments/:id', async (req, res) => {
     } else {
       res.status(500).json({ error: 'Erro interno ao processar a requisição', message: error.message });
     }
+  }
+});
+
+// Rota de teste para tokenização
+app.get('/api/asaas/creditCard/test', (req, res) => {
+  try {
+    console.log('Teste de rota de tokenização acessado');
+    res.json({ 
+      message: 'Rota de teste para tokenização de cartão funcionando!',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      asaasConfig: {
+        apiUrl: asaasBaseUrl,
+        apiKeyConfigured: !!asaasApiKey,
+        environment: asaasBaseUrl.includes('sandbox') ? 'sandbox' : 'production'
+      }
+    });
+  } catch (error) {
+    console.error('Erro na rota de teste:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

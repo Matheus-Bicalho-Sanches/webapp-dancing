@@ -1,7 +1,17 @@
 import axios from 'axios';
 
+// Determina a URL base com base no ambiente
+const getBaseUrl = () => {
+  // Em produção, usa o domínio atual
+  if (window.location.hostname !== 'localhost') {
+    return '/api/asaas';
+  }
+  // Em desenvolvimento, mantém o proxy para localhost:3001
+  return '/api/asaas';
+};
+
 const api = axios.create({
-  baseURL: '/api/asaas',
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json'
   }
