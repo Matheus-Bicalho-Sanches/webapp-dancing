@@ -769,11 +769,11 @@ export default function CRM() {
                         onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
                         size="small"
                         sx={{ 
-                          minWidth: 50, 
-                          fontSize: '0.75rem', 
-                          height: '1.8rem',
+                          minWidth: 60, 
+                          fontSize: '0.8rem', 
+                          height: '2rem',
                           '& .MuiSelect-select': { 
-                            padding: '2px 4px',
+                            padding: '4px 6px',
                             paddingRight: '24px' 
                           }
                         }}
@@ -790,10 +790,11 @@ export default function CRM() {
                             }
                             size="small"
                             sx={{ 
-                              height: '16px', 
+                              height: '20px', 
                               '& .MuiChip-label': { 
-                                px: 0.3, 
-                                fontSize: '0.6rem' 
+                                px: 0.8, 
+                                fontSize: '0.75rem',
+                                fontWeight: 500
                               } 
                             }}
                           />
@@ -801,24 +802,22 @@ export default function CRM() {
                         MenuProps={{
                           PaperProps: {
                             style: {
-                              maxHeight: 200,
-                              width: '70px'
+                              maxHeight: 200
                             }
                           }
                         }}
                       >
-                        {statusOptions.map((status) => (
+                        {statusOptions.map((option) => (
                           <MenuItem 
-                            key={status} 
-                            value={status}
+                            key={option} 
+                            value={option}
                             sx={{ 
-                              fontSize: '0.7rem',
-                              py: 0.25,
-                              px: 0.5,
-                              minHeight: '24px'
+                              fontSize: '0.8rem',
+                              minHeight: '30px', 
+                              py: 0.5 
                             }}
                           >
-                            {status}
+                            {option}
                           </MenuItem>
                         ))}
                       </Select>
