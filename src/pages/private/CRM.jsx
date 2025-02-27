@@ -62,6 +62,7 @@ export default function CRM() {
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [formError, setFormError] = useState('');
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
@@ -437,19 +438,85 @@ export default function CRM() {
         origemLead: ''
       });
     }
+    // Limpa qualquer erro ao abrir o diálogo
+    setFormError('');
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingLead(null);
+    // Limpa qualquer erro ao fechar o diálogo
+    setFormError('');
   };
 
   const handleSubmit = async () => {
     try {
+      // Limpa qualquer erro anterior
+      setFormError('');
+
+      // Validar se WhatsApp está preenchido
+      if (!formData.whatsapp.trim()) {
+        setFormError('O campo WhatsApp é obrigatório.');
+        return;
+      }
+
+      // Normaliza o número de WhatsApp (remove espaços, traços, etc)
+      const normalizedWhatsApp = formData.whatsapp.trim().replace(/\D/g, '');
+      
+      // Verifica se tem o formato adequado para um número de WhatsApp brasileiro
+      if (normalizedWhatsApp.length < 10 || normalizedWhatsApp.length > 13) {
+        setFormError('O número de WhatsApp parece inválido. Verifique o formato.');
+        return;
+      }
+      
+      // Se estiver criando um novo lead (não editando), verifica se o WhatsApp já existe
+      if (!editingLead) {
+        // Verifica se o WhatsApp já existe em algum lead
+        const whatsAppExists = leads.some(lead => {
+          if (!lead.whatsapp) return false;
+          const leadWhatsApp = lead.whatsapp.replace(/\D/g, '');
+          return leadWhatsApp === normalizedWhatsApp;
+        });
+        
+        if (whatsAppExists) {
+          setFormError('Este número de WhatsApp já está cadastrado.');
+          return;
+        }
+      } else if (editingLead.whatsapp) {
+        // Se estiver editando e o WhatsApp atual for diferente do original
+        const originalWhatsApp = editingLead.whatsapp.replace(/\D/g, '');
+        
+        if (normalizedWhatsApp !== originalWhatsApp) {
+          // Verifica se o novo número já existe em outro lead
+          const whatsAppExists = leads.some(lead => {
+            if (lead.id === editingLead.id || !lead.whatsapp) return false;
+            const leadWhatsApp = lead.whatsapp.replace(/\D/g, '');
+            return leadWhatsApp === normalizedWhatsApp;
+          });
+          
+          if (whatsAppExists) {
+            setFormError('Este número de WhatsApp já está cadastrado.');
+            return;
+          }
+        }
+      }
+
+      // Formatação do WhatsApp para exibição
+      let formattedWhatsApp = normalizedWhatsApp;
+      // Se for um número brasileiro
+      if (normalizedWhatsApp.startsWith('55') && normalizedWhatsApp.length >= 12) {
+        // Formato: (XX) XXXXX-XXXX
+        formattedWhatsApp = normalizedWhatsApp.replace(
+          /^55(\d{2})(\d{5})(\d{4})$/,
+          '($1) $2-$3'
+        );
+      }
+
       // Preparar os dados do lead, convertendo as datas para o formato correto
       const leadData = {
         ...formData,
+        whatsapp: formattedWhatsApp, // Salva o WhatsApp formatado para exibição
         ultimoContato: formData.ultimoContato ? formatDateForSave(formData.ultimoContato) : '',
         proximoContato: formData.proximoContato ? formatDateForSave(formData.proximoContato) : '',
         dataAE: formData.dataAE ? formatDateForSave(formData.dataAE) : '',
@@ -1265,6 +1332,12 @@ export default function CRM() {
           </DialogTitle>
           <DialogContent>
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {formError && (
+                <Alert severity="error" sx={{ mb: 1 }}>
+                  {formError}
+                </Alert>
+              )}
+              
               <TextField
                 fullWidth
                 label="Nome"
@@ -1300,7 +1373,13 @@ export default function CRM() {
                 fullWidth
                 label="WhatsApp"
                 value={formData.whatsapp}
-                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, whatsapp: e.target.value });
+                  // Limpa o erro quando o usuário modifica o campo
+                  if (formError && formError.includes('WhatsApp')) {
+                    setFormError('');
+                  }
+                }}
                 required
               />
 
