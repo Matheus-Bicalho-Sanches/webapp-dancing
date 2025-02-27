@@ -1270,7 +1270,6 @@ export default function CRM() {
                 label="Nome"
                 value={formData.nome}
                 onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                required
               />
 
               <FormControl fullWidth required>
@@ -1396,7 +1395,7 @@ export default function CRM() {
             <Button
               onClick={handleSubmit}
               variant="contained"
-              disabled={!formData.nome || !formData.whatsapp}
+              disabled={!formData.whatsapp}
             >
               {editingLead ? 'Salvar' : 'Criar'}
             </Button>
