@@ -28,7 +28,11 @@ import {
   Link,
   Divider,
   Popover,
-  TablePagination
+  TablePagination,
+  FormGroup,
+  FormControlLabel,
+  FormLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -57,7 +61,9 @@ export default function CRM() {
   const [editValue, setEditValue] = useState('');
 
   // Filter states
-  const [statusFilter, setStatusFilter] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [statusSort, setStatusSort] = useState('asc');
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
 
@@ -83,15 +89,16 @@ export default function CRM() {
     origemLead: ''
   });
 
-  // Status options for the leads
-  const statusOptions = [
-    'Lead',
-    'AE Agend',
-    'AE Feita',
-    'Barra',
-    'Matrícula',
-    'Inativo'
-  ];
+  // Status constants
+  const statusOptions = ['Matrícula', 'Inativo', 'AE Agend', 'AE Feita', 'Barra', 'Lead'];
+  const statusColorMap = {
+    'Matrícula': '#4caf50', // green
+    'Inativo': '#f44336',   // red
+    'AE Agend': '#ff9800',  // orange
+    'AE Feita': '#2196f3',  // blue
+    'Barra': '#9c27b0',     // purple
+    'Lead': '#757575'       // gray
+  };
 
   // Add this after statusOptions array
   const turmaOptions = [
@@ -173,13 +180,20 @@ export default function CRM() {
   };
 
   const handleStatusFilterChange = (status) => {
-    setStatusFilter(status);
-    handleStatusFilterClose();
+    // Toggle the status in the selected statuses array
+    setSelectedStatuses(prevSelected => {
+      if (prevSelected.includes(status)) {
+        return prevSelected.filter(s => s !== status);
+      } else {
+        return [...prevSelected, status];
+      }
+    });
   };
 
   const clearStatusFilter = () => {
-    setStatusFilter(null);
-    handleStatusFilterClose();
+    setSelectedStatuses([]);
+    setStatusFilter('');
+    setStatusFilterOpen(false);
   };
 
   const [tempProxContatoFilter, setTempProxContatoFilter] = useState('');
@@ -255,36 +269,42 @@ export default function CRM() {
 
   // Filter logic
   const filterLeads = (leadsToFilter) => {
-    let filtered = [...leadsToFilter];
+    let result = [...leadsToFilter];
 
-    // Apply status filter
-    if (statusFilter) {
-      filtered = filtered.filter(lead => lead.status === statusFilter);
+    // Filter by status (if any selected)
+    if (selectedStatuses.length > 0) {
+      result = result.filter(lead => selectedStatuses.includes(lead.status));
+    } else if (statusFilter) {
+      result = result.filter(lead => lead.status === statusFilter);
     }
 
     // Apply próximo contato filter
     if (proxContatoFilter) {
-      filtered = filtered.filter(lead => {
+      const filterDate = dayjs(proxContatoFilter).startOf('day');
+      result = result.filter(lead => {
         if (!lead.proximoContato) return false;
-        return dayjs(lead.proximoContato).format('YYYY-MM-DD') === proxContatoFilter;
+        const leadDate = dayjs(lead.proximoContato).startOf('day');
+        return leadDate.isSame(filterDate);
       });
     }
 
     // Apply data AE filter
     if (dataAEFilter) {
-      filtered = filtered.filter(lead => {
+      const filterDate = dayjs(dataAEFilter).startOf('day');
+      result = result.filter(lead => {
         if (!lead.dataAE) return false;
-        return dayjs(lead.dataAE).format('YYYY-MM-DD') === dataAEFilter;
+        const leadDate = dayjs(lead.dataAE).startOf('day');
+        return leadDate.isSame(filterDate);
       });
     }
 
     // Apply turma AE filter
     if (turmaAEFilter) {
-      filtered = filtered.filter(lead => lead.turmaAE === turmaAEFilter);
+      result = result.filter(lead => lead.turmaAE === turmaAEFilter);
     }
 
     // Apply sorting
-    filtered.sort((a, b) => {
+    result.sort((a, b) => {
       // Primeiro, tentamos ordenar por próximo contato se essa ordenação estiver ativa
       if (proxContatoSort) {
         if (!a.proximoContato && !b.proximoContato) {
@@ -323,14 +343,14 @@ export default function CRM() {
       return 0;
     });
 
-    return filtered;
+    return result;
   };
 
   // Update filtered leads when filters or leads change
   useEffect(() => {
     const filtered = filterLeads(leads);
     setFilteredLeads(filtered);
-  }, [leads, statusFilter, proxContatoFilter, dataAEFilter, turmaAEFilter,
+  }, [leads, statusFilter, selectedStatuses, proxContatoFilter, dataAEFilter, turmaAEFilter,
       statusSort, proxContatoSort]);
 
   useEffect(() => {
@@ -674,25 +694,104 @@ export default function CRM() {
                   <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       Status
-                      <IconButton 
-                        size="small" 
-                        onClick={handleStatusFilterClick}
-                        sx={{ 
-                          p: 0.3,
-                          color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
+                      <Box sx={{ display: 'flex', ml: 'auto' }}>
+                        <FilterListIcon 
+                          fontSize="small" 
+                          onClick={handleStatusFilterClick}
+                          sx={{ 
+                            cursor: 'pointer',
+                            color: selectedStatuses.length > 0 ? 'primary.main' : 'inherit'
+                          }}
+                        />
+                        {selectedStatuses.length > 0 && (
+                          <Box
+                            sx={{
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              borderRadius: '50%',
+                              width: 16,
+                              height: 16,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              ml: -0.8,
+                              mt: -0.8,
+                            }}
+                          >
+                            {selectedStatuses.length}
+                          </Box>
+                        )}
+                      </Box>
+                      <Popover
+                        open={Boolean(statusAnchorEl)}
+                        anchorEl={statusAnchorEl}
+                        onClose={handleStatusFilterClose}
+                        anchorOrigin={{
+                          vertical: 'bottom',
+                          horizontal: 'left',
                         }}
                       >
-                        <FilterListIcon sx={{ fontSize: '0.8rem' }} />
-                      </IconButton>
-                      {statusFilter && (
-                        <IconButton 
-                          size="small" 
-                          onClick={clearStatusFilter}
-                          sx={{ p: 0.3 }}
-                        >
-                          <ClearIcon sx={{ fontSize: '0.8rem' }} />
-                        </IconButton>
-                      )}
+                        <Box sx={{ p: 2, width: 200 }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+                            Filtrar por status {selectedStatuses.length > 0 && `(${selectedStatuses.length})`}
+                          </Typography>
+                          <FormControl component="fieldset">
+                            <FormGroup>
+                              {statusOptions.map((status) => (
+                                <FormControlLabel
+                                  key={status}
+                                  control={
+                                    <Checkbox 
+                                      checked={selectedStatuses.includes(status)} 
+                                      onChange={() => handleStatusFilterChange(status)}
+                                      sx={{
+                                        color: statusColorMap[status] || 'default',
+                                        '&.Mui-checked': {
+                                          color: statusColorMap[status] || 'primary.main',
+                                        },
+                                      }}
+                                    />
+                                  }
+                                  label={
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Box
+                                        sx={{
+                                          width: 12,
+                                          height: 12,
+                                          borderRadius: '50%',
+                                          mr: 1,
+                                          bgcolor: statusColorMap[status] || '#757575',
+                                        }}
+                                      />
+                                      {status}
+                                    </Box>
+                                  }
+                                />
+                              ))}
+                            </FormGroup>
+                            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                onClick={clearStatusFilter}
+                                sx={{ mr: 1, fontSize: '0.75rem', py: 0.5 }}
+                              >
+                                Limpar
+                              </Button>
+                              <Button 
+                                variant="contained" 
+                                size="small" 
+                                onClick={handleStatusFilterClose}
+                                sx={{ fontSize: '0.75rem', py: 0.5 }}
+                              >
+                                Aplicar
+                              </Button>
+                            </Box>
+                          </FormControl>
+                        </Box>
+                      </Popover>
                     </Box>
                   </TableCell>
                   <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1, px: 0.5 }}>WhatsApp</TableCell>
@@ -792,7 +891,7 @@ export default function CRM() {
                     <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {lead.nome}
                     </TableCell>
-                    <TableCell sx={{ maxWidth: 80, p: 0.25 }}>
+                    <TableCell sx={{ maxWidth: 80, p: 0.25, height: '36px' }}>
                       <FormControl size="small" fullWidth>
                         <Select
                           value={lead.status}
@@ -801,7 +900,7 @@ export default function CRM() {
                           sx={{ 
                             minWidth: 60, 
                             fontSize: '0.8rem', 
-                            height: '2rem',
+                            height: '28px',
                             '& .MuiSelect-select': { 
                               padding: '4px 6px',
                               paddingRight: '24px' 
@@ -810,22 +909,14 @@ export default function CRM() {
                           renderValue={(value) => (
                             <Chip
                               label={value}
-                              color={
-                                value === 'Matrícula' ? 'success' :
-                                value === 'Inativo' ? 'error' :
-                                value === 'AE Agend' ? 'warning' :
-                                value === 'AE Feita' ? 'info' :
-                                value === 'Barra' ? 'secondary' :
-                                'default'
-                              }
                               size="small"
-                              sx={{ 
-                                height: '20px', 
-                                '& .MuiChip-label': { 
-                                  px: 0.8, 
-                                  fontSize: '0.75rem',
-                                  fontWeight: 500
-                                } 
+                              sx={{
+                                height: 20,
+                                bgcolor: statusColorMap[value] || '#757575',
+                                color: 'white',
+                                fontSize: '0.7rem',
+                                fontWeight: 'medium',
+                                '& .MuiChip-label': { px: 0.8 }
                               }}
                             />
                           )}
@@ -841,7 +932,21 @@ export default function CRM() {
                             <MenuItem 
                               key={option} 
                               value={option}
+                              sx={{ 
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
                             >
+                              <Box
+                                sx={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: '50%',
+                                  bgcolor: statusColorMap[option] || '#757575',
+                                  mr: 1
+                                }}
+                              />
                               {option}
                             </MenuItem>
                           ))}
@@ -1254,79 +1359,6 @@ export default function CRM() {
             </Button>
           </DialogActions>
         </Dialog>
-
-        {/* Status Filter Popover */}
-        <Popover
-          open={Boolean(statusAnchorEl)}
-          anchorEl={statusAnchorEl}
-          onClose={handleStatusFilterClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-        >
-          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="subtitle2">
-              Filtrar por status
-            </Typography>
-            <FormControl size="small">
-              <Select
-                value={statusFilter || ''}
-                onChange={(e) => handleStatusFilterChange(e.target.value)}
-                sx={{ minWidth: 200 }}
-                displayEmpty
-                renderValue={(value) => (
-                  value ? (
-                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                      <Box 
-                        sx={{ 
-                          width: 12, 
-                          height: 12, 
-                          borderRadius: '50%', 
-                          bgcolor: 
-                            value === 'Matrícula' ? 'success.main' :
-                            value === 'Inativo' ? 'error.main' :
-                            value === 'AE Agend' ? 'warning.main' :
-                            value === 'AE Feita' ? 'info.main' :
-                            value === 'Barra' ? 'secondary.main' :
-                            value === 'Lead' ? 'default.main' :
-                            'default.main'
-                        }} 
-                      />
-                      {value}
-                    </Box>
-                  ) : 'Todos os status'
-                )}
-              >
-                <MenuItem value="">
-                  <em>Todos</em>
-                </MenuItem>
-                {statusOptions.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                      <Box 
-                        sx={{ 
-                          width: 12, 
-                          height: 12, 
-                          borderRadius: '50%', 
-                          bgcolor: 
-                            status === 'Matrícula' ? 'success.main' :
-                            status === 'Inativo' ? 'error.main' :
-                            status === 'AE Agend' ? 'warning.main' :
-                            status === 'AE Feita' ? 'info.main' :
-                            status === 'Barra' ? 'secondary.main' :
-                            status === 'Lead' ? 'default.main' :
-                            'default.main'
-                        }} 
-                      />
-                      {status}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </Popover>
 
         {/* Próximo Contato Filter Popover */}
         <Popover
