@@ -107,6 +107,20 @@ export default function CRM() {
     'REC11'
   ];
 
+  // Add turma color mapping
+  const turmaColorMap = {
+    'D12N': '#1976d2', // blue
+    'D13M': '#9c27b0', // purple
+    'D13T': '#673ab7', // deep purple
+    'D13N': '#3f51b5', // indigo
+    'D14M': '#006064', // dark cyan
+    'D14N': '#ff6f00', // amber
+    'ADULTO': '#689f38', // light green
+    'AI': '#bf360c', // deep orange/brown
+    'REC10': '#d32f2f', // dark red
+    'REC11': '#c2185b', // dark pink
+  };
+
   // Add pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(50);
@@ -914,14 +928,67 @@ export default function CRM() {
                         onChange={(e) => handleTurmaUpdate(lead.id, e.target.value)}
                         size="small"
                         displayEmpty
-                        sx={{ fontSize: '0.75rem', height: '1.8rem' }}
+                        sx={{ 
+                          fontSize: '0.8rem', 
+                          height: '2rem',
+                          '& .MuiSelect-select': { 
+                            padding: '4px 6px',
+                            paddingRight: '24px' 
+                          }
+                        }}
+                        renderValue={(value) => (
+                          value ? (
+                            <Chip
+                              label={value}
+                              color="default"
+                              size="small"
+                              sx={{ 
+                                height: '20px',
+                                bgcolor: turmaColorMap[value] || '#757575',
+                                color: 'white',
+                                '& .MuiChip-label': { 
+                                  px: 0.8, 
+                                  fontSize: '0.75rem',
+                                  fontWeight: 500
+                                } 
+                              }}
+                            />
+                          ) : (
+                            <em style={{ fontSize: '0.75rem', opacity: 0.7 }}>Sem turma</em>
+                          )
+                        )}
+                        MenuProps={{
+                          PaperProps: {
+                            style: {
+                              maxHeight: 200
+                            }
+                          }
+                        }}
                       >
                         <MenuItem value="">
                           <em>Sem turma</em>
                         </MenuItem>
                         {turmaOptions.map((turma) => (
-                          <MenuItem key={turma} value={turma}>
-                            {turma}
+                          <MenuItem 
+                            key={turma} 
+                            value={turma}
+                            sx={{ 
+                              fontSize: '0.8rem',
+                              minHeight: '30px', 
+                              py: 0.5 
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              <Box 
+                                sx={{ 
+                                  width: 14, 
+                                  height: 14, 
+                                  borderRadius: '50%', 
+                                  bgcolor: turmaColorMap[turma] || '#757575' 
+                                }} 
+                              />
+                              {turma}
+                            </Box>
                           </MenuItem>
                         ))}
                       </Select>
@@ -1111,10 +1178,35 @@ export default function CRM() {
                   value={formData.turmaAE}
                   onChange={(e) => setFormData({ ...formData, turmaAE: e.target.value })}
                   label="Turma da Aula Experimental"
+                  renderValue={(value) => (
+                    value ? (
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                        <Box 
+                          sx={{ 
+                            width: 14, 
+                            height: 14, 
+                            borderRadius: '50%', 
+                            bgcolor: turmaColorMap[value] || '#757575' 
+                          }} 
+                        />
+                        {value}
+                      </Box>
+                    ) : 'Sem turma'
+                  )}
                 >
                   {turmaOptions.map((turma) => (
                     <MenuItem key={turma} value={turma}>
-                      {turma}
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                        <Box 
+                          sx={{ 
+                            width: 14, 
+                            height: 14, 
+                            borderRadius: '50%', 
+                            bgcolor: turmaColorMap[turma] || '#757575' 
+                          }} 
+                        />
+                        {turma}
+                      </Box>
                     </MenuItem>
                   ))}
                 </Select>
@@ -1171,38 +1263,54 @@ export default function CRM() {
                 onChange={(e) => handleStatusFilterChange(e.target.value)}
                 sx={{ minWidth: 200 }}
                 displayEmpty
+                renderValue={(value) => (
+                  value ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          borderRadius: '50%', 
+                          bgcolor: 
+                            value === 'Matrícula' ? 'success.main' :
+                            value === 'Inativo' ? 'error.main' :
+                            value === 'AE Agend' ? 'warning.main' :
+                            value === 'AE Feita' ? 'info.main' :
+                            value === 'Barra' ? 'secondary.main' :
+                            value === 'Lead' ? 'default.main' :
+                            'default.main'
+                        }} 
+                      />
+                      {value}
+                    </Box>
+                  ) : 'Todos os status'
+                )}
               >
-                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="">
+                  <em>Todos</em>
+                </MenuItem>
                 {statusOptions.map((status) => (
-                  <MenuItem 
-                    key={status} 
-                    value={status}
-                    sx={{ 
-                      fontSize: '0.7rem',
-                      py: 0.25,
-                      px: 0.5,
-                      minHeight: '24px'
-                    }}
-                  >
-                    {status}
+                  <MenuItem key={status} value={status}>
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          borderRadius: '50%', 
+                          bgcolor: 
+                            status === 'Matrícula' ? 'success.main' :
+                            status === 'Inativo' ? 'error.main' :
+                            status === 'AE Agend' ? 'warning.main' :
+                            status === 'AE Feita' ? 'info.main' :
+                            status === 'Barra' ? 'secondary.main' :
+                            status === 'Lead' ? 'default.main' :
+                            'default.main'
+                        }} 
+                      />
+                      {status}
+                    </Box>
                   </MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-            
-            <Divider sx={{ my: 1 }} />
-            
-            <Typography variant="subtitle2">
-              Ordenação
-            </Typography>
-            <FormControl size="small">
-              <Select
-                value={statusSort}
-                onChange={(e) => setStatusSort(e.target.value)}
-                sx={{ minWidth: 200 }}
-              >
-                <MenuItem value="asc">A-Z</MenuItem>
-                <MenuItem value="desc">Z-A</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -1330,11 +1438,38 @@ export default function CRM() {
                 onChange={(e) => handleTurmaAEFilterChange(e.target.value)}
                 sx={{ minWidth: 200 }}
                 displayEmpty
+                renderValue={(value) => (
+                  value ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          borderRadius: '50%', 
+                          bgcolor: turmaColorMap[value] || '#757575' 
+                        }} 
+                      />
+                      {value}
+                    </Box>
+                  ) : 'Todas as turmas'
+                )}
               >
-                <MenuItem value="">Todas</MenuItem>
+                <MenuItem value="">
+                  <em>Todas</em>
+                </MenuItem>
                 {turmaOptions.map((turma) => (
                   <MenuItem key={turma} value={turma}>
-                    {turma}
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                      <Box 
+                        sx={{ 
+                          width: 12, 
+                          height: 12, 
+                          borderRadius: '50%', 
+                          bgcolor: turmaColorMap[turma] || '#757575' 
+                        }} 
+                      />
+                      {turma}
+                    </Box>
                   </MenuItem>
                 ))}
               </Select>
