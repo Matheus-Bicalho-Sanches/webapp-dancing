@@ -66,7 +66,7 @@ export default function CRM() {
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
-  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  const [selectedStatuses, setSelectedStatuses] = useState(['AE Agend', 'AE Feita', 'Barra', 'Lead']);
   const [statusSort, setStatusSort] = useState('asc');
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
 
