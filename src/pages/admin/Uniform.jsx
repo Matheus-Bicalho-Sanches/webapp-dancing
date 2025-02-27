@@ -69,7 +69,7 @@ export default function Uniform() {
   const [dateFilter, setDateFilter] = useState('all');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [userFilter, setUserFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState(['all']);
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [uniqueUsers, setUniqueUsers] = useState([]);
 
@@ -172,8 +172,9 @@ export default function Uniform() {
     const filterLogs = () => {
       let filtered = [...logs];
 
-      if (userFilter !== 'all') {
-        filtered = filtered.filter(log => log.userName === userFilter);
+      // Se não incluir 'all' no filtro de usuários, filtra pelos usuários selecionados
+      if (!userFilter.includes('all')) {
+        filtered = filtered.filter(log => userFilter.includes(log.userName));
       }
 
       if (dateFilter === 'custom' && startDate && endDate) {
@@ -714,10 +715,36 @@ export default function Uniform() {
                   <FormControl fullWidth size="small">
                     <InputLabel>Filtrar por Usuário</InputLabel>
                     <Select
+                      multiple
                       value={userFilter}
-                      onChange={(e) => setUserFilter(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Se selecionar 'all', limpa outras seleções
+                        // Se tinha 'all' selecionado e selecionar outros itens, remove 'all'
+                        if (value.includes('all')) {
+                          setUserFilter(value.length > 1 && userFilter.includes('all') ? 
+                            value.filter(item => item !== 'all') : ['all']);
+                        } else {
+                          setUserFilter(value.length ? value : ['all']);
+                        }
+                      }}
                       label="Filtrar por Usuário"
                       className="no-print"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.includes('all') ? (
+                            <Chip label="Todos os usuários" size="small" />
+                          ) : (
+                            selected.map((value) => (
+                              <Chip 
+                                key={value} 
+                                label={value.includes('@') ? value.split('@')[0] : value} 
+                                size="small"
+                              />
+                            ))
+                          )}
+                        </Box>
+                      )}
                     >
                       <MenuItem value="all">Todos os usuários</MenuItem>
                       {uniqueUsers.map(user => (
@@ -746,10 +773,12 @@ export default function Uniform() {
               <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}>
                 Relatório de Vendas de Uniformes
               </Typography>
-              {(dateFilter !== 'all' || userFilter !== 'all') && (
+              {(dateFilter !== 'all' || !userFilter.includes('all')) && (
                 <Typography variant="subtitle2" sx={{ mb: 2, textAlign: 'center', color: 'text.secondary' }}>
                   Filtros aplicados: {dateFilter !== 'all' && `Data: ${dateFilter === 'custom' ? `${startDate?.toLocaleDateString()} até ${endDate?.toLocaleDateString()}` : dateFilter}`}
-                  {userFilter !== 'all' && ` | Usuário: ${userFilter.includes('@') ? userFilter.split('@')[0] : userFilter}`}
+                  {!userFilter.includes('all') && ` | Usuário${userFilter.length > 1 ? 's' : ''}: ${userFilter.map(
+                    user => user.includes('@') ? user.split('@')[0] : user
+                  ).join(', ')}`}
                 </Typography>
               )}
               
@@ -764,7 +793,7 @@ export default function Uniform() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs).map((log) => (
+                    {(dateFilter === 'all' && userFilter.includes('all') ? logs : filteredLogs).map((log) => (
                       <TableRow key={log.id} hover>
                         <TableCell>{formatLogDate(log.createdAt)}</TableCell>
                         <TableCell>
@@ -805,10 +834,10 @@ export default function Uniform() {
               </TableContainer>
 
               {/* Add total sales summary */}
-              {(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs).length > 0 && (
+              {(dateFilter === 'all' && userFilter.includes('all') ? logs : filteredLogs).length > 0 && (
                 <Box sx={{ mt: 2, textAlign: 'right' }}>
                   <Typography variant="h6">
-                    Total em Vendas: {formatCurrency(calculateTotalSales(dateFilter === 'all' && userFilter === 'all' ? logs : filteredLogs))}
+                    Total em Vendas: {formatCurrency(calculateTotalSales(dateFilter === 'all' && userFilter.includes('all') ? logs : filteredLogs))}
                   </Typography>
                 </Box>
               )}
