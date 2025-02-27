@@ -275,16 +275,16 @@ export default function CRM() {
       if (proxContatoSort) {
         if (!a.proximoContato && !b.proximoContato) {
           // Se ambos não têm próximo contato, usamos o status como critério
-          if (statusSort && a.status !== b.status) {
-            const aStatus = a.status || '';
-            const bStatus = b.status || '';
-            return statusSort === 'asc'
-              ? aStatus.localeCompare(bStatus)
-              : bStatus.localeCompare(aStatus);
+      if (statusSort && a.status !== b.status) {
+        const aStatus = a.status || '';
+        const bStatus = b.status || '';
+        return statusSort === 'asc' 
+          ? aStatus.localeCompare(bStatus)
+          : bStatus.localeCompare(aStatus);
           }
           return 0;
-        }
-        
+      }
+
         if (!a.proximoContato) return 1;
         if (!b.proximoContato) return -1;
 
@@ -305,7 +305,7 @@ export default function CRM() {
             : bStatus.localeCompare(aStatus);
         }
       }
-      
+
       return 0;
     });
 
@@ -596,7 +596,7 @@ export default function CRM() {
 
   if (loading) {
     return (
-      <MainLayout title="CRM">
+      <MainLayout title="CRM" sx={{ maxWidth: '100vw', overflowX: 'hidden' }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
           <CircularProgress />
         </Box>
@@ -605,127 +605,138 @@ export default function CRM() {
   }
 
   return (
-    <MainLayout title="CRM">
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" sx={{ color: '#000' }}>
+    <MainLayout title="CRM" sx={{ maxWidth: '100vw', overflowX: 'hidden' }}>
+      <Box sx={{ p: { xs: 0.5, sm: 1 }, overflow: 'hidden', maxWidth: '100vw' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+          <Typography variant="h5" sx={{ color: '#000', fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>
             Gestão de Leads
           </Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog()}
+            size="small"
           >
             Novo Lead
           </Button>
         </Box>
 
-        <TableContainer component={Paper}>
-          <Table>
+        <TableContainer component={Paper} sx={{ 
+          maxWidth: '100%', 
+          width: '100%', 
+          overflow: 'hidden', 
+          boxSizing: 'border-box',
+          '&::-webkit-scrollbar': {
+            display: 'none'
+          },
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none'
+        }}>
+          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                <TableCell>Nome</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TableCell width="15%" sx={{ minWidth: 110, maxWidth: 130, py: 1 }}>Nome</TableCell>
+                <TableCell width="10%" sx={{ minWidth: 90, maxWidth: 100, py: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Status
                     <IconButton 
                       size="small" 
                       onClick={handleStatusFilterClick}
                       sx={{ 
-                        ml: 1,
+                        p: 0.3,
                         color: (statusFilter || statusSort === 'desc') ? 'primary.main' : 'inherit'
                       }}
                     >
-                      <FilterListIcon fontSize="small" />
+                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
                     </IconButton>
                     {statusFilter && (
                       <IconButton 
                         size="small" 
                         onClick={clearStatusFilter}
-                        sx={{ ml: 0.5 }}
+                        sx={{ p: 0.3 }}
                       >
-                        <ClearIcon fontSize="small" />
+                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
                       </IconButton>
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>WhatsApp</TableCell>
-                <TableCell>Últ. Contato</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    Próx. Contato
+                <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1 }}>WhatsApp</TableCell>
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>Últ.</TableCell>
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Próx.
                     <IconButton 
                       size="small" 
                       onClick={handleProxContatoFilterClick}
                       sx={{ 
-                        ml: 1,
+                        p: 0.3,
                         color: (proxContatoFilter || proxContatoSort === 'desc') ? 'primary.main' : 'inherit'
                       }}
                     >
-                      <FilterListIcon fontSize="small" />
+                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
                     </IconButton>
                     {proxContatoFilter && (
                       <IconButton 
                         size="small" 
                         onClick={clearProxContatoFilter}
-                        sx={{ ml: 0.5 }}
+                        sx={{ p: 0.3 }}
                       >
-                        <ClearIcon fontSize="small" />
+                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
                       </IconButton>
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    Data AE
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Data
                     <IconButton 
                       size="small" 
                       onClick={handleDataAEFilterClick}
                       sx={{ 
-                        ml: 1,
+                        p: 0.3,
                         color: dataAEFilter ? 'primary.main' : 'inherit'
                       }}
                     >
-                      <FilterListIcon fontSize="small" />
+                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
                     </IconButton>
                     {dataAEFilter && (
                       <IconButton 
                         size="small" 
                         onClick={clearDataAEFilter}
-                        sx={{ ml: 0.5 }}
+                        sx={{ p: 0.3 }}
                       >
-                        <ClearIcon fontSize="small" />
+                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
                       </IconButton>
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    Turma AE
+                <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Turma
                     <IconButton 
                       size="small" 
                       onClick={handleTurmaAEFilterClick}
                       sx={{ 
-                        ml: 1,
+                        p: 0.3,
                         color: turmaAEFilter ? 'primary.main' : 'inherit'
                       }}
                     >
-                      <FilterListIcon fontSize="small" />
+                      <FilterListIcon sx={{ fontSize: '0.8rem' }} />
                     </IconButton>
                     {turmaAEFilter && (
                       <IconButton 
                         size="small" 
                         onClick={clearTurmaAEFilter}
-                        sx={{ ml: 0.5 }}
+                        sx={{ p: 0.3 }}
                       >
-                        <ClearIcon fontSize="small" />
+                        <ClearIcon sx={{ fontSize: '0.8rem' }} />
                       </IconButton>
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>Observações</TableCell>
-                <TableCell>Origem Lead</TableCell>
-                <TableCell align="right">Ações</TableCell>
+                <TableCell width="15%" sx={{ minWidth: 100, maxWidth: 120, py: 1 }}>Obs.</TableCell>
+                <TableCell width="10%" sx={{ minWidth: 70, maxWidth: 80, py: 1 }}>Origem</TableCell>
+                <TableCell width="5%" sx={{ minWidth: 60, maxWidth: 70, py: 1 }} align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -734,14 +745,16 @@ export default function CRM() {
                 : filteredLeads
               ).map((lead) => (
                 <TableRow key={lead.id}>
-                  <TableCell>{lead.nome}</TableCell>
-                  <TableCell>
-                    <FormControl size="small">
+                  <TableCell sx={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                    {lead.nome}
+                  </TableCell>
+                  <TableCell sx={{ maxWidth: 100, p: 0.5 }}>
+                    <FormControl size="small" fullWidth>
                       <Select
                         value={lead.status}
                         onChange={(e) => handleStatusUpdate(lead.id, e.target.value)}
                         size="small"
-                        sx={{ minWidth: 120 }}
+                        sx={{ minWidth: 70, fontSize: '0.75rem', height: '1.8rem' }}
                         renderValue={(value) => (
                           <Chip
                             label={value}
@@ -754,6 +767,13 @@ export default function CRM() {
                               'default'
                             }
                             size="small"
+                            sx={{ 
+                              height: '18px', 
+                              '& .MuiChip-label': { 
+                                px: 0.4, 
+                                fontSize: '0.65rem' 
+                              } 
+                            }}
                           />
                         )}
                       >
@@ -765,12 +785,10 @@ export default function CRM() {
                       </Select>
                     </FormControl>
                   </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {lead.whatsapp}
-                    </Box>
+                  <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                    {lead.whatsapp}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
                     {editingCell === lead.id ? (
                       <TextField
                         type="date"
@@ -795,7 +813,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
                     {editingCell === `${lead.id}-prox` ? (
                       <TextField
                         type="date"
@@ -823,7 +841,7 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
                     {editingCell === `${lead.id}-ae` ? (
                       <TextField
                         type="date"
@@ -851,14 +869,14 @@ export default function CRM() {
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <FormControl size="small">
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
+                    <FormControl size="small" fullWidth>
                       <Select
                         value={lead.turmaAE || ''}
                         onChange={(e) => handleTurmaUpdate(lead.id, e.target.value)}
                         size="small"
-                        sx={{ minWidth: 120 }}
                         displayEmpty
+                        sx={{ fontSize: '0.75rem', height: '1.8rem' }}
                       >
                         <MenuItem value="">
                           <em>Sem turma</em>
@@ -871,7 +889,7 @@ export default function CRM() {
                       </Select>
                     </FormControl>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
                     {editingCell === `${lead.id}-obs` ? (
                       <TextField
                         fullWidth
@@ -892,13 +910,13 @@ export default function CRM() {
                           setEditingCell(`${lead.id}-obs`);
                           setEditValue(lead.observacoes || '');
                         }}
-                        style={{ cursor: 'pointer', minHeight: '20px' }}
+                        style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       >
                         {lead.observacoes || '-'}
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5 }}>
                     {editingCell === `${lead.id}-origem` ? (
                       <TextField
                         fullWidth
@@ -919,27 +937,27 @@ export default function CRM() {
                           setEditingCell(`${lead.id}-origem`);
                           setEditValue(lead.origemLead || '');
                         }}
-                        style={{ cursor: 'pointer', minHeight: '20px' }}
+                        style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       >
                         {lead.origemLead || '-'}
                       </Box>
                     )}
                   </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                  <TableCell align="right" sx={{ maxWidth: 70, p: 0.5 }}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                       <IconButton
                         color="primary"
                         onClick={() => handleOpenDialog(lead)}
                         size="small"
                       >
-                        <EditIcon />
+                        <EditIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         color="error"
                         onClick={() => handleDelete(lead.id)}
                         size="small"
                       >
-                        <DeleteIcon />
+                        <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Box>
                   </TableCell>
@@ -955,7 +973,13 @@ export default function CRM() {
             page={page}
             onPageChange={handleChangePage}
             labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            labelRowsPerPage="Leads por página"
+            labelRowsPerPage="Por página"
+            sx={{ 
+              '& .MuiTablePagination-toolbar': { minHeight: '36px', p: 0.5 },
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                fontSize: '0.75rem'
+              }
+            }}
           />
         </TableContainer>
 
