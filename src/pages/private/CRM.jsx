@@ -79,7 +79,8 @@ export default function CRM() {
     proximoContato: '',
     dataAE: '',
     turmaAE: '',
-    observacoes: ''
+    observacoes: '',
+    origemLead: ''
   });
 
   // Status options for the leads
@@ -270,18 +271,20 @@ export default function CRM() {
 
     // Apply sorting
     filtered.sort((a, b) => {
-      // Status sorting
-      if (statusSort && a.status !== b.status) {
-        const aStatus = a.status || '';
-        const bStatus = b.status || '';
-        return statusSort === 'asc' 
-          ? aStatus.localeCompare(bStatus)
-          : bStatus.localeCompare(aStatus);
-      }
-
-      // Próximo contato sorting
+      // Primeiro, tentamos ordenar por próximo contato se essa ordenação estiver ativa
       if (proxContatoSort) {
-        if (!a.proximoContato && !b.proximoContato) return 0;
+        if (!a.proximoContato && !b.proximoContato) {
+          // Se ambos não têm próximo contato, usamos o status como critério
+          if (statusSort && a.status !== b.status) {
+            const aStatus = a.status || '';
+            const bStatus = b.status || '';
+            return statusSort === 'asc'
+              ? aStatus.localeCompare(bStatus)
+              : bStatus.localeCompare(aStatus);
+          }
+          return 0;
+        }
+        
         if (!a.proximoContato) return 1;
         if (!b.proximoContato) return -1;
 
@@ -291,8 +294,18 @@ export default function CRM() {
         return proxContatoSort === 'asc'
           ? dateA.getTime() - dateB.getTime()
           : dateB.getTime() - dateA.getTime();
+      } 
+      // Se não há ordenação por próximo contato, mas há por status
+      else if (statusSort) {
+        if (a.status !== b.status) {
+          const aStatus = a.status || '';
+          const bStatus = b.status || '';
+          return statusSort === 'asc'
+            ? aStatus.localeCompare(bStatus)
+            : bStatus.localeCompare(aStatus);
+        }
       }
-
+      
       return 0;
     });
 
@@ -357,19 +370,25 @@ export default function CRM() {
         proximoContato: lead.proximoContato || '',
         dataAE: lead.dataAE || '',
         turmaAE: lead.turmaAE || '',
-        observacoes: lead.observacoes || ''
+        observacoes: lead.observacoes || '',
+        origemLead: lead.origemLead || ''
       });
     } else {
+      // Obter a data de hoje no formato YYYY-MM-DD para o campo ultimoContato
+      const today = new Date();
+      const formattedToday = format(today, 'yyyy-MM-dd');
+      
       setEditingLead(null);
       setFormData({
         nome: '',
         status: 'Lead',
         whatsapp: '',
-        ultimoContato: '',
+        ultimoContato: formattedToday, // Preenche com a data de hoje
         proximoContato: '',
         dataAE: '',
         turmaAE: '',
-        observacoes: ''
+        observacoes: '',
+        origemLead: ''
       });
     }
     setOpenDialog(true);
@@ -382,8 +401,12 @@ export default function CRM() {
 
   const handleSubmit = async () => {
     try {
+      // Preparar os dados do lead, convertendo as datas para o formato correto
       const leadData = {
         ...formData,
+        ultimoContato: formData.ultimoContato ? formatDateForSave(formData.ultimoContato) : '',
+        proximoContato: formData.proximoContato ? formatDateForSave(formData.proximoContato) : '',
+        dataAE: formData.dataAE ? formatDateForSave(formData.dataAE) : '',
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
@@ -678,6 +701,7 @@ export default function CRM() {
                   </Box>
                 </TableCell>
                 <TableCell>Observações</TableCell>
+                <TableCell>Origem Lead</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
@@ -721,13 +745,6 @@ export default function CRM() {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {lead.whatsapp}
-                      <IconButton
-                        size="small"
-                        onClick={() => handleWhatsAppClick(lead.whatsapp)}
-                        color="success"
-                      >
-                        <WhatsAppIcon />
-                      </IconButton>
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -831,7 +848,60 @@ export default function CRM() {
                       </Select>
                     </FormControl>
                   </TableCell>
-                  <TableCell>{lead.observacoes || '-'}</TableCell>
+                  <TableCell>
+                    {editingCell === `${lead.id}-obs` ? (
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'observacoes')}
+                        onBlur={() => handleSaveEdit(lead.id, 'observacoes')}
+                        autoFocus
+                        size="small"
+                        InputProps={{
+                          style: { fontSize: '0.875rem' }
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        onClick={() => {
+                          setEditingCell(`${lead.id}-obs`);
+                          setEditValue(lead.observacoes || '');
+                        }}
+                        style={{ cursor: 'pointer', minHeight: '20px' }}
+                      >
+                        {lead.observacoes || '-'}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingCell === `${lead.id}-origem` ? (
+                      <TextField
+                        fullWidth
+                        variant="standard"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, lead.id, 'origemLead')}
+                        onBlur={() => handleSaveEdit(lead.id, 'origemLead')}
+                        autoFocus
+                        size="small"
+                        InputProps={{
+                          style: { fontSize: '0.875rem' }
+                        }}
+                      />
+                    ) : (
+                      <Box
+                        onClick={() => {
+                          setEditingCell(`${lead.id}-origem`);
+                          setEditValue(lead.origemLead || '');
+                        }}
+                        style={{ cursor: 'pointer', minHeight: '20px' }}
+                      >
+                        {lead.origemLead || '-'}
+                      </Box>
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                       <IconButton
@@ -957,6 +1027,13 @@ export default function CRM() {
                 onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
                 multiline
                 rows={4}
+              />
+
+              <TextField
+                fullWidth
+                label="Origem Lead"
+                value={formData.origemLead}
+                onChange={(e) => setFormData({ ...formData, origemLead: e.target.value })}
               />
             </Box>
           </DialogContent>
