@@ -16,7 +16,7 @@ A aba "Semanais" no módulo de Tarefas permite gerenciar tarefas que são realiz
 2. **Gerenciar tarefas semanais**
    - Visualizar todas as tarefas semanais
    - Editar descrição e dia da semana
-   - Alterar status (Pendente, Em andamento, Finalizada, Aguardando)
+   - Alterar status (Pendente, Em andamento, Finalizada, Aguardando, Urgente)
    - Excluir tarefas (apenas usuários master)
 
 3. **Reset automático de tarefas**
@@ -29,7 +29,7 @@ A aba "Semanais" no módulo de Tarefas permite gerenciar tarefas que são realiz
 - **Campos**:
   - `descricao`: String (descrição da tarefa)
   - `diaDaSemana`: Number (1-7, onde 1 = Segunda-feira, 7 = Domingo)
-  - `status`: String (Pendente, Em andamento, Finalizada, Aguardando)
+  - `status`: String (Pendente, Em andamento, Finalizada, Aguardando, Urgente)
   - `ultimaExecucao`: Timestamp (data/hora da última vez que foi marcada como Finalizada)
   - `createdAt`: Timestamp
   - `createdBy`: String (ID do usuário que criou)

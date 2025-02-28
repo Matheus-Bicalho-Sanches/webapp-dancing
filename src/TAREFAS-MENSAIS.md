@@ -16,7 +16,7 @@ A aba "Mensais" no módulo de Tarefas permite gerenciar tarefas que são realiza
 2. **Gerenciar tarefas mensais**
    - Visualizar todas as tarefas mensais
    - Editar descrição e dia do mês
-   - Alterar status (Pendente, Em andamento, Finalizada, Aguardando)
+   - Alterar status (Pendente, Em andamento, Finalizada, Aguardando, Urgente)
    - Excluir tarefas (apenas usuários master)
 
 3. **Reset automático de tarefas**
@@ -29,7 +29,7 @@ A aba "Mensais" no módulo de Tarefas permite gerenciar tarefas que são realiza
 - **Campos**:
   - `descricao`: String (descrição da tarefa)
   - `diaDoMes`: Number (1-31, dia do mês)
-  - `status`: String (Pendente, Em andamento, Finalizada, Aguardando)
+  - `status`: String (Pendente, Em andamento, Finalizada, Aguardando, Urgente)
   - `ultimaExecucao`: Timestamp (data/hora da última vez que foi marcada como Finalizada)
   - `createdAt`: Timestamp
   - `createdBy`: String (ID do usuário que criou)

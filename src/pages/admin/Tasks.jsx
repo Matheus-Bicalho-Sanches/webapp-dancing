@@ -567,6 +567,24 @@ export default function Tasks() {
     return 'success';
   };
 
+  // Função para obter a cor baseada no status da tarefa
+  const getStatusColorByName = (status) => {
+    switch (status) {
+      case 'Pendente':
+        return 'warning'; // Amarelo
+      case 'Em andamento':
+        return 'primary'; // Azul
+      case 'Finalizada':
+        return 'success'; // Verde
+      case 'Aguardando':
+        return 'default'; // Cinza
+      case 'Urgente':
+        return 'error'; // Vermelho
+      default:
+        return 'default';
+    }
+  };
+
   // Função para determinar qual aba está ativa baseado na URL
   const getCurrentTab = () => {
     const searchParams = new URLSearchParams(location.search);
@@ -1520,6 +1538,7 @@ export default function Tasks() {
                 <MenuItem value="Em andamento">Em andamento</MenuItem>
                 <MenuItem value="Finalizada">Finalizada</MenuItem>
                 <MenuItem value="Aguardando">Aguardando</MenuItem>
+                <MenuItem value="Urgente">Urgente</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -1587,11 +1606,21 @@ export default function Tasks() {
                         onChange={(e) => handleStatusChange(task.id, e.target.value)}
                         size="small"
                         sx={{ minWidth: 120 }}
+                        renderValue={(selected) => (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Chip 
+                              label={selected} 
+                              size="small" 
+                              color={getStatusColorByName(selected)}
+                            />
+                          </Box>
+                        )}
                       >
                         <MenuItem value="Pendente">Pendente</MenuItem>
                         <MenuItem value="Em andamento">Em andamento</MenuItem>
                         <MenuItem value="Finalizada">Finalizada</MenuItem>
                         <MenuItem value="Aguardando">Aguardando</MenuItem>
+                        <MenuItem value="Urgente">Urgente</MenuItem>
                       </Select>
                     </TableCell>
                     <TableCell align="right">
@@ -1664,11 +1693,21 @@ export default function Tasks() {
                             onChange={(e) => handleDailyStatusChange(task.id, e.target.value)}
                             size="small"
                             sx={{ minWidth: 120 }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Chip 
+                                  label={selected} 
+                                  size="small" 
+                                  color={getStatusColorByName(selected)}
+                                />
+                              </Box>
+                            )}
                           >
                             <MenuItem value="Pendente">Pendente</MenuItem>
                             <MenuItem value="Em andamento">Em andamento</MenuItem>
                             <MenuItem value="Finalizada">Finalizada</MenuItem>
                             <MenuItem value="Aguardando">Aguardando</MenuItem>
+                            <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
                         <TableCell align="right">
@@ -1746,11 +1785,21 @@ export default function Tasks() {
                             onChange={(e) => handleWeeklyStatusChange(task.id, e.target.value)}
                             size="small"
                             sx={{ minWidth: 120 }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Chip 
+                                  label={selected} 
+                                  size="small" 
+                                  color={getStatusColorByName(selected)}
+                                />
+                              </Box>
+                            )}
                           >
                             <MenuItem value="Pendente">Pendente</MenuItem>
                             <MenuItem value="Em andamento">Em andamento</MenuItem>
                             <MenuItem value="Finalizada">Finalizada</MenuItem>
                             <MenuItem value="Aguardando">Aguardando</MenuItem>
+                            <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
                         <TableCell align="right">
@@ -1828,11 +1877,21 @@ export default function Tasks() {
                             onChange={(e) => handleMonthlyStatusChange(task.id, e.target.value)}
                             size="small"
                             sx={{ minWidth: 120 }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Chip 
+                                  label={selected} 
+                                  size="small" 
+                                  color={getStatusColorByName(selected)}
+                                />
+                              </Box>
+                            )}
                           >
                             <MenuItem value="Pendente">Pendente</MenuItem>
                             <MenuItem value="Em andamento">Em andamento</MenuItem>
                             <MenuItem value="Finalizada">Finalizada</MenuItem>
                             <MenuItem value="Aguardando">Aguardando</MenuItem>
+                            <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
                         <TableCell align="right">
@@ -1995,11 +2054,21 @@ export default function Tasks() {
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
                 >
                   <MenuItem value="Pendente">Pendente</MenuItem>
                   <MenuItem value="Em andamento">Em andamento</MenuItem>
                   <MenuItem value="Finalizada">Finalizada</MenuItem>
                   <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -2062,11 +2131,21 @@ export default function Tasks() {
                   value={dailyFormData.status}
                   onChange={(e) => setDailyFormData({ ...dailyFormData, status: e.target.value })}
                   label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
                 >
                   <MenuItem value="Pendente">Pendente</MenuItem>
                   <MenuItem value="Em andamento">Em andamento</MenuItem>
                   <MenuItem value="Finalizada">Finalizada</MenuItem>
                   <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -2130,11 +2209,21 @@ export default function Tasks() {
                   value={weeklyFormData.status}
                   onChange={(e) => setWeeklyFormData({ ...weeklyFormData, status: e.target.value })}
                   label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
                 >
                   <MenuItem value="Pendente">Pendente</MenuItem>
                   <MenuItem value="Em andamento">Em andamento</MenuItem>
                   <MenuItem value="Finalizada">Finalizada</MenuItem>
                   <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -2222,11 +2311,21 @@ export default function Tasks() {
                   value={monthlyFormData.status}
                   onChange={(e) => setMonthlyFormData({ ...monthlyFormData, status: e.target.value })}
                   label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
                 >
                   <MenuItem value="Pendente">Pendente</MenuItem>
                   <MenuItem value="Em andamento">Em andamento</MenuItem>
                   <MenuItem value="Finalizada">Finalizada</MenuItem>
                   <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
                 </Select>
               </FormControl>
             </Box>

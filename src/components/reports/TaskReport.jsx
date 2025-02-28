@@ -120,6 +120,8 @@ export default function TaskReport() {
         return 'primary';
       case 'Aguardando':
         return 'warning';
+      case 'Urgente':
+        return 'error';
       default:
         return 'default';
     }
@@ -255,6 +257,7 @@ export default function TaskReport() {
                 <MenuItem value="Em andamento">Em andamento</MenuItem>
                 <MenuItem value="Finalizada">Finalizada</MenuItem>
                 <MenuItem value="Aguardando">Aguardando</MenuItem>
+                <MenuItem value="Urgente">Urgente</MenuItem>
               </Select>
             </FormControl>
           </Grid>
