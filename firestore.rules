@@ -135,6 +135,13 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
+    // Regras para a coleção tarefas_mensais
+    match /tarefas_mensais/{tarefaId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
     // Regras para a coleção movimentacoes
     match /movimentacoes/{movimentacaoId} {
       allow read: if isAuthenticated();

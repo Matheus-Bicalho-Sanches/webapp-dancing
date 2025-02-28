@@ -50,6 +50,7 @@ import {
   doc,
   serverTimestamp,
   getDocs,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -102,6 +103,18 @@ export default function Tasks() {
   const [weeklyFormData, setWeeklyFormData] = useState({
     descricao: '',
     diaDaSemana: 1, // 1-7 (Segunda a Domingo)
+    status: 'Pendente',
+    ultimaExecucao: null
+  });
+
+  // Estados para tarefas mensais
+  const [monthlyTasks, setMonthlyTasks] = useState([]);
+  const [monthlyTasksLoading, setMonthlyTasksLoading] = useState(true);
+  const [openMonthlyDialog, setOpenMonthlyDialog] = useState(false);
+  const [editingMonthlyTask, setEditingMonthlyTask] = useState(null);
+  const [monthlyFormData, setMonthlyFormData] = useState({
+    descricao: '',
+    diaDoMes: 1, // 1-31 (Dia do mês)
     status: 'Pendente',
     ultimaExecucao: null
   });
@@ -349,13 +362,25 @@ export default function Tasks() {
         userId: currentUser.uid,
         userName: currentUser.displayName || currentUser.email,
         timestamp: serverTimestamp(),
-        taskType: taskData?.taskType || 'regular' // Identificar o tipo de tarefa (regular ou diária)
+        taskType: taskData?.taskType || 'regular', // Identificar o tipo de tarefa
+        details: {} // Campo para armazenar detalhes específicos
       };
+      
+      // Adicionar campos específicos de acordo com o tipo de tarefa
+      if (taskData.taskType === 'mensal') {
+        logEntry.details.taskType = 'mensal';
+        logEntry.details.diaDoMes = taskData.diaDoMes;
+      } else if (taskData.taskType === 'semanal') {
+        logEntry.details.taskType = 'semanal';
+        logEntry.details.diaDaSemana = taskData.diaDaSemana;
+      } else if (taskData.taskType === 'diaria') {
+        logEntry.details.taskType = 'diaria';
+      }
       
       // Incluir oldStatus e newStatus no log independentemente da ação
       if (taskData.oldStatus && taskData.newStatus) {
-        logEntry.oldStatus = taskData.oldStatus;
-        logEntry.newStatus = taskData.newStatus;
+        logEntry.details.oldStatus = taskData.oldStatus;
+        logEntry.details.newStatus = taskData.newStatus;
       }
       
       // Processo padrão para action === 'status-change'
@@ -365,22 +390,30 @@ export default function Tasks() {
           // Para tarefas diárias
           const originalTask = dailyTasks.find(task => task.id === taskId);
           if (originalTask) {
-            logEntry.oldStatus = originalTask.status;
-            logEntry.newStatus = taskData.newStatus || taskData.status;
+            logEntry.details.oldStatus = originalTask.status;
+            logEntry.details.newStatus = taskData.newStatus || taskData.status;
           }
         } else if (taskData.taskType === 'semanal') {
           // Para tarefas semanais
           const originalTask = weeklyTasks.find(task => task.id === taskId);
           if (originalTask) {
-            logEntry.oldStatus = originalTask.status;
-            logEntry.newStatus = taskData.newStatus || taskData.status;
+            logEntry.details.oldStatus = originalTask.status;
+            logEntry.details.newStatus = taskData.newStatus || taskData.status;
+          }
+        } else if (taskData.taskType === 'mensal') {
+          // Para tarefas mensais
+          const originalTask = monthlyTasks.find(task => task.id === taskId);
+          if (originalTask) {
+            logEntry.details.oldStatus = originalTask.status;
+            logEntry.details.newStatus = taskData.newStatus || taskData.status;
+            logEntry.details.diaDoMes = originalTask.diaDoMes;
           }
         } else {
           // Para tarefas regulares
           const originalTask = tasks.find(task => task.id === taskId);
           if (originalTask) {
-            logEntry.oldStatus = originalTask.status;
-            logEntry.newStatus = taskData.newStatus || taskData.status;
+            logEntry.details.oldStatus = originalTask.status;
+            logEntry.details.newStatus = taskData.newStatus || taskData.status;
           }
         }
       }
@@ -571,48 +604,70 @@ export default function Tasks() {
 
   // Função para formatar data e hora para exibição nos logs
   const formatDateTime = (timestamp) => {
-    if (!timestamp) return 'Data não disponível';
-    
-    // Se for um timestamp do Firestore
-    if (timestamp.toDate) {
-      const date = timestamp.toDate();
-      return dayjs(date).format('DD/MM/YYYY HH:mm');
-    }
-    
-    // Se for uma data normal
-    return dayjs(timestamp).format('DD/MM/YYYY HH:mm');
+    if (!timestamp) return '-';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return dayjs(date).format('DD/MM/YYYY HH:mm');
   };
 
   // Função para obter o nome da ação
   const getActionName = (action, log) => {
     let taskTypeLabel = 'Tarefa';
     
-    if (log.taskType === 'diaria') {
+    if (log.details?.taskType === 'diaria' || action.includes('daily')) {
       taskTypeLabel = 'Tarefa Diária';
-    } else if (log.taskType === 'semanal') {
+    } else if (log.details?.taskType === 'semanal' || action.includes('weekly')) {
       taskTypeLabel = 'Tarefa Semanal';
+    } else if (log.details?.taskType === 'mensal' || action.includes('monthly')) {
+      taskTypeLabel = 'Tarefa Mensal';
     }
     
     // Se temos informações sobre o status anterior e novo, exibi-los sempre
-    if (log.oldStatus && log.newStatus) {
-      if (action === 'update') {
-        return `Editou ${taskTypeLabel} - Status: ${log.oldStatus} → ${log.newStatus}`;
+    if (log.details?.oldStatus && log.details?.newStatus) {
+      if (action === 'update' || action === 'edit_monthly') {
+        return `Editou ${taskTypeLabel} - Status: ${log.details.oldStatus} → ${log.details.newStatus}`;
+      }
+      
+      if (action === 'status_change_monthly') {
+        return `Alterou o status da ${taskTypeLabel}: ${log.details.oldStatus} → ${log.details.newStatus}`;
       }
       
       if (action === 'status-change') {
         // Verificar se foi uma atualização automática
-        if (log.automatic) {
-          if (log.taskType === 'diaria') {
-            return `Reset automático: ${log.oldStatus} → ${log.newStatus}`;
-          } else if (log.taskType === 'semanal') {
-            return `Reset semanal automático: ${log.oldStatus} → ${log.newStatus}`;
+        if (log.details.automatic) {
+          if (log.details.taskType === 'diaria') {
+            return `Reset automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
+          } else if (log.details.taskType === 'semanal') {
+            return `Reset semanal automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
           }
-          return `Reset automático: ${log.oldStatus} → ${log.newStatus}`;
+          return `Reset automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
         }
         
         // Mostrar alteração de status com a transição
-        return `Alterou o status da ${taskTypeLabel}: ${log.oldStatus} → ${log.newStatus}`;
+        return `Alterou o status da ${taskTypeLabel}: ${log.details.oldStatus} → ${log.details.newStatus}`;
       }
+    }
+    
+    // Casos específicos para tarefas mensais
+    if (action === 'reset_monthly') {
+      return `Reset mensal automático: ${log.details.oldStatus} → ${log.details.newStatus} (Dia ${log.details.diaDoMes})`;
+    }
+    
+    if (action === 'create_monthly') {
+      return `Criou ${taskTypeLabel} (Dia ${log.details.diaDoMes})`;
+    }
+    
+    if (action === 'edit_monthly') {
+      let description = `Editou ${taskTypeLabel}`;
+      
+      if (log.details.oldDiaDoMes !== log.details.newDiaDoMes) {
+        description += ` - Dia: ${log.details.oldDiaDoMes} → ${log.details.newDiaDoMes}`;
+      }
+      
+      return description;
+    }
+    
+    if (action === 'delete_monthly') {
+      return `Excluiu ${taskTypeLabel} (Dia ${log.details.diaDoMes})`;
     }
     
     // Casos onde não temos informações de status ou outros tipos de ação
@@ -806,20 +861,20 @@ export default function Tasks() {
   // Carregar tarefas semanais
   useEffect(() => {
     const q = query(
-      collection(db, 'tarefas_semanais'), 
-      orderBy('descricao', 'asc')
+        collection(db, 'tarefas_semanais'), 
+        orderBy('descricao', 'asc')
     );
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const tasksData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+          id: doc.id,
+          ...doc.data()
+        }));
       setWeeklyTasks(tasksData);
       setWeeklyTasksLoading(false);
       
-      // Verificar e resetar tarefas semanais se necessário
-      checkWeeklyTasksReset(tasksData);
+      // Verificar e resetar tarefas finalizadas quando os dados são carregados
+      resetFinishedWeeklyTasks(tasksData);
     }, (error) => {
       console.error('Erro ao carregar tarefas semanais:', error);
       setWeeklyTasksLoading(false);
@@ -828,8 +883,8 @@ export default function Tasks() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Função para verificar e resetar tarefas semanais
-  const checkWeeklyTasksReset = async (tasks) => {
+  // Função para resetar tarefas semanais finalizadas
+  const resetFinishedWeeklyTasks = async (tasks) => {
     try {
       // Verificar se o usuário está autenticado
       if (!currentUser) {
@@ -893,7 +948,7 @@ export default function Tasks() {
     if (currentTab === 2 && !weeklyTasksLoading && weeklyTasks.length > 0) {
       // Verificar a cada 5 minutos
       const intervalId = setInterval(() => {
-        checkWeeklyTasksReset(weeklyTasks);
+        resetFinishedWeeklyTasks(weeklyTasks);
       }, 5 * 60 * 1000); // 5 minutos em milissegundos
       
       return () => clearInterval(intervalId);
@@ -927,27 +982,18 @@ export default function Tasks() {
     setEditingWeeklyTask(null);
   };
 
-  const getDiaSemanaTexto = (diaDaSemana) => {
-    const diasSemana = [
-      'Segunda-feira',
-      'Terça-feira',
-      'Quarta-feira',
-      'Quinta-feira',
-      'Sexta-feira',
-      'Sábado',
-      'Domingo'
-    ];
-    return diasSemana[diaDaSemana - 1] || 'Dia inválido';
+  // Função para obter nome do dia da semana
+  const getDiaSemanaTexto = (dia) => {
+    const diasSemana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    // Ajustando índice para o formato usado (1 = Segunda, 7 = Domingo)
+    return diasSemana[(dia % 7) || 0];
   };
 
+  // Função para formatar texto de "Feito em"
   const formatUltimaExecucao = (timestamp) => {
-    if (!timestamp) return 'Nunca executada';
-    
-    if (timestamp.toDate) {
-      return dayjs(timestamp.toDate()).format('DD/MM/YYYY');
-    }
-    
-    return dayjs(timestamp).format('DD/MM/YYYY');
+    if (!timestamp) return "Nunca";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return dayjs(date).format('DD/MM/YYYY HH:mm');
   };
 
   const handleWeeklySubmit = async () => {
@@ -1101,6 +1147,286 @@ export default function Tasks() {
       setSnackbar({
         open: true,
         message: 'Erro ao atualizar status. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  // Carregar tarefas mensais
+  useEffect(() => {
+    const q = query(
+        collection(db, 'tarefas_mensais'), 
+        orderBy('descricao', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setMonthlyTasks(tasksData);
+      setMonthlyTasksLoading(false);
+      
+      // Verificar e resetar tarefas finalizadas quando os dados são carregados
+      resetFinishedMonthlyTasks(tasksData);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas mensais:', error);
+      setMonthlyTasksLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Função para resetar tarefas mensais finalizadas
+  const resetFinishedMonthlyTasks = async (tasks) => {
+    try {
+      // Verificar se o usuário está autenticado
+      if (!currentUser) {
+        console.log('Usuário não autenticado, não é possível resetar tarefas');
+        return;
+      }
+      
+      const today = new Date();
+      const currentDayOfMonth = today.getDate();
+      
+      // Filtrar tarefas que devem ser resetadas
+      // Uma tarefa deve ser resetada se:
+      // 1. Seu status for "Finalizada"
+      // 2. Hoje for o dia do mês correspondente à tarefa
+      // 3. A tarefa não foi finalizada hoje
+      const tasksToReset = tasks.filter(task => {
+        // Verificar se o status é "Finalizada"
+        if (task.status !== 'Finalizada') return false;
+        
+        // Verificar se hoje é o dia do mês para esta tarefa
+        if (task.diaDoMes !== currentDayOfMonth) return false;
+        
+        // Verificar se a tarefa já foi finalizada hoje
+        if (task.ultimaExecucao) {
+          const lastExecution = task.ultimaExecucao.toDate ? task.ultimaExecucao.toDate() : new Date(task.ultimaExecucao);
+          const lastExecutionDay = lastExecution.getDate();
+          const lastExecutionMonth = lastExecution.getMonth();
+          const lastExecutionYear = lastExecution.getFullYear();
+          
+          const isToday = 
+            lastExecutionDay === today.getDate() && 
+            lastExecutionMonth === today.getMonth() && 
+            lastExecutionYear === today.getFullYear();
+            
+          if (isToday) return false;
+        }
+        
+        return true;
+      });
+      
+      // Resetar tarefas
+      for (const task of tasksToReset) {
+        await updateDoc(doc(db, 'tarefas_mensais', task.id), {
+          status: 'Pendente',
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser.uid
+        });
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('reset_monthly', {
+          ...task,
+          taskType: 'mensal',
+          oldStatus: 'Finalizada',
+          newStatus: 'Pendente'
+        }, task.id);
+      }
+      
+      if (tasksToReset.length > 0) {
+        console.log(`Reset de ${tasksToReset.length} tarefas mensais realizado com sucesso.`);
+      }
+    } catch (error) {
+      console.error('Erro ao resetar tarefas mensais:', error);
+    }
+  };
+
+  // Funções para tarefas mensais
+  const handleOpenMonthlyDialog = (task = null) => {
+    if (task) {
+      setEditingMonthlyTask(task);
+      setMonthlyFormData({
+        descricao: task.descricao,
+        diaDoMes: task.diaDoMes,
+        status: task.status || 'Pendente'
+      });
+    } else {
+      setEditingMonthlyTask(null);
+      setMonthlyFormData({
+        descricao: '',
+        diaDoMes: 1,
+        status: 'Pendente',
+        ultimaExecucao: null
+      });
+    }
+    setOpenMonthlyDialog(true);
+  };
+
+  const handleCloseMonthlyDialog = () => {
+    setOpenMonthlyDialog(false);
+    setEditingMonthlyTask(null);
+  };
+
+  const handleMonthlySubmit = async () => {
+    try {
+      // Validar formulário
+      if (!monthlyFormData.descricao) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, preencha a descrição da tarefa.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (monthlyFormData.diaDoMes < 1 || monthlyFormData.diaDoMes > 31) {
+        setSnackbar({
+          open: true,
+          message: 'O dia do mês deve estar entre 1 e 31.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Dados comuns para criar ou atualizar
+      const taskData = {
+        descricao: monthlyFormData.descricao,
+        diaDoMes: Number(monthlyFormData.diaDoMes),
+        status: monthlyFormData.status,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      // Se estiver editando uma tarefa existente
+      if (editingMonthlyTask) {
+        await updateDoc(doc(db, 'tarefas_mensais', editingMonthlyTask.id), taskData);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('edit_monthly', {
+          ...taskData,
+          taskType: 'mensal',
+          oldDescription: editingMonthlyTask.descricao,
+          newDescription: monthlyFormData.descricao,
+          oldDiaDoMes: editingMonthlyTask.diaDoMes,
+          newDiaDoMes: Number(monthlyFormData.diaDoMes),
+          oldStatus: editingMonthlyTask.status,
+          newStatus: monthlyFormData.status
+        }, editingMonthlyTask.id);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa mensal atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        // Se estiver criando uma nova tarefa
+        const newTaskData = {
+          ...taskData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        };
+        
+        const docRef = await addDoc(collection(db, 'tarefas_mensais'), newTaskData);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('create_monthly', {
+          ...newTaskData,
+          taskType: 'mensal'
+        }, docRef.id);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa mensal criada com sucesso!',
+          severity: 'success'
+        });
+      }
+      
+      handleCloseMonthlyDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa mensal:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa mensal. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleMonthlyDelete = async (taskId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa mensal?')) {
+      try {
+        // Obter os dados da tarefa antes de excluir
+        const taskDoc = doc(db, 'tarefas_mensais', taskId);
+        const taskSnapshot = await getDoc(taskDoc);
+        const taskData = taskSnapshot.data();
+        
+        // Excluir a tarefa
+        await deleteDoc(taskDoc);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('delete_monthly', {
+          ...taskData,
+          taskType: 'mensal'
+        }, taskId);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa mensal excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa mensal:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa mensal. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleMonthlyStatusChange = async (taskId, newStatus) => {
+    try {
+      // Obter os dados da tarefa antes de atualizar
+      const taskDoc = doc(db, 'tarefas_mensais', taskId);
+      const taskSnapshot = await getDoc(taskDoc);
+      const taskData = taskSnapshot.data();
+      
+      const updateData = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+      
+      // Se o status for "Finalizada", atualizar o campo ultimaExecucao
+      if (newStatus === 'Finalizada') {
+        updateData.ultimaExecucao = serverTimestamp();
+      }
+      
+      // Atualizar a tarefa
+      await updateDoc(taskDoc, updateData);
+      
+      // Registrar log usando a função addTaskLog
+      await addTaskLog('status_change_monthly', {
+        ...taskData,
+        taskType: 'mensal',
+        oldStatus: taskData.status,
+        newStatus: newStatus
+      }, taskId);
+      
+      setSnackbar({
+        open: true,
+        message: `Status da tarefa mensal alterado para ${newStatus}!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao alterar status da tarefa mensal:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao alterar status da tarefa mensal. Por favor, tente novamente.',
         severity: 'error'
       });
     }
@@ -1461,6 +1787,88 @@ export default function Tasks() {
           </>
         )}
 
+        {/* Aba de Tarefas Mensais */}
+        {getCurrentTab() === 3 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenMonthlyDialog()}
+              >
+                Nova Tarefa Mensal
+              </Button>
+            </Box>
+
+            {monthlyTasksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Dia do Mês</TableCell>
+                      <TableCell>Feito em</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {monthlyTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell>{task.descricao}</TableCell>
+                        <TableCell>{task.diaDoMes}</TableCell>
+                        <TableCell>{formatUltimaExecucao(task.ultimaExecucao)}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={task.status || 'Pendente'}
+                            onChange={(e) => handleMonthlyStatusChange(task.id, e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 120 }}
+                          >
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                            <MenuItem value="Em andamento">Em andamento</MenuItem>
+                            <MenuItem value="Finalizada">Finalizada</MenuItem>
+                            <MenuItem value="Aguardando">Aguardando</MenuItem>
+                          </Select>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenMonthlyDialog(task)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          {hasDeletePermission && (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleMonthlyDelete(task.id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {monthlyTasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          Nenhuma tarefa mensal encontrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
+
         {/* Aba de Logs */}
         {getCurrentTab() === 5 && (
           <>
@@ -1741,6 +2149,98 @@ export default function Tasks() {
               disabled={!weeklyFormData.descricao}
             >
               {editingWeeklyTask ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog para adicionar/editar tarefa mensal */}
+        <Dialog
+          open={openMonthlyDialog}
+          onClose={handleCloseMonthlyDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingMonthlyTask ? 'Editar Tarefa Mensal' : 'Nova Tarefa Mensal'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                value={monthlyFormData.descricao}
+                onChange={(e) => setMonthlyFormData({ ...monthlyFormData, descricao: e.target.value })}
+                required
+                multiline
+                rows={2}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Dia do Mês</InputLabel>
+                <Select
+                  value={monthlyFormData.diaDoMes}
+                  onChange={(e) => setMonthlyFormData({ ...monthlyFormData, diaDoMes: e.target.value })}
+                  label="Dia do Mês"
+                >
+                  <MenuItem value={1}>1</MenuItem>
+                  <MenuItem value={2}>2</MenuItem>
+                  <MenuItem value={3}>3</MenuItem>
+                  <MenuItem value={4}>4</MenuItem>
+                  <MenuItem value={5}>5</MenuItem>
+                  <MenuItem value={6}>6</MenuItem>
+                  <MenuItem value={7}>7</MenuItem>
+                  <MenuItem value={8}>8</MenuItem>
+                  <MenuItem value={9}>9</MenuItem>
+                  <MenuItem value={10}>10</MenuItem>
+                  <MenuItem value={11}>11</MenuItem>
+                  <MenuItem value={12}>12</MenuItem>
+                  <MenuItem value={13}>13</MenuItem>
+                  <MenuItem value={14}>14</MenuItem>
+                  <MenuItem value={15}>15</MenuItem>
+                  <MenuItem value={16}>16</MenuItem>
+                  <MenuItem value={17}>17</MenuItem>
+                  <MenuItem value={18}>18</MenuItem>
+                  <MenuItem value={19}>19</MenuItem>
+                  <MenuItem value={20}>20</MenuItem>
+                  <MenuItem value={21}>21</MenuItem>
+                  <MenuItem value={22}>22</MenuItem>
+                  <MenuItem value={23}>23</MenuItem>
+                  <MenuItem value={24}>24</MenuItem>
+                  <MenuItem value={25}>25</MenuItem>
+                  <MenuItem value={26}>26</MenuItem>
+                  <MenuItem value={27}>27</MenuItem>
+                  <MenuItem value={28}>28</MenuItem>
+                  <MenuItem value={29}>29</MenuItem>
+                  <MenuItem value={30}>30</MenuItem>
+                  <MenuItem value={31}>31</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={monthlyFormData.status}
+                  onChange={(e) => setMonthlyFormData({ ...monthlyFormData, status: e.target.value })}
+                  label="Status"
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseMonthlyDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleMonthlySubmit}
+              variant="contained"
+              disabled={!monthlyFormData.descricao}
+            >
+              {editingMonthlyTask ? 'Salvar' : 'Criar'}
             </Button>
           </DialogActions>
         </Dialog>
