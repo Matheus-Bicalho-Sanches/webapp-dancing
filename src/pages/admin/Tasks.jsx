@@ -408,14 +408,19 @@ export default function Tasks() {
         }
       }
       
+      // Garantir que temos informações do usuário
+      const userName = currentUser.displayName || currentUser.email || 'Usuário';
+      
       const logEntry = {
         action,
         taskId: task.id,
         taskDescription: task.descricao,
+        userId: currentUser.uid,
+        userName: userName,
         user: {
           uid: currentUser.uid,
           email: currentUser.email,
-          displayName: currentUser.displayName || currentUser.email
+          displayName: userName
         },
         timestamp: serverTimestamp(),
         details
@@ -658,39 +663,42 @@ export default function Tasks() {
     }
 
     if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled') {
-      return `Criou tarefa ${taskTypeLabel}: "${log.descricao}"`;
+      return `Criou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
     if (log.action === 'update' || log.action === 'update_daily' || log.action === 'update_weekly' || log.action === 'edit_monthly' || log.action === 'edit_scheduled') {
-      return `Editou tarefa ${taskTypeLabel}: "${log.descricao}"`;
+      return `Editou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
     if (log.action === 'delete' || log.action === 'delete_daily' || log.action === 'delete_weekly' || log.action === 'delete_monthly' || log.action === 'delete_scheduled') {
-      return `Excluiu tarefa ${taskTypeLabel}: "${log.descricao}"`;
+      return `Excluiu tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
     if (log.action === 'status-change' || log.action === 'status_change_daily' || log.action === 'status_change_weekly' || log.action === 'status_change_monthly' || log.action === 'status_change_scheduled') {
       if (log.details && log.details.oldStatus && log.details.newStatus) {
         if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'diaria') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}"`;
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
         } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'semanal') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}" (${log.details.diaDaSemana})`;
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana})`;
         } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'mensal') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}" (dia ${log.details.diaDoMes})`;
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (dia ${log.details.diaDoMes})`;
+        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'agendada') {
+          const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario})`;
         } else if (log.details.taskType === 'diaria') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else if (log.details.taskType === 'semanal') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (${log.details.diaDaSemana}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else if (log.details.taskType === 'mensal') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (dia ${log.details.diaDoMes}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (dia ${log.details.diaDoMes}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else if (log.details.taskType === 'agendada') {
           const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         }
       } else {
-        return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}"`;
+        return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
       }
     }
 
@@ -1518,9 +1526,41 @@ export default function Tasks() {
   const formatDiasDaSemana = (dias) => {
     if (!dias || !Array.isArray(dias) || dias.length === 0) return 'Nenhum';
     
-    // Se forem poucos dias, exibe todos
-    if (dias.length <= 2) {
-      return dias.join(', ');
+    // Converter dias numéricos em nomes, se necessário
+    const diasNomes = {
+      1: 'Segunda',
+      2: 'Terça',
+      3: 'Quarta',
+      4: 'Quinta',
+      5: 'Sexta',
+      6: 'Sábado',
+      7: 'Domingo',
+      '1': 'Segunda',
+      '2': 'Terça',
+      '3': 'Quarta',
+      '4': 'Quinta',
+      '5': 'Sexta',
+      '6': 'Sábado',
+      '7': 'Domingo'
+    };
+    
+    // Verificar se dias contém números e converter para nomes
+    const diasFormatados = dias.map(dia => {
+      if (typeof dia === 'number' || (typeof dia === 'string' && !isNaN(parseInt(dia)))) {
+        return diasNomes[dia] || dia;
+      }
+      return dia;
+    });
+    
+    // Se forem todos os dias da semana, abreviar
+    if (diasFormatados.length === 7) {
+      return 'Todos os dias';
+    }
+    
+    // Se forem todos os dias úteis
+    const diasUteis = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+    if (diasUteis.every(dia => diasFormatados.includes(dia)) && diasFormatados.length === 5) {
+      return 'Dias úteis';
     }
     
     // Ordenar dias da semana em ordem lógica
@@ -1534,21 +1574,10 @@ export default function Tasks() {
       'Sábado': 6
     };
     
-    const diasOrdenados = [...dias].sort((a, b) => diasOrdem[a] - diasOrdem[b]);
+    const diasOrdenados = [...diasFormatados].sort((a, b) => diasOrdem[a] - diasOrdem[b]);
     
-    // Se for todos os dias da semana, abreviar
-    if (dias.length === 7) {
-      return 'Todos os dias';
-    }
-    
-    // Se forem todos os dias úteis
-    const diasUteis = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-    if (diasUteis.every(dia => dias.includes(dia)) && dias.length === 5) {
-      return 'Dias úteis';
-    }
-    
-    // Para outros casos, exibir os 2 primeiros e o número total
-    return `${diasOrdenados[0]}, ${diasOrdenados[1]} +${dias.length - 2}`;
+    // Exibir todos os dias da semana, independentemente da quantidade
+    return diasOrdenados.join(', ');
   };
 
   const handleScheduledSubmit = async () => {
@@ -1600,21 +1629,21 @@ export default function Tasks() {
         
         // Registrar log
         if (statusChanged) {
-          await addTaskLog('status-change', {
-            ...taskData,
-            oldStatus: editingScheduledTask.status,
-            newStatus: scheduledFormData.status,
-            taskType: 'por_horario'
-          }, editingScheduledTask.id);
+          await addTaskLog('status_change_scheduled', {
+            id: editingScheduledTask.id,
+            descricao: scheduledFormData.descricao,
+            diasDaSemana: scheduledFormData.diasDaSemana,
+            horario: scheduledFormData.horario,
+            taskType: 'agendada'
+          }, editingScheduledTask.status, scheduledFormData.status);
         } else {
           await addTaskLog('edit_scheduled', {
-            ...taskData,
-            taskType: 'por_horario',
-            oldDiasDaSemana: editingScheduledTask.diasDaSemana,
-            newDiasDaSemana: scheduledFormData.diasDaSemana,
-            oldHorario: editingScheduledTask.horario,
-            newHorario: scheduledFormData.horario
-          }, editingScheduledTask.id);
+            id: editingScheduledTask.id,
+            descricao: scheduledFormData.descricao,
+            diasDaSemana: scheduledFormData.diasDaSemana,
+            horario: scheduledFormData.horario,
+            taskType: 'agendada'
+          }, null, null);
         }
         
         setSnackbar({
@@ -1635,9 +1664,12 @@ export default function Tasks() {
         
         // Registrar log
         await addTaskLog('create_scheduled', {
-          ...newTaskData,
-          taskType: 'por_horario'
-        }, docRef.id);
+          id: docRef.id,
+          descricao: scheduledFormData.descricao,
+          diasDaSemana: scheduledFormData.diasDaSemana,
+          horario: scheduledFormData.horario,
+          taskType: 'agendada'
+        }, null, null);
         
         setSnackbar({
           open: true,
@@ -1670,9 +1702,12 @@ export default function Tasks() {
         
         // Registrar log
         await addTaskLog('delete_scheduled', {
-          ...taskData,
-          taskType: 'por_horario'
-        }, taskId);
+          id: taskId,
+          descricao: taskData.descricao,
+          diasDaSemana: taskData.diasDaSemana,
+          horario: taskData.horario,
+          taskType: 'agendada'
+        }, null, null);
         
         setSnackbar({
           open: true,
@@ -1713,11 +1748,12 @@ export default function Tasks() {
       
       // Registrar log
       await addTaskLog('status_change_scheduled', {
-        ...taskData,
-        taskType: 'por_horario',
-        oldStatus: taskData.status,
-        newStatus: newStatus
-      }, taskId);
+        id: taskId,
+        descricao: taskData.descricao,
+        diasDaSemana: taskData.diasDaSemana,
+        horario: taskData.horario,
+        taskType: 'agendada'
+      }, taskData.status, newStatus);
       
       setSnackbar({
         open: true,
@@ -2758,22 +2794,17 @@ export default function Tasks() {
                   label="Dias da Semana"
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip
-                          key={value}
-                          label={formatDiasDaSemana(selected)}
-                        />
-                      ))}
+                      {formatDiasDaSemana(selected)}
                     </Box>
                   )}
                 >
-                  <MenuItem value={1}>Segunda</MenuItem>
-                  <MenuItem value={2}>Terça</MenuItem>
-                  <MenuItem value={3}>Quarta</MenuItem>
-                  <MenuItem value={4}>Quinta</MenuItem>
-                  <MenuItem value={5}>Sexta</MenuItem>
-                  <MenuItem value={6}>Sábado</MenuItem>
-                  <MenuItem value={7}>Domingo</MenuItem>
+                  <MenuItem value="Segunda">Segunda</MenuItem>
+                  <MenuItem value="Terça">Terça</MenuItem>
+                  <MenuItem value="Quarta">Quarta</MenuItem>
+                  <MenuItem value="Quinta">Quinta</MenuItem>
+                  <MenuItem value="Sexta">Sexta</MenuItem>
+                  <MenuItem value="Sábado">Sábado</MenuItem>
+                  <MenuItem value="Domingo">Domingo</MenuItem>
                 </Select>
               </FormControl>
 
