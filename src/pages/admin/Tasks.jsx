@@ -31,6 +31,7 @@ import {
   Grid,
   Avatar,
   Tooltip,
+  FormHelperText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,9 +52,11 @@ import {
   serverTimestamp,
   getDocs,
   getDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Tasks() {
   const { currentUser } = useAuth();
@@ -115,6 +118,19 @@ export default function Tasks() {
   const [monthlyFormData, setMonthlyFormData] = useState({
     descricao: '',
     diaDoMes: 1, // 1-31 (Dia do mês)
+    status: 'Pendente',
+    ultimaExecucao: null
+  });
+
+  // Estados para tarefas por horário
+  const [scheduledTasks, setScheduledTasks] = useState([]);
+  const [scheduledTasksLoading, setScheduledTasksLoading] = useState(true);
+  const [openScheduledDialog, setOpenScheduledDialog] = useState(false);
+  const [editingScheduledTask, setEditingScheduledTask] = useState(null);
+  const [scheduledFormData, setScheduledFormData] = useState({
+    descricao: '',
+    diasDaSemana: [], // Array com os dias da semana (1-7)
+    horario: '08:00', // Horário no formato HH:MM
     status: 'Pendente',
     ultimaExecucao: null
   });
@@ -344,83 +360,70 @@ export default function Tasks() {
     setEditingTask(null);
   };
 
-  // Função para registrar o log
-  const addTaskLog = async (action, taskData, taskId = null) => {
+  // Função para adicionar um log de tarefa
+  const addTaskLog = async (action, task, oldStatus, newStatus) => {
     try {
-      console.log(`[DEBUG] addTaskLog - action: ${action}, taskType: ${taskData.taskType}`);
-      console.log('[DEBUG] taskData:', JSON.stringify({
-        descricao: taskData.descricao,
-        oldStatus: taskData.oldStatus,
-        newStatus: taskData.newStatus,
-        status: taskData.status
-      }, null, 2));
+      const taskDoc = doc(db, 'task_logs', uuidv4());
       
-      const logEntry = {
-        action, // 'create', 'update', 'delete' ou 'status-change'
-        taskId,
-        taskDescription: taskData?.descricao,
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email,
-        timestamp: serverTimestamp(),
-        taskType: taskData?.taskType || 'regular', // Identificar o tipo de tarefa
-        details: {} // Campo para armazenar detalhes específicos
-      };
+      // Determinar o tipo de tarefa e detalhes relevantes
+      let details = {};
       
-      // Adicionar campos específicos de acordo com o tipo de tarefa
-      if (taskData.taskType === 'mensal') {
-        logEntry.details.taskType = 'mensal';
-        logEntry.details.diaDoMes = taskData.diaDoMes;
-      } else if (taskData.taskType === 'semanal') {
-        logEntry.details.taskType = 'semanal';
-        logEntry.details.diaDaSemana = taskData.diaDaSemana;
-      } else if (taskData.taskType === 'diaria') {
-        logEntry.details.taskType = 'diaria';
+      if (action.includes('daily') || task.taskType === 'diaria') {
+        details.taskType = 'diaria';
+      } else if (action.includes('weekly') || task.taskType === 'semanal') {
+        details.taskType = 'semanal';
+        details.diaDaSemana = task.diaDaSemana;
+      } else if (action.includes('monthly') || task.taskType === 'mensal') {
+        details.taskType = 'mensal';
+        details.diaDoMes = task.diaDoMes;
+      } else if (action.includes('scheduled') || task.taskType === 'agendada') {
+        details.taskType = 'agendada';
+        details.diasDaSemana = task.diasDaSemana;
+        details.horario = task.horario;
       }
       
-      // Incluir oldStatus e newStatus no log independentemente da ação
-      if (taskData.oldStatus && taskData.newStatus) {
-        logEntry.details.oldStatus = taskData.oldStatus;
-        logEntry.details.newStatus = taskData.newStatus;
-      }
+      // Adicionar status antigo e novo aos detalhes, se disponíveis
+      if (oldStatus) details.oldStatus = oldStatus;
+      if (newStatus) details.newStatus = newStatus;
       
-      // Processo padrão para action === 'status-change'
-      if (action === 'status-change' && taskData) {
-        // Verificar o tipo de tarefa e buscar a tarefa original correspondente
-        if (taskData.taskType === 'diaria') {
-          // Para tarefas diárias
-          const originalTask = dailyTasks.find(task => task.id === taskId);
-          if (originalTask) {
-            logEntry.details.oldStatus = originalTask.status;
-            logEntry.details.newStatus = taskData.newStatus || taskData.status;
-          }
-        } else if (taskData.taskType === 'semanal') {
-          // Para tarefas semanais
-          const originalTask = weeklyTasks.find(task => task.id === taskId);
-          if (originalTask) {
-            logEntry.details.oldStatus = originalTask.status;
-            logEntry.details.newStatus = taskData.newStatus || taskData.status;
-          }
-        } else if (taskData.taskType === 'mensal') {
-          // Para tarefas mensais
-          const originalTask = monthlyTasks.find(task => task.id === taskId);
-          if (originalTask) {
-            logEntry.details.oldStatus = originalTask.status;
-            logEntry.details.newStatus = taskData.newStatus || taskData.status;
-            logEntry.details.diaDoMes = originalTask.diaDoMes;
-          }
+      // Se a ação é uma alteração de status, verificar o status original da tarefa
+      if (action === 'status-change' || action.includes('status_change')) {
+        // Dependendo do tipo de tarefa, buscamos o original em arrays diferentes
+        let originalTask;
+        
+        if (details.taskType === 'diaria') {
+          originalTask = dailyTasks.find(t => t.id === task.id);
+        } else if (details.taskType === 'semanal') {
+          originalTask = weeklyTasks.find(t => t.id === task.id);
+        } else if (details.taskType === 'mensal') {
+          originalTask = monthlyTasks.find(t => t.id === task.id);
+        } else if (details.taskType === 'agendada') {
+          originalTask = scheduledTasks.find(t => t.id === task.id);
         } else {
-          // Para tarefas regulares
-          const originalTask = tasks.find(task => task.id === taskId);
-          if (originalTask) {
-            logEntry.details.oldStatus = originalTask.status;
-            logEntry.details.newStatus = taskData.newStatus || taskData.status;
-          }
+          originalTask = tasks.find(t => t.id === task.id);
+        }
+        
+        if (originalTask && !details.oldStatus) {
+          details.oldStatus = originalTask.status || 'Pendente';
         }
       }
       
-      await addDoc(collection(db, 'task_logs'), logEntry);
+      const logEntry = {
+        action,
+        taskId: task.id,
+        taskDescription: task.descricao,
+        user: {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName || currentUser.email
+        },
+        timestamp: serverTimestamp(),
+        details
+      };
+      
+      await setDoc(taskDoc, logEntry);
     } catch (error) {
-      console.error('Erro ao registrar log:', error);
+      console.error('Erro ao adicionar log:', error);
     }
   };
 
@@ -627,80 +630,91 @@ export default function Tasks() {
     return dayjs(date).format('DD/MM/YYYY HH:mm');
   };
 
-  // Função para obter o nome da ação
-  const getActionName = (action, log) => {
-    let taskTypeLabel = 'Tarefa';
+  // Função para formatar o nome da ação no log
+  const getActionName = (log) => {
+    let taskTypeLabel = '';
     
-    if (log.details?.taskType === 'diaria' || action.includes('daily')) {
-      taskTypeLabel = 'Tarefa Diária';
-    } else if (log.details?.taskType === 'semanal' || action.includes('weekly')) {
-      taskTypeLabel = 'Tarefa Semanal';
-    } else if (log.details?.taskType === 'mensal' || action.includes('monthly')) {
-      taskTypeLabel = 'Tarefa Mensal';
+    if (log.action.includes('daily')) {
+      taskTypeLabel = 'diária';
+    } else if (log.action.includes('weekly')) {
+      taskTypeLabel = 'semanal';
+    } else if (log.action.includes('monthly')) {
+      taskTypeLabel = 'mensal';
+    } else if (log.action.includes('scheduled')) {
+      taskTypeLabel = 'por horário';
+    } else {
+      taskTypeLabel = 'não recorrente';
     }
-    
-    // Se temos informações sobre o status anterior e novo, exibi-los sempre
-    if (log.details?.oldStatus && log.details?.newStatus) {
-      if (action === 'update' || action === 'edit_monthly') {
-        return `Editou ${taskTypeLabel} - Status: ${log.details.oldStatus} → ${log.details.newStatus}`;
-      }
-      
-      if (action === 'status_change_monthly') {
-        return `Alterou o status da ${taskTypeLabel}: ${log.details.oldStatus} → ${log.details.newStatus}`;
-      }
-      
-      if (action === 'status-change') {
-        // Verificar se foi uma atualização automática
-        if (log.details.automatic) {
-          if (log.details.taskType === 'diaria') {
-            return `Reset automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
-          } else if (log.details.taskType === 'semanal') {
-            return `Reset semanal automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
-          }
-          return `Reset automático: ${log.details.oldStatus} → ${log.details.newStatus}`;
+
+    // Detectar tipo de tarefa pelos detalhes, se disponível
+    if (log.details?.taskType === 'diaria') {
+      taskTypeLabel = 'diária';
+    } else if (log.details?.taskType === 'semanal') {
+      taskTypeLabel = 'semanal';
+    } else if (log.details?.taskType === 'mensal') {
+      taskTypeLabel = 'mensal';
+    } else if (log.details?.taskType === 'agendada') {
+      taskTypeLabel = 'por horário';
+    }
+
+    if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled') {
+      return `Criou tarefa ${taskTypeLabel}: "${log.descricao}"`;
+    }
+
+    if (log.action === 'update' || log.action === 'update_daily' || log.action === 'update_weekly' || log.action === 'edit_monthly' || log.action === 'edit_scheduled') {
+      return `Editou tarefa ${taskTypeLabel}: "${log.descricao}"`;
+    }
+
+    if (log.action === 'delete' || log.action === 'delete_daily' || log.action === 'delete_weekly' || log.action === 'delete_monthly' || log.action === 'delete_scheduled') {
+      return `Excluiu tarefa ${taskTypeLabel}: "${log.descricao}"`;
+    }
+
+    if (log.action === 'status-change' || log.action === 'status_change_daily' || log.action === 'status_change_weekly' || log.action === 'status_change_monthly' || log.action === 'status_change_scheduled') {
+      if (log.details && log.details.oldStatus && log.details.newStatus) {
+        if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'diaria') {
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}"`;
+        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'semanal') {
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}" (${log.details.diaDaSemana})`;
+        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'mensal') {
+          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.descricao}" (dia ${log.details.diaDoMes})`;
+        } else if (log.details.taskType === 'diaria') {
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else if (log.details.taskType === 'semanal') {
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (${log.details.diaDaSemana}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else if (log.details.taskType === 'mensal') {
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (dia ${log.details.diaDoMes}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else if (log.details.taskType === 'agendada') {
+          const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else {
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         }
-        
-        // Mostrar alteração de status com a transição
-        return `Alterou o status da ${taskTypeLabel}: ${log.details.oldStatus} → ${log.details.newStatus}`;
+      } else {
+        return `Alterou status da tarefa ${taskTypeLabel}: "${log.descricao}"`;
       }
     }
-    
-    // Casos específicos para tarefas mensais
-    if (action === 'reset_monthly') {
-      return `Reset mensal automático: ${log.details.oldStatus} → ${log.details.newStatus} (Dia ${log.details.diaDoMes})`;
+
+    if (log.action === 'reset_daily') {
+      return `Resetou tarefa diária: "${log.descricao}"`;
     }
-    
-    if (action === 'create_monthly') {
-      return `Criou ${taskTypeLabel} (Dia ${log.details.diaDoMes})`;
-    }
-    
-    if (action === 'edit_monthly') {
-      let description = `Editou ${taskTypeLabel}`;
-      
-      if (log.details.oldDiaDoMes !== log.details.newDiaDoMes) {
-        description += ` - Dia: ${log.details.oldDiaDoMes} → ${log.details.newDiaDoMes}`;
+
+    if (log.action === 'reset_weekly') {
+      if (log.details && log.details.diaDaSemana) {
+        return `Resetou tarefa semanal: "${log.descricao}" (${log.details.diaDaSemana})`;
+      } else {
+        return `Resetou tarefa semanal: "${log.descricao}"`;
       }
-      
-      return description;
     }
-    
-    if (action === 'delete_monthly') {
-      return `Excluiu ${taskTypeLabel} (Dia ${log.details.diaDoMes})`;
+
+    if (log.action === 'reset_monthly') {
+      if (log.details && log.details.diaDoMes) {
+        return `Resetou tarefa mensal: "${log.descricao}" (dia ${log.details.diaDoMes})`;
+      } else {
+        return `Resetou tarefa mensal: "${log.descricao}"`;
+      }
     }
-    
-    // Casos onde não temos informações de status ou outros tipos de ação
-    switch (action) {
-      case 'create': 
-        return `Criou ${taskTypeLabel}`;
-      case 'update': 
-        return `Editou ${taskTypeLabel}`;
-      case 'delete': 
-        return `Excluiu ${taskTypeLabel}`;
-      case 'status-change':
-        return `Alterou o status da ${taskTypeLabel}`;
-      default: 
-        return action;
-    }
+
+    return log.action;
   };
 
   // Função para encontrar informações do usuário pelo ID
@@ -1195,6 +1209,28 @@ export default function Tasks() {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Carregar tarefas por horário
+  useEffect(() => {
+    const q = query(
+        collection(db, 'tarefas_por_horario'), 
+        orderBy('descricao', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setScheduledTasks(tasksData);
+      setScheduledTasksLoading(false);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas por horário:', error);
+      setScheduledTasksLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
   // Função para resetar tarefas mensais finalizadas
   const resetFinishedMonthlyTasks = async (tasks) => {
     try {
@@ -1450,6 +1486,254 @@ export default function Tasks() {
     }
   };
 
+  // Funções para tarefas por horário
+  const handleOpenScheduledDialog = (task = null) => {
+    if (task) {
+      setEditingScheduledTask(task);
+      setScheduledFormData({
+        descricao: task.descricao,
+        diasDaSemana: task.diasDaSemana || [],
+        horario: task.horario || '08:00',
+        status: task.status || 'Pendente'
+      });
+    } else {
+      setEditingScheduledTask(null);
+      setScheduledFormData({
+        descricao: '',
+        diasDaSemana: [],
+        horario: '08:00',
+        status: 'Pendente',
+        ultimaExecucao: null
+      });
+    }
+    setOpenScheduledDialog(true);
+  };
+
+  const handleCloseScheduledDialog = () => {
+    setOpenScheduledDialog(false);
+    setEditingScheduledTask(null);
+  };
+
+  // Função auxiliar para formatar os dias da semana
+  const formatDiasDaSemana = (dias) => {
+    if (!dias || !Array.isArray(dias) || dias.length === 0) return 'Nenhum';
+    
+    // Se forem poucos dias, exibe todos
+    if (dias.length <= 2) {
+      return dias.join(', ');
+    }
+    
+    // Ordenar dias da semana em ordem lógica
+    const diasOrdem = {
+      'Domingo': 0,
+      'Segunda': 1,
+      'Terça': 2,
+      'Quarta': 3,
+      'Quinta': 4,
+      'Sexta': 5,
+      'Sábado': 6
+    };
+    
+    const diasOrdenados = [...dias].sort((a, b) => diasOrdem[a] - diasOrdem[b]);
+    
+    // Se for todos os dias da semana, abreviar
+    if (dias.length === 7) {
+      return 'Todos os dias';
+    }
+    
+    // Se forem todos os dias úteis
+    const diasUteis = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+    if (diasUteis.every(dia => dias.includes(dia)) && dias.length === 5) {
+      return 'Dias úteis';
+    }
+    
+    // Para outros casos, exibir os 2 primeiros e o número total
+    return `${diasOrdenados[0]}, ${diasOrdenados[1]} +${dias.length - 2}`;
+  };
+
+  const handleScheduledSubmit = async () => {
+    try {
+      // Validar formulário
+      if (!scheduledFormData.descricao) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, preencha a descrição da tarefa.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (!scheduledFormData.diasDaSemana || scheduledFormData.diasDaSemana.length === 0) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, selecione pelo menos um dia da semana.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (!scheduledFormData.horario) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, informe o horário.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Dados comuns para criar ou atualizar
+      const taskData = {
+        descricao: scheduledFormData.descricao,
+        diasDaSemana: scheduledFormData.diasDaSemana,
+        horario: scheduledFormData.horario,
+        status: scheduledFormData.status,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      // Se estiver editando uma tarefa existente
+      if (editingScheduledTask) {
+        // Verificar se o status foi alterado
+        const statusChanged = editingScheduledTask.status !== scheduledFormData.status;
+        
+        await updateDoc(doc(db, 'tarefas_por_horario', editingScheduledTask.id), taskData);
+        
+        // Registrar log
+        if (statusChanged) {
+          await addTaskLog('status-change', {
+            ...taskData,
+            oldStatus: editingScheduledTask.status,
+            newStatus: scheduledFormData.status,
+            taskType: 'por_horario'
+          }, editingScheduledTask.id);
+        } else {
+          await addTaskLog('edit_scheduled', {
+            ...taskData,
+            taskType: 'por_horario',
+            oldDiasDaSemana: editingScheduledTask.diasDaSemana,
+            newDiasDaSemana: scheduledFormData.diasDaSemana,
+            oldHorario: editingScheduledTask.horario,
+            newHorario: scheduledFormData.horario
+          }, editingScheduledTask.id);
+        }
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa por horário atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        // Se estiver criando uma nova tarefa
+        const newTaskData = {
+          ...taskData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid,
+          tipo: 'por_horario'
+        };
+        
+        const docRef = await addDoc(collection(db, 'tarefas_por_horario'), newTaskData);
+        
+        // Registrar log
+        await addTaskLog('create_scheduled', {
+          ...newTaskData,
+          taskType: 'por_horario'
+        }, docRef.id);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa por horário criada com sucesso!',
+          severity: 'success'
+        });
+      }
+      
+      handleCloseScheduledDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa por horário:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa por horário. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleScheduledDelete = async (taskId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa por horário?')) {
+      try {
+        // Obter os dados da tarefa antes de excluir
+        const taskDoc = doc(db, 'tarefas_por_horario', taskId);
+        const taskSnapshot = await getDoc(taskDoc);
+        const taskData = taskSnapshot.data();
+        
+        // Excluir a tarefa
+        await deleteDoc(taskDoc);
+        
+        // Registrar log
+        await addTaskLog('delete_scheduled', {
+          ...taskData,
+          taskType: 'por_horario'
+        }, taskId);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa por horário excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa por horário:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa por horário. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleScheduledStatusChange = async (taskId, newStatus) => {
+    try {
+      // Obter os dados da tarefa antes de atualizar
+      const taskDoc = doc(db, 'tarefas_por_horario', taskId);
+      const taskSnapshot = await getDoc(taskDoc);
+      const taskData = taskSnapshot.data();
+      
+      const updateData = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+      
+      // Se o status for "Finalizada", atualizar o campo ultimaExecucao
+      if (newStatus === 'Finalizada') {
+        updateData.ultimaExecucao = serverTimestamp();
+      }
+      
+      // Atualizar a tarefa
+      await updateDoc(taskDoc, updateData);
+      
+      // Registrar log
+      await addTaskLog('status_change_scheduled', {
+        ...taskData,
+        taskType: 'por_horario',
+        oldStatus: taskData.status,
+        newStatus: newStatus
+      }, taskId);
+      
+      setSnackbar({
+        open: true,
+        message: `Status da tarefa por horário alterado para ${newStatus}!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao alterar status da tarefa por horário:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao alterar status da tarefa por horário. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout title="Tarefas">
@@ -1467,9 +1751,16 @@ export default function Tasks() {
           Gerenciamento de Tarefas
         </Typography>
 
+        {/* Navegação entre abas */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={getCurrentTab()} onChange={handleTabChange}>
-            <Tab label="Não recorrentes" />
+          <Tabs
+            value={getCurrentTab()}
+            onChange={handleTabChange}
+            aria-label="task management tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab label="Não Recorrentes" />
             <Tab label="Diárias" />
             <Tab label="Semanais" />
             <Tab label="Mensais" />
@@ -1928,6 +2219,98 @@ export default function Tasks() {
           </>
         )}
 
+        {/* Aba de Tarefas Por Horário */}
+        {getCurrentTab() === 4 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenScheduledDialog()}
+              >
+                Nova Tarefa Por Horário
+              </Button>
+            </Box>
+
+            {scheduledTasksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Dias da Semana</TableCell>
+                      <TableCell>Horário</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {scheduledTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell>{task.descricao}</TableCell>
+                        <TableCell>{formatDiasDaSemana(task.diasDaSemana)}</TableCell>
+                        <TableCell>{task.horario}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={task.status || 'Pendente'}
+                            onChange={(e) => handleScheduledStatusChange(task.id, e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 120 }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Chip 
+                                  label={selected} 
+                                  size="small" 
+                                  color={getStatusColorByName(selected)}
+                                />
+                              </Box>
+                            )}
+                          >
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                            <MenuItem value="Em andamento">Em andamento</MenuItem>
+                            <MenuItem value="Finalizada">Finalizada</MenuItem>
+                            <MenuItem value="Aguardando">Aguardando</MenuItem>
+                            <MenuItem value="Urgente">Urgente</MenuItem>
+                          </Select>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenScheduledDialog(task)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          {hasDeletePermission && (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleScheduledDelete(task.id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {scheduledTasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} align="center">
+                          Nenhuma tarefa por horário encontrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
+
         {/* Aba de Logs */}
         {getCurrentTab() === 5 && (
           <>
@@ -1967,7 +2350,7 @@ export default function Tasks() {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>{getActionName(log.action, log)}</TableCell>
+                        <TableCell>{getActionName(log)}</TableCell>
                         <TableCell>{log.taskDescription || '(Tarefa excluída)'}</TableCell>
                         <TableCell>{formatDateTime(log.timestamp)}</TableCell>
                       </TableRow>
@@ -2340,6 +2723,107 @@ export default function Tasks() {
               disabled={!monthlyFormData.descricao}
             >
               {editingMonthlyTask ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog para adicionar/editar tarefa por horário */}
+        <Dialog
+          open={openScheduledDialog}
+          onClose={handleCloseScheduledDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingScheduledTask ? 'Editar Tarefa Por Horário' : 'Nova Tarefa Por Horário'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                value={scheduledFormData.descricao}
+                onChange={(e) => setScheduledFormData({ ...scheduledFormData, descricao: e.target.value })}
+                required
+                multiline
+                rows={2}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Dias da Semana</InputLabel>
+                <Select
+                  multiple
+                  value={scheduledFormData.diasDaSemana}
+                  onChange={(e) => setScheduledFormData({ ...scheduledFormData, diasDaSemana: e.target.value })}
+                  label="Dias da Semana"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => (
+                        <Chip
+                          key={value}
+                          label={formatDiasDaSemana(selected)}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  <MenuItem value={1}>Segunda</MenuItem>
+                  <MenuItem value={2}>Terça</MenuItem>
+                  <MenuItem value={3}>Quarta</MenuItem>
+                  <MenuItem value={4}>Quinta</MenuItem>
+                  <MenuItem value={5}>Sexta</MenuItem>
+                  <MenuItem value={6}>Sábado</MenuItem>
+                  <MenuItem value={7}>Domingo</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Horário"
+                type="time"
+                value={scheduledFormData.horario}
+                onChange={(e) => setScheduledFormData({ ...scheduledFormData, horario: e.target.value })}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                required
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={scheduledFormData.status}
+                  onChange={(e) => setScheduledFormData({ ...scheduledFormData, status: e.target.value })}
+                  label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseScheduledDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleScheduledSubmit}
+              variant="contained"
+              disabled={!scheduledFormData.descricao || !scheduledFormData.diasDaSemana.length || !scheduledFormData.horario}
+            >
+              {editingScheduledTask ? 'Salvar' : 'Criar'}
             </Button>
           </DialogActions>
         </Dialog>
