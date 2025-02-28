@@ -107,7 +107,8 @@ export default function Tasks() {
     descricao: '',
     diaDaSemana: 1, // 1-7 (Segunda a Domingo)
     status: 'Pendente',
-    ultimaExecucao: null
+    ultimaExecucao: null,
+    observacoes: ''
   });
 
   // Estados para tarefas mensais
@@ -1019,7 +1020,8 @@ export default function Tasks() {
         descricao: task.descricao,
         diaDaSemana: task.diaDaSemana || 1,
         status: task.status || 'Pendente',
-        ultimaExecucao: task.ultimaExecucao || null
+        ultimaExecucao: task.ultimaExecucao || null,
+        observacoes: task.observacoes || ''
       });
     } else {
       setEditingWeeklyTask(null);
@@ -1027,7 +1029,8 @@ export default function Tasks() {
         descricao: '',
         diaDaSemana: 1,
         status: 'Pendente',
-        ultimaExecucao: null
+        ultimaExecucao: null,
+        observacoes: ''
       });
     }
     setOpenWeeklyDialog(true);
@@ -2097,6 +2100,7 @@ export default function Tasks() {
                       <TableCell>Dia da Semana</TableCell>
                       <TableCell>Feito em</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell>Observações</TableCell>
                       <TableCell align="right">Ações</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2129,6 +2133,7 @@ export default function Tasks() {
                             <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
+                        <TableCell>{task.observacoes}</TableCell>
                         <TableCell align="right">
                           <IconButton
                             color="primary"
@@ -2151,7 +2156,7 @@ export default function Tasks() {
                     ))}
                     {weeklyTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           Nenhuma tarefa semanal encontrada
                         </TableCell>
                       </TableRow>
@@ -2645,6 +2650,16 @@ export default function Tasks() {
                   <MenuItem value="Urgente">Urgente</MenuItem>
                 </Select>
               </FormControl>
+
+              <TextField
+                fullWidth
+                label="Observações"
+                value={weeklyFormData.observacoes}
+                onChange={(e) => setWeeklyFormData({ ...weeklyFormData, observacoes: e.target.value })}
+                multiline
+                rows={3}
+                placeholder="Informações adicionais sobre esta tarefa (opcional)"
+              />
             </Box>
           </DialogContent>
           <DialogActions>
