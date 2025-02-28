@@ -291,13 +291,14 @@ export default function Tasks() {
           });
           
           // Registrar log de atualização automática de status
-          await addTaskLog('status-change', {
-            ...task,
-            oldStatus: 'Finalizada',
+          await addTaskLog('status_change_daily', {
+            id: task.id,
+            descricao: task.descricao,
+            oldStatus: 'AUTO-RESET',
             newStatus: 'Pendente',
             taskType: 'diaria',
             automatic: true
-          }, task.id);
+          }, 'Finalizada', 'Pendente');
         }
         
         // Salvar a data atual no localStorage
@@ -686,7 +687,13 @@ export default function Tasks() {
           const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
           return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario})`;
         } else if (log.details.taskType === 'diaria') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          if (log.details.newStatus === 'Finalizada') {
+            return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+          } else if (log.details.newStatus === 'Pendente') {
+            return `Desmarcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+          } else {
+            return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+          }
         } else if (log.details.taskType === 'semanal') {
           return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else if (log.details.taskType === 'mensal') {
@@ -867,25 +874,34 @@ export default function Tasks() {
       }
       
       // Salvar o status anterior antes de atualizar
-      const oldStatus = taskToUpdate.status;
+      const oldStatus = taskToUpdate.status || 'Pendente';
       
-      await updateDoc(taskRef, { 
+      // Se o novo status for "Finalizada", atualizar também a data de última execução
+      const updates = { 
         status: newStatus,
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
-      });
+      };
+      
+      // Se a tarefa estiver sendo marcada como finalizada, atualizar a data de última execução
+      if (newStatus === 'Finalizada') {
+        updates.ultimaExecucao = serverTimestamp();
+      }
+      
+      await updateDoc(taskRef, updates);
       
       // Registrar log de atualização de status
-      await addTaskLog('status-change', {
-        ...taskToUpdate,
+      await addTaskLog('status_change_daily', {
+        id: taskId,
+        descricao: taskToUpdate.descricao,
         oldStatus: oldStatus,
         newStatus: newStatus,
         taskType: 'diaria'
-      }, taskId);
+      }, oldStatus, newStatus);
       
       setSnackbar({
         open: true,
-        message: 'Status atualizado com sucesso!',
+        message: newStatus === 'Finalizada' ? 'Tarefa marcada como concluída!' : 'Tarefa marcada como pendente!',
         severity: 'success'
       });
     } catch (error) {
@@ -2006,7 +2022,7 @@ export default function Tasks() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Descrição</TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell>Concluída</TableCell>
                       <TableCell align="right">Ações</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2015,27 +2031,11 @@ export default function Tasks() {
                       <TableRow key={task.id}>
                         <TableCell>{task.descricao}</TableCell>
                         <TableCell>
-                          <Select
-                            value={task.status || 'Pendente'}
-                            onChange={(e) => handleDailyStatusChange(task.id, e.target.value)}
-                            size="small"
-                            sx={{ minWidth: 120 }}
-                            renderValue={(selected) => (
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Chip 
-                                  label={selected} 
-                                  size="small" 
-                                  color={getStatusColorByName(selected)}
-                                />
-                              </Box>
-                            )}
-                          >
-                            <MenuItem value="Pendente">Pendente</MenuItem>
-                            <MenuItem value="Em andamento">Em andamento</MenuItem>
-                            <MenuItem value="Finalizada">Finalizada</MenuItem>
-                            <MenuItem value="Aguardando">Aguardando</MenuItem>
-                            <MenuItem value="Urgente">Urgente</MenuItem>
-                          </Select>
+                          <Checkbox
+                            checked={task.status === 'Finalizada'}
+                            onChange={(e) => handleDailyStatusChange(task.id, e.target.checked ? 'Finalizada' : 'Pendente')}
+                            color="success"
+                          />
                         </TableCell>
                         <TableCell align="right">
                           <IconButton
