@@ -122,7 +122,8 @@ export default function Tasks() {
     descricao: '',
     diaDoMes: 1, // 1-31 (Dia do mês)
     status: 'Pendente',
-    ultimaExecucao: null
+    ultimaExecucao: null,
+    observacoes: ''
   });
 
   // Estados para tarefas por horário
@@ -1334,7 +1335,9 @@ export default function Tasks() {
       setMonthlyFormData({
         descricao: task.descricao,
         diaDoMes: task.diaDoMes,
-        status: task.status || 'Pendente'
+        status: task.status || 'Pendente',
+        ultimaExecucao: task.ultimaExecucao,
+        observacoes: task.observacoes || ''
       });
     } else {
       setEditingMonthlyTask(null);
@@ -1342,7 +1345,8 @@ export default function Tasks() {
         descricao: '',
         diaDoMes: 1,
         status: 'Pendente',
-        ultimaExecucao: null
+        ultimaExecucao: null,
+        observacoes: ''
       });
     }
     setOpenMonthlyDialog(true);
@@ -1379,6 +1383,7 @@ export default function Tasks() {
         descricao: monthlyFormData.descricao,
         diaDoMes: Number(monthlyFormData.diaDoMes),
         status: monthlyFormData.status,
+        observacoes: monthlyFormData.observacoes,
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
       };
@@ -2196,6 +2201,7 @@ export default function Tasks() {
                       <TableCell>Dia do Mês</TableCell>
                       <TableCell>Feito em</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell>Observações</TableCell>
                       <TableCell align="right">Ações</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2228,6 +2234,7 @@ export default function Tasks() {
                             <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
+                        <TableCell>{task.observacoes}</TableCell>
                         <TableCell align="right">
                           <IconButton
                             color="primary"
@@ -2250,7 +2257,7 @@ export default function Tasks() {
                     ))}
                     {monthlyTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           Nenhuma tarefa mensal encontrada
                         </TableCell>
                       </TableRow>
@@ -2288,6 +2295,7 @@ export default function Tasks() {
                       <TableCell>Dias da Semana</TableCell>
                       <TableCell>Horário</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell>Observações</TableCell>
                       <TableCell align="right">Ações</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2320,6 +2328,7 @@ export default function Tasks() {
                             <MenuItem value="Urgente">Urgente</MenuItem>
                           </Select>
                         </TableCell>
+                        <TableCell>{task.observacoes}</TableCell>
                         <TableCell align="right">
                           <IconButton
                             color="primary"
@@ -2342,7 +2351,7 @@ export default function Tasks() {
                     ))}
                     {scheduledTasks.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           Nenhuma tarefa por horário encontrada
                         </TableCell>
                       </TableRow>
@@ -2745,6 +2754,40 @@ export default function Tasks() {
                   <MenuItem value={31}>31</MenuItem>
                 </Select>
               </FormControl>
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={monthlyFormData.status}
+                  onChange={(e) => setMonthlyFormData({ ...monthlyFormData, status: e.target.value })}
+                  label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Observações"
+                value={monthlyFormData.observacoes}
+                onChange={(e) => setMonthlyFormData({ ...monthlyFormData, observacoes: e.target.value })}
+                multiline
+                rows={3}
+                placeholder="Informações adicionais sobre esta tarefa (opcional)"
+              />
 
               <FormControl fullWidth required>
                 <InputLabel>Status</InputLabel>
