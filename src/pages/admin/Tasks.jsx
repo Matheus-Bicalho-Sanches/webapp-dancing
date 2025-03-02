@@ -40,6 +40,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { 
   collection, 
   query, 
@@ -2451,17 +2453,22 @@ export default function Tasks() {
                     </Select>
                   </FormControl>
 
-                  <TextField
-                    fullWidth
-                    label="Prazo Limite"
-                    type="date"
-                    value={formData.prazoLimite}
-                    onChange={(e) => setFormData({ ...formData, prazoLimite: e.target.value })}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
-                    required
-                  />
+                  <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DatePicker
+                      label="Prazo Limite"
+                      value={dayjs(formData.prazoLimite)}
+                      onChange={(newValue) => setFormData({ ...formData, prazoLimite: newValue.format('YYYY-MM-DD') })}
+                      slotProps={{
+                        textField: {
+                          required: true,
+                          fullWidth: true,
+                          error: !formData.prazoLimite,
+                          helperText: !formData.prazoLimite ? 'Prazo é obrigatório' : ''
+                        }
+                      }}
+                      format="DD/MM/YYYY"
+                    />
+                  </LocalizationProvider>
 
               <TextField
                 fullWidth
