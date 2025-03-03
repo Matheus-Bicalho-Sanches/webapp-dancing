@@ -697,19 +697,58 @@ export default function Tasks() {
       taskTypeLabel = 'técnica';
     }
 
-    if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled') {
+    if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled' || log.action === 'create_technical') {
+      if (log.action === 'create_technical' && log.details?.taskType === 'tecnica') {
+        const responsaveis = log.details.responsavel ? 
+          (Array.isArray(log.details.responsavel) ? 
+            log.details.responsavel.map(userId => users.find(u => u.id === userId)?.nome || userId).join(', ') : 
+            log.details.responsavel) : 
+          'Não especificado';
+        
+        const prazo = log.details.prazoLimite ? 
+          (log.details.prazoLimite instanceof Date || typeof log.details.prazoLimite.toDate === 'function' ? 
+            dayjs(log.details.prazoLimite.toDate()).format('DD/MM/YYYY') : 
+            typeof log.details.prazoLimite === 'string' ? log.details.prazoLimite : 'Não especificado') : 
+          'Não especificado';
+        
+        return `Criou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+      }
       return `Criou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
-    if (log.action === 'update' || log.action === 'update_daily' || log.action === 'update_weekly' || log.action === 'edit_monthly' || log.action === 'edit_scheduled') {
+    if (log.action === 'update' || log.action === 'update_daily' || log.action === 'update_weekly' || log.action === 'edit_monthly' || log.action === 'edit_scheduled' || log.action === 'update_technical') {
+      if (log.action === 'update_technical' && log.details?.taskType === 'tecnica') {
+        const responsaveis = log.details.responsavel ? 
+          (Array.isArray(log.details.responsavel) ? 
+            log.details.responsavel.map(userId => users.find(u => u.id === userId)?.nome || userId).join(', ') : 
+            log.details.responsavel) : 
+          'Não especificado';
+        
+        const prazo = log.details.prazoLimite ? 
+          (log.details.prazoLimite instanceof Date || typeof log.details.prazoLimite.toDate === 'function' ? 
+            dayjs(log.details.prazoLimite.toDate()).format('DD/MM/YYYY') : 
+            typeof log.details.prazoLimite === 'string' ? log.details.prazoLimite : 'Não especificado') : 
+          'Não especificado';
+        
+        return `Editou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+      }
       return `Editou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
-    if (log.action === 'delete' || log.action === 'delete_daily' || log.action === 'delete_weekly' || log.action === 'delete_monthly' || log.action === 'delete_scheduled') {
+    if (log.action === 'delete' || log.action === 'delete_daily' || log.action === 'delete_weekly' || log.action === 'delete_monthly' || log.action === 'delete_scheduled' || log.action === 'delete_technical') {
+      if (log.action === 'delete_technical' && log.details?.taskType === 'tecnica') {
+        const responsaveis = log.details.responsavel ? 
+          (Array.isArray(log.details.responsavel) ? 
+            log.details.responsavel.map(userId => users.find(u => u.id === userId)?.nome || userId).join(', ') : 
+            log.details.responsavel) : 
+          'Não especificado';
+        
+        return `Excluiu tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis}`;
+      }
       return `Excluiu tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
-    if (log.action === 'status-change' || log.action === 'status_change_daily' || log.action === 'status_change_weekly' || log.action === 'status_change_monthly' || log.action === 'status_change_scheduled') {
+    if (log.action === 'status-change' || log.action === 'status_change_daily' || log.action === 'status_change_weekly' || log.action === 'status_change_monthly' || log.action === 'status_change_scheduled' || log.action === 'status_change_technical') {
       if (log.details && log.details.oldStatus && log.details.newStatus) {
         if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'diaria') {
           return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
@@ -720,6 +759,26 @@ export default function Tasks() {
         } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'agendada') {
           const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
           return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario})`;
+        } else if (log.action === 'status_change_technical' && log.details.taskType === 'tecnica') {
+          const responsaveis = log.details.responsavel ? 
+            (Array.isArray(log.details.responsavel) ? 
+              log.details.responsavel.map(userId => users.find(u => u.id === userId)?.nome || userId).join(', ') : 
+              log.details.responsavel) : 
+            'Não especificado';
+          
+          const prazo = log.details.prazoLimite ? 
+            (log.details.prazoLimite instanceof Date || typeof log.details.prazoLimite.toDate === 'function' ? 
+              dayjs(log.details.prazoLimite.toDate()).format('DD/MM/YYYY') : 
+              typeof log.details.prazoLimite === 'string' ? log.details.prazoLimite : 'Não especificado') : 
+            'Não especificado';
+          
+          if (log.details.newStatus === 'Finalizada') {
+            return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+          } else if (log.details.newStatus === 'Pendente' && log.details.oldStatus === 'Finalizada') {
+            return `Desmarcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+          } else {
+            return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+          }
         } else if (log.details.taskType === 'diaria') {
           if (log.details.newStatus === 'Finalizada') {
             return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
@@ -735,8 +794,9 @@ export default function Tasks() {
         } else if (log.details.taskType === 'agendada') {
           const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
           return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-        } else if (log.details.taskType === 'tecnica') {
-          return `Alterou status da tarefa técnica ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else if (log.details.taskType === 'tecnica' && !log.action.includes('technical')) {
+          // Skip this case as it's handled by the action === 'status_change_technical' case above
+          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else {
           return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         }
@@ -1449,6 +1509,7 @@ export default function Tasks() {
         // Registrar log usando a função addTaskLog
         await addTaskLog('edit_monthly', {
           ...taskData,
+          id: editingMonthlyTask.id,
           taskType: 'mensal',
           oldDescription: editingMonthlyTask.descricao,
           newDescription: monthlyFormData.descricao,
@@ -1456,7 +1517,7 @@ export default function Tasks() {
           newDiaDoMes: Number(monthlyFormData.diaDoMes),
           oldStatus: editingMonthlyTask.status,
           newStatus: monthlyFormData.status
-        }, editingMonthlyTask.id);
+        }, editingMonthlyTask.status, monthlyFormData.status);
         
         setSnackbar({
           open: true,
@@ -1476,8 +1537,9 @@ export default function Tasks() {
         // Registrar log usando a função addTaskLog
         await addTaskLog('create_monthly', {
           ...newTaskData,
+          id: docRef.id,
           taskType: 'mensal'
-        }, docRef.id);
+        }, null, newTaskData.status);
         
         setSnackbar({
           open: true,
@@ -1511,8 +1573,9 @@ export default function Tasks() {
         // Registrar log usando a função addTaskLog
         await addTaskLog('delete_monthly', {
           ...taskData,
+          id: taskId,
           taskType: 'mensal'
-        }, taskId);
+        }, taskData.status, null);
         
         setSnackbar({
           open: true,
@@ -1554,10 +1617,10 @@ export default function Tasks() {
       // Registrar log usando a função addTaskLog
       await addTaskLog('status_change_monthly', {
         ...taskData,
+        id: taskId,
         taskType: 'mensal',
-        oldStatus: taskData.status,
-        newStatus: newStatus
-      }, taskId);
+        status: newStatus
+      }, taskData.status, newStatus);
       
       setSnackbar({
         open: true,
