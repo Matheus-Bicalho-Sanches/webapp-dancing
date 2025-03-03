@@ -2,25 +2,25 @@ import React, { useState, useEffect } from 'react';
 import MainLayout from '../../layouts/MainLayout';
 import {
   Box,
-  Paper,
+  Button,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
-  Button,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Paper,
   TextField,
-  FormControl,
-  InputLabel,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Typography,
   Select,
   MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
   Chip,
   CircularProgress,
   Alert,
@@ -128,9 +128,14 @@ export default function Tasks() {
 
   // Estados para tarefas técnicas
   const [technicalTasks, setTechnicalTasks] = useState([]);
+  const [filteredTechnicalTasks, setFilteredTechnicalTasks] = useState([]);
   const [technicalTasksLoading, setTechnicalTasksLoading] = useState(true);
   const [openTechnicalDialog, setOpenTechnicalDialog] = useState(false);
   const [editingTechnicalTask, setEditingTechnicalTask] = useState(null);
+  const [showCompletedTechnicalTasks, setShowCompletedTechnicalTasks] = useState(false);
+  const [technicalResponsibleFilter, setTechnicalResponsibleFilter] = useState('all');
+  const [technicalStatusFilter, setTechnicalStatusFilter] = useState('all');
+  const [technicalDeadlineSort, setTechnicalDeadlineSort] = useState('asc');
   const [technicalFormData, setTechnicalFormData] = useState({
     descricao: '',
     responsavel: [],
@@ -2093,6 +2098,39 @@ export default function Tasks() {
     }
   };
 
+  // Adicionar useEffect para filtrar tarefas técnicas
+  useEffect(() => {
+    let filtered = [...technicalTasks];
+    
+    // Filtrar por responsável
+    if (technicalResponsibleFilter !== 'all') {
+      filtered = filtered.filter(task => 
+        Array.isArray(task.responsavel) 
+          ? task.responsavel.includes(technicalResponsibleFilter)
+          : task.responsavel === technicalResponsibleFilter
+      );
+    }
+    
+    // Filtrar por status
+    if (technicalStatusFilter !== 'all') {
+      filtered = filtered.filter(task => task.status === technicalStatusFilter);
+    }
+    
+    // Filtrar tarefas finalizadas se necessário
+    if (!showCompletedTechnicalTasks) {
+      filtered = filtered.filter(task => task.status !== 'Finalizada');
+    }
+    
+    // Ordenar por prazo
+    filtered.sort((a, b) => {
+      const dateA = a.prazoLimite instanceof Date ? a.prazoLimite : a.prazoLimite?.toDate?.() || new Date();
+      const dateB = b.prazoLimite instanceof Date ? b.prazoLimite : b.prazoLimite?.toDate?.() || new Date();
+      return technicalDeadlineSort === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+    
+    setFilteredTechnicalTasks(filtered);
+  }, [technicalTasks, showCompletedTechnicalTasks, technicalResponsibleFilter, technicalStatusFilter, technicalDeadlineSort]);
+
   if (loading) {
     return (
       <MainLayout title="Tarefas">
@@ -3338,7 +3376,21 @@ export default function Tasks() {
         {/* Aba de Tarefas Técnicas */}
         {getCurrentTab() === 1 && (
           <>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Checkbox
+                  checked={showCompletedTechnicalTasks}
+                  onChange={(e) => setShowCompletedTechnicalTasks(e.target.checked)}
+                  id="show-completed-technical"
+                />
+                <Typography
+                  component="label"
+                  htmlFor="show-completed-technical"
+                  sx={{ cursor: 'pointer', userSelect: 'none', color: '#000' }}
+                >
+                  Mostrar tarefas finalizadas
+                </Typography>
+              </Box>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -3346,6 +3398,59 @@ export default function Tasks() {
               >
                 Nova Tarefa Técnica
               </Button>
+            </Box>
+
+            {/* Adicionar filtros */}
+            <Box sx={{ mb: 3 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Filtrar por Responsável</InputLabel>
+                    <Select
+                      value={technicalResponsibleFilter}
+                      onChange={(e) => setTechnicalResponsibleFilter(e.target.value)}
+                      label="Filtrar por Responsável"
+                    >
+                      <MenuItem value="all">Todos os responsáveis</MenuItem>
+                      {users.map((user) => (
+                        <MenuItem key={user.id} value={user.id}>
+                          {user.name || user.email}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Filtrar por Status</InputLabel>
+                    <Select
+                      value={technicalStatusFilter}
+                      onChange={(e) => setTechnicalStatusFilter(e.target.value)}
+                      label="Filtrar por Status"
+                    >
+                      <MenuItem value="all">Todos os status</MenuItem>
+                      <MenuItem value="Pendente">Pendente</MenuItem>
+                      <MenuItem value="Em andamento">Em andamento</MenuItem>
+                      <MenuItem value="Finalizada">Finalizada</MenuItem>
+                      <MenuItem value="Aguardando">Aguardando</MenuItem>
+                      <MenuItem value="Urgente">Urgente</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Ordenar por Prazo</InputLabel>
+                    <Select
+                      value={technicalDeadlineSort}
+                      onChange={(e) => setTechnicalDeadlineSort(e.target.value)}
+                      label="Ordenar por Prazo"
+                    >
+                      <MenuItem value="asc">Mais próximo primeiro</MenuItem>
+                      <MenuItem value="desc">Mais distante primeiro</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
             </Box>
 
             {technicalTasksLoading ? (
@@ -3366,7 +3471,7 @@ export default function Tasks() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {technicalTasks.map((task) => (
+                    {filteredTechnicalTasks.map((task) => (
                       <TableRow key={task.id}>
                         <TableCell>{task.descricao}</TableCell>
                         <TableCell>
@@ -3438,7 +3543,7 @@ export default function Tasks() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {technicalTasks.length === 0 && (
+                    {filteredTechnicalTasks.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6} align="center">
                           Nenhuma tarefa técnica encontrada
