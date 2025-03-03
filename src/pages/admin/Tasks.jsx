@@ -516,7 +516,11 @@ export default function Tasks() {
         taskData.createdBy = currentUser.uid;
         const docRef = await addDoc(collection(db, 'tarefas'), taskData);
         // Registrar log de criação
-        await addTaskLog('create', taskData, docRef.id);
+        await addTaskLog('create', {
+          ...taskData,
+          id: docRef.id,
+          taskType: 'nao_recorrente'
+        }, null, taskData.status);
         setSnackbar({
           open: true,
           message: 'Tarefa criada com sucesso!',
@@ -541,7 +545,11 @@ export default function Tasks() {
         const taskToDelete = tasks.find(task => task.id === taskId);
         await deleteDoc(doc(db, 'tarefas', taskId));
         // Registrar log de exclusão
-        await addTaskLog('delete', taskToDelete, taskId);
+        await addTaskLog('delete', {
+          ...taskToDelete,
+          id: taskId,
+          taskType: 'nao_recorrente'
+        }, taskToDelete.status, null);
         setSnackbar({
           open: true,
           message: 'Tarefa excluída com sucesso!',
@@ -579,9 +587,11 @@ export default function Tasks() {
       // Registrar log de atualização de status com informações de status anterior e novo
       await addTaskLog('status-change', {
         ...taskToUpdate,
+        id: taskId,
+        taskType: 'nao_recorrente',
         oldStatus: oldStatus,
         newStatus: newStatus
-      }, taskId);
+      }, oldStatus, newStatus);
       
       setSnackbar({
         open: true,
