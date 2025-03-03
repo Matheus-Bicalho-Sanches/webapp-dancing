@@ -89,6 +89,36 @@ export default function Users() {
     return isMaster;
   };
 
+  // Verificar se o usuário pode editar outro usuário
+  const canEditUser = (user) => {
+    // Se for master, pode editar qualquer usuário
+    if (currentUser?.userType === 'master') {
+      return true;
+    }
+    
+    // Se for administrative, pode editar qualquer usuário exceto master
+    if (currentUser?.userType === 'administrative' && user.userType !== 'master') {
+      return true;
+    }
+    
+    // Se for professor ou ateliê, só pode editar o próprio perfil
+    if ((currentUser?.userType === 'teacher' || currentUser?.userType === 'atelier') && user.id === currentUser?.uid) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Verificar se o usuário pode adicionar novos usuários
+  const canAddUser = () => {
+    return currentUser?.userType === 'master' || currentUser?.userType === 'administrative';
+  };
+
+  // Verificar se o usuário pode excluir usuários
+  const canDeleteUser = () => {
+    return currentUser?.userType === 'master';
+  };
+
   // Handlers
   const handleOpenCreateDialog = () => {
     console.log('Abrindo diálogo de criação. É master?', isMasterUser());
@@ -143,6 +173,11 @@ export default function Users() {
 
     try {
       if (openCreateDialog) {
+        // Verificar se usuário atual pode criar usuários
+        if (!canAddUser()) {
+          throw new Error('Você não tem permissão para criar usuários');
+        }
+
         // Verificar se usuário atual é Master para criar outro Master
         if (formData.userType === 'master' && currentUser?.userType !== 'master') {
           throw new Error('Apenas usuários Master podem criar outros usuários Master');
@@ -151,7 +186,22 @@ export default function Users() {
         await createUser(formData);
         setSuccess('Usuário criado com sucesso!');
       } else {
-        // Verificar permissões para edição
+        // Editando um usuário existente
+        if (!canEditUser(selectedUser)) {
+          throw new Error('Você não tem permissão para editar este usuário');
+        }
+
+        // Validar o tipo de usuário
+        const isProfessorOrAtelier = 
+          currentUser?.userType === 'teacher' || 
+          currentUser?.userType === 'atelier';
+
+        // Se for professor ou ateliê, não permitir alteração do tipo de usuário
+        if (isProfessorOrAtelier && formData.userType !== selectedUser.userType) {
+          throw new Error('Você não tem permissão para alterar seu tipo de usuário');
+        }
+
+        // Verificar se está tentando criar/editar usuário master sem ter permissão
         if (formData.userType === 'master' && currentUser?.userType !== 'master') {
           throw new Error('Apenas usuários Master podem editar usuários Master');
         }
@@ -182,6 +232,11 @@ export default function Users() {
   };
 
   const handleDelete = async (userId) => {
+    if (!canDeleteUser()) {
+      setError('Apenas usuários Master podem excluir outros usuários');
+      return;
+    }
+
     if (!window.confirm('Tem certeza que deseja excluir este usuário?')) {
       return;
     }
@@ -190,11 +245,6 @@ export default function Users() {
     setError(null);
 
     try {
-      // Verificar se o usuário atual tem permissão para excluir
-      if (currentUser?.userType !== 'master') {
-        throw new Error('Apenas usuários Master podem excluir usuários');
-      }
-
       await deleteUser(userId);
       setSuccess('Usuário excluído com sucesso!');
       loadUsers();
@@ -239,7 +289,16 @@ export default function Users() {
         required
         disabled={loading}
       />
-      <FormControl fullWidth margin="normal" required disabled={loading}>
+      <FormControl 
+        fullWidth 
+        margin="normal" 
+        required 
+        disabled={loading || (
+          (currentUser?.userType === 'teacher' || currentUser?.userType === 'atelier') && 
+          openEditDialog && 
+          selectedUser?.id === currentUser?.uid
+        )}
+      >
         <InputLabel>Tipo de usuário</InputLabel>
         <Select
           name="userType"
@@ -251,7 +310,12 @@ export default function Users() {
             <MenuItem 
               key={value} 
               value={value}
-              disabled={value === 'master' && currentUser?.userType !== 'master'}
+              disabled={
+                // Desabilitar Master se não for Master
+                (value === 'master' && currentUser?.userType !== 'master') ||
+                // Desabilitar opções inapropriadas para usuários não-master
+                (currentUser?.userType !== 'master' && !(['teacher', 'atelier'].includes(value) || value === currentUser?.userType))
+              }
             >
               {label}
             </MenuItem>
@@ -280,21 +344,22 @@ export default function Users() {
   );
 
   return (
-    <MainLayout title="Usuários">
-      {/* Cabeçalho */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ color: '#000' }}>
+    <MainLayout title="Gerenciamento de Usuários">
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', my: 2 }}>
+        <Typography variant="h5" gutterBottom sx={{ color: '#000000', fontWeight: 'bold' }}>
           Usuários
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenCreateDialog}
-          disabled={loading}
-        >
-          Novo Usuário
-        </Button>
+        {canAddUser() && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreateDialog}
+          >
+            Novo Usuário
+          </Button>
+        )}
       </Box>
 
       {/* Tabela de usuários */}
@@ -320,17 +385,18 @@ export default function Users() {
                   <IconButton 
                     onClick={() => handleOpenEditDialog(user)} 
                     color="primary"
-                    disabled={!isMasterUser() && user.userType === 'master'}
+                    disabled={!canEditUser(user)}
                   >
                     <EditIcon />
                   </IconButton>
-                  <IconButton 
-                    onClick={() => handleDelete(user.id)} 
-                    color="error"
-                    disabled={!isMasterUser()}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+                  {canDeleteUser() && (
+                    <IconButton 
+                      onClick={() => handleDelete(user.id)} 
+                      color="error"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
