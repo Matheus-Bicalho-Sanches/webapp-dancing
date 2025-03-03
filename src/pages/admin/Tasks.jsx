@@ -126,6 +126,19 @@ export default function Tasks() {
     observacoes: ''
   });
 
+  // Estados para tarefas técnicas
+  const [technicalTasks, setTechnicalTasks] = useState([]);
+  const [technicalTasksLoading, setTechnicalTasksLoading] = useState(true);
+  const [openTechnicalDialog, setOpenTechnicalDialog] = useState(false);
+  const [editingTechnicalTask, setEditingTechnicalTask] = useState(null);
+  const [technicalFormData, setTechnicalFormData] = useState({
+    descricao: '',
+    responsavel: [],
+    prazoLimite: dayjs().format('YYYY-MM-DD'),
+    observacoes: '',
+    status: 'Pendente'
+  });
+
   // Estados para tarefas por horário
   const [scheduledTasks, setScheduledTasks] = useState([]);
   const [scheduledTasksLoading, setScheduledTasksLoading] = useState(true);
@@ -385,6 +398,14 @@ export default function Tasks() {
         details.taskType = 'agendada';
         details.diasDaSemana = task.diasDaSemana;
         details.horario = task.horario;
+      } else if (action.includes('technical') || task.taskType === 'tecnica') {
+        details.taskType = 'tecnica';
+        details.responsavel = task.responsavel;
+        details.prazoLimite = task.prazoLimite;
+        details.observacoes = task.observacoes;
+        details.status = task.status;
+      } else {
+        details.taskType = 'nao_recorrente';
       }
       
       // Adicionar status antigo e novo aos detalhes, se disponíveis
@@ -404,6 +425,8 @@ export default function Tasks() {
           originalTask = monthlyTasks.find(t => t.id === task.id);
         } else if (details.taskType === 'agendada') {
           originalTask = scheduledTasks.find(t => t.id === task.id);
+        } else if (details.taskType === 'tecnica') {
+          originalTask = technicalTasks.find(t => t.id === task.id);
         } else {
           originalTask = tasks.find(t => t.id === task.id);
         }
@@ -605,16 +628,18 @@ export default function Tasks() {
     switch (tab) {
       case 'nao_recorrente':
         return 0;
-      case 'diaria':
+      case 'tecnico':
         return 1;
-      case 'semanal':
+      case 'diaria':
         return 2;
-      case 'mensal':
+      case 'semanal':
         return 3;
-      case 'por_horario':
+      case 'mensal':
         return 4;
-      case 'logs':
+      case 'por_horario':
         return 5;
+      case 'logs':
+        return 6;
       default:
         return 0;
     }
@@ -624,6 +649,7 @@ export default function Tasks() {
   const handleTabChange = (event, newValue) => {
     const tabPaths = [
       '/admin/tarefas?tab=nao_recorrente',
+      '/admin/tarefas?tab=tecnico',
       '/admin/tarefas?tab=diaria',
       '/admin/tarefas?tab=semanal',
       '/admin/tarefas?tab=mensal',
@@ -652,6 +678,8 @@ export default function Tasks() {
       taskTypeLabel = 'mensal';
     } else if (log.action.includes('scheduled')) {
       taskTypeLabel = 'por horário';
+    } else if (log.action.includes('technical')) {
+      taskTypeLabel = 'técnica';
     } else {
       taskTypeLabel = 'não recorrente';
     }
@@ -665,6 +693,8 @@ export default function Tasks() {
       taskTypeLabel = 'mensal';
     } else if (log.details?.taskType === 'agendada') {
       taskTypeLabel = 'por horário';
+    } else if (log.details?.taskType === 'tecnica') {
+      taskTypeLabel = 'técnica';
     }
 
     if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled') {
@@ -705,6 +735,8 @@ export default function Tasks() {
         } else if (log.details.taskType === 'agendada') {
           const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
           return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
+        } else if (log.details.taskType === 'tecnica') {
+          return `Alterou status da tarefa técnica ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         } else {
           return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         }
@@ -1238,6 +1270,28 @@ export default function Tasks() {
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Carregar tarefas técnicas
+  useEffect(() => {
+    const q = query(
+        collection(db, 'tarefas_tecnicas'), 
+        orderBy('prazoLimite', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const tasksData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setTechnicalTasks(tasksData);
+      setTechnicalTasksLoading(false);
+    }, (error) => {
+      console.error('Erro ao carregar tarefas técnicas:', error);
+      setTechnicalTasksLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Carregar tarefas por horário
   useEffect(() => {
@@ -1796,6 +1850,186 @@ export default function Tasks() {
     }
   };
 
+  // Funções para tarefas técnicas
+  const handleOpenTechnicalDialog = (task = null) => {
+    if (task) {
+      setEditingTechnicalTask(task);
+      setTechnicalFormData({
+        descricao: task.descricao,
+        responsavel: task.responsavel || [],
+        prazoLimite: task.prazoLimite,
+        observacoes: task.observacoes || '',
+        status: task.status || 'Pendente'
+      });
+    } else {
+      setEditingTechnicalTask(null);
+      setTechnicalFormData({
+        descricao: '',
+        responsavel: [],
+        prazoLimite: dayjs().format('YYYY-MM-DD'),
+        observacoes: '',
+        status: 'Pendente'
+      });
+    }
+    setOpenTechnicalDialog(true);
+  };
+
+  const handleCloseTechnicalDialog = () => {
+    setOpenTechnicalDialog(false);
+    setEditingTechnicalTask(null);
+  };
+
+  const handleTechnicalSubmit = async () => {
+    try {
+      // Validar formulário
+      if (!technicalFormData.descricao || !technicalFormData.responsavel.length || !technicalFormData.prazoLimite) {
+        setSnackbar({
+          open: true,
+          message: 'Por favor, preencha todos os campos obrigatórios.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Dados comuns para criar ou atualizar
+      const taskData = {
+        descricao: technicalFormData.descricao,
+        responsavel: technicalFormData.responsavel,
+        prazoLimite: technicalFormData.prazoLimite,
+        observacoes: technicalFormData.observacoes,
+        status: technicalFormData.status,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      // Se estiver editando uma tarefa existente
+      if (editingTechnicalTask) {
+        await updateDoc(doc(db, 'tarefas_tecnicas', editingTechnicalTask.id), taskData);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('update_technical', {
+          ...taskData,
+          id: editingTechnicalTask.id,
+          taskType: 'tecnica',
+          oldDescription: editingTechnicalTask.descricao,
+          newDescription: technicalFormData.descricao,
+          oldStatus: editingTechnicalTask.status,
+          newStatus: technicalFormData.status
+        }, editingTechnicalTask.status, technicalFormData.status);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa técnica atualizada com sucesso!',
+          severity: 'success'
+        });
+      } else {
+        // Se estiver criando uma nova tarefa
+        const newTaskData = {
+          ...taskData,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        };
+        
+        const docRef = await addDoc(collection(db, 'tarefas_tecnicas'), newTaskData);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('create_technical', {
+          ...newTaskData,
+          id: docRef.id,
+          taskType: 'tecnica'
+        }, null, taskData.status);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa técnica criada com sucesso!',
+          severity: 'success'
+        });
+      }
+      
+      handleCloseTechnicalDialog();
+    } catch (error) {
+      console.error('Erro ao salvar tarefa técnica:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao salvar tarefa técnica. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleTechnicalDelete = async (taskId) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa técnica?')) {
+      try {
+        // Obter os dados da tarefa antes de excluir
+        const taskDoc = doc(db, 'tarefas_tecnicas', taskId);
+        const taskSnapshot = await getDoc(taskDoc);
+        const taskData = taskSnapshot.data();
+        
+        // Excluir a tarefa
+        await deleteDoc(taskDoc);
+        
+        // Registrar log usando a função addTaskLog
+        await addTaskLog('delete_technical', {
+          ...taskData,
+          id: taskId,
+          taskType: 'tecnica'
+        }, taskData.status, null);
+        
+        setSnackbar({
+          open: true,
+          message: 'Tarefa técnica excluída com sucesso!',
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Erro ao excluir tarefa técnica:', error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao excluir tarefa técnica. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      }
+    }
+  };
+
+  const handleTechnicalStatusChange = async (taskId, newStatus) => {
+    try {
+      // Obter os dados da tarefa antes de atualizar
+      const taskDoc = doc(db, 'tarefas_tecnicas', taskId);
+      const taskSnapshot = await getDoc(taskDoc);
+      const taskData = taskSnapshot.data();
+      
+      const updateData = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+      
+      // Atualizar a tarefa
+      await updateDoc(taskDoc, updateData);
+      
+      // Registrar log usando a função addTaskLog
+      await addTaskLog('status_change_technical', {
+        ...taskData,
+        id: taskId,
+        taskType: 'tecnica',
+        status: newStatus
+      }, taskData.status, newStatus);
+      
+      setSnackbar({
+        open: true,
+        message: `Status da tarefa técnica alterado para ${newStatus}!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao alterar status da tarefa técnica:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao alterar status da tarefa técnica. Por favor, tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout title="Tarefas">
@@ -1823,6 +2057,7 @@ export default function Tasks() {
             scrollButtons="auto"
           >
             <Tab label="Não Recorrentes" />
+            <Tab label="Técnico" />
             <Tab label="Diárias" />
             <Tab label="Semanais" />
             <Tab label="Mensais" />
@@ -2010,7 +2245,7 @@ export default function Tasks() {
         )}
 
         {/* Aba de Tarefas Diárias */}
-        {getCurrentTab() === 1 && (
+        {getCurrentTab() === 2 && (
           <>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
               <Button
@@ -2082,7 +2317,7 @@ export default function Tasks() {
         )}
 
         {/* Aba de Tarefas Semanais */}
-        {getCurrentTab() === 2 && (
+        {getCurrentTab() === 3 && (
           <>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
               <Button
@@ -2176,7 +2411,7 @@ export default function Tasks() {
         )}
 
         {/* Aba de Tarefas Mensais */}
-        {getCurrentTab() === 3 && (
+        {getCurrentTab() === 4 && (
           <>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
               <Button
@@ -2270,7 +2505,7 @@ export default function Tasks() {
         )}
 
         {/* Aba de Tarefas Por Horário */}
-        {getCurrentTab() === 4 && (
+        {getCurrentTab() === 5 && (
           <>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
               <Button
@@ -2364,7 +2599,7 @@ export default function Tasks() {
         )}
 
         {/* Aba de Logs */}
-        {getCurrentTab() === 5 && (
+        {getCurrentTab() === 6 && (
           <>
             {logsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -2923,6 +3158,236 @@ export default function Tasks() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Dialog para adicionar/editar tarefa técnica */}
+        <Dialog
+          open={openTechnicalDialog}
+          onClose={handleCloseTechnicalDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingTechnicalTask ? 'Editar Tarefa Técnica' : 'Nova Tarefa Técnica'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                value={technicalFormData.descricao}
+                onChange={(e) => setTechnicalFormData({ ...technicalFormData, descricao: e.target.value })}
+                required
+                multiline
+                rows={2}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Responsável</InputLabel>
+                <Select
+                  multiple
+                  value={technicalFormData.responsavel}
+                  onChange={(e) => setTechnicalFormData({ ...technicalFormData, responsavel: e.target.value })}
+                  label="Responsável"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => (
+                        <Chip
+                          key={value}
+                          label={users.find(user => user.id === value)?.name || value}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  {users.map((user) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.name || user.email}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  label="Prazo Limite"
+                  value={dayjs(technicalFormData.prazoLimite)}
+                  onChange={(newValue) => setTechnicalFormData({ ...technicalFormData, prazoLimite: newValue.format('YYYY-MM-DD') })}
+                  slotProps={{
+                    textField: {
+                      required: true,
+                      fullWidth: true,
+                      error: !technicalFormData.prazoLimite,
+                      helperText: !technicalFormData.prazoLimite ? 'Prazo é obrigatório' : ''
+                    }
+                  }}
+                  format="DD/MM/YYYY"
+                />
+              </LocalizationProvider>
+
+              <TextField
+                fullWidth
+                label="Observações"
+                value={technicalFormData.observacoes}
+                onChange={(e) => setTechnicalFormData({ ...technicalFormData, observacoes: e.target.value })}
+                multiline
+                rows={3}
+              />
+
+              <FormControl fullWidth required>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={technicalFormData.status}
+                  onChange={(e) => setTechnicalFormData({ ...technicalFormData, status: e.target.value })}
+                  label="Status"
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        label={selected} 
+                        size="small" 
+                        color={getStatusColorByName(selected)}
+                      />
+                    </Box>
+                  )}
+                >
+                  <MenuItem value="Pendente">Pendente</MenuItem>
+                  <MenuItem value="Em andamento">Em andamento</MenuItem>
+                  <MenuItem value="Finalizada">Finalizada</MenuItem>
+                  <MenuItem value="Aguardando">Aguardando</MenuItem>
+                  <MenuItem value="Urgente">Urgente</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseTechnicalDialog}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleTechnicalSubmit}
+              variant="contained"
+              disabled={!technicalFormData.descricao || !technicalFormData.responsavel.length || !technicalFormData.prazoLimite}
+            >
+              {editingTechnicalTask ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Aba de Tarefas Técnicas */}
+        {getCurrentTab() === 1 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenTechnicalDialog()}
+              >
+                Nova Tarefa Técnica
+              </Button>
+            </Box>
+
+            {technicalTasksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Descrição</TableCell>
+                      <TableCell>Responsável</TableCell>
+                      <TableCell>Prazo</TableCell>
+                      <TableCell>Observações</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {technicalTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell>{task.descricao}</TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {Array.isArray(task.responsavel) ? (
+                              task.responsavel.map((userId) => (
+                                <Chip
+                                  key={userId}
+                                  label={users.find(user => user.id === userId)?.name || userId}
+                                  size="small"
+                                />
+                              ))
+                            ) : (
+                              <Chip
+                                label={users.find(user => user.id === task.responsavel)?.name || task.responsavel}
+                                size="small"
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={dayjs(task.prazoLimite).format('DD/MM/YYYY')}
+                            color={getStatusColor(task.prazoLimite)}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{task.observacoes}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={task.status || 'Pendente'}
+                            onChange={(e) => handleTechnicalStatusChange(task.id, e.target.value)}
+                            size="small"
+                            sx={{ minWidth: 120 }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Chip 
+                                  label={selected} 
+                                  size="small" 
+                                  color={getStatusColorByName(selected)}
+                                />
+                              </Box>
+                            )}
+                          >
+                            <MenuItem value="Pendente">Pendente</MenuItem>
+                            <MenuItem value="Em andamento">Em andamento</MenuItem>
+                            <MenuItem value="Finalizada">Finalizada</MenuItem>
+                            <MenuItem value="Aguardando">Aguardando</MenuItem>
+                            <MenuItem value="Urgente">Urgente</MenuItem>
+                          </Select>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleOpenTechnicalDialog(task)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          {hasDeletePermission && (
+                            <IconButton
+                              color="error"
+                              onClick={() => handleTechnicalDelete(task.id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {technicalTasks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          Nenhuma tarefa técnica encontrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
+        )}
       </Box>
     </MainLayout>
   );
