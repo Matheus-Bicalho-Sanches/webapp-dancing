@@ -3365,6 +3365,23 @@ export default function Tasks() {
                   value={technicalFormData.responsavel}
                   onChange={(e) => setTechnicalFormData({ ...technicalFormData, responsavel: e.target.value })}
                   label="Responsável"
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 150, // Reduced height
+                        overflow: 'auto',
+                      },
+                    },
+                    // Control the positioning of the menu
+                    anchorOrigin: {
+                      vertical: 'bottom',
+                      horizontal: 'left',
+                    },
+                    transformOrigin: {
+                      vertical: 'top',
+                      horizontal: 'left',
+                    },
+                  }}
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                       {selected.map((value) => (
