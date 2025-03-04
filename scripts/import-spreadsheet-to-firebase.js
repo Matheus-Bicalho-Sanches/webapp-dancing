@@ -6,11 +6,17 @@
  */
 
 // Importando as dependências necessárias
-const admin = require('firebase-admin');
-const { google } = require('googleapis');
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+import admin from 'firebase-admin';
+import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Função para configurar as credenciais do Firebase
 function initializeFirebase() {
@@ -30,7 +36,7 @@ function initializeFirebase() {
       process.exit(1);
     }
     
-    const serviceAccount = require(serviceAccountPath);
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
     
     // Inicialize o Firebase Admin
     admin.initializeApp({
@@ -64,7 +70,7 @@ async function initializeGoogleSheets() {
       process.exit(1);
     }
     
-    const credentials = require(credentialsPath);
+    const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     
     // Configure a autenticação JWT
     const auth = new google.auth.JWT(

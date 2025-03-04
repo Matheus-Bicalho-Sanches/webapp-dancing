@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import MainLayout from '../../layouts/MainLayout';
 import {
   Box,
@@ -44,12 +44,15 @@ import {
   Clear as ClearIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import dayjs from 'dayjs';
+
+// Adicionar uma constante para o número de linhas a serem exibidas por página
+const ROWS_PER_PAGE = 50;
 
 export default function CRM() {
   const { currentUser } = useAuth();
@@ -62,7 +65,9 @@ export default function CRM() {
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [formError, setFormError] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
@@ -134,43 +139,168 @@ export default function CRM() {
 
   // Add pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage] = useState(50);
+  const [rowsPerPage, setRowsPerPage] = useState(ROWS_PER_PAGE);
 
   // Add date conversion helpers
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
     try {
-      const date = new Date(dateString);
+      let date;
+      
+      // Se for um timestamp do Firestore (objeto com seconds e nanoseconds)
+      if (dateString && typeof dateString === 'object' && dateString.seconds !== undefined) {
+        date = new Date(dateString.seconds * 1000);
+      }
+      // Se for um timestamp ISO ou string de data
+      else if (typeof dateString === 'string') {
+        date = new Date(dateString);
+      }
+      // Se for um Date object
+      else if (dateString instanceof Date) {
+        date = dateString;
+      }
+      // Se for um objeto com formato de data personalizado
+      else if (dateString && typeof dateString === 'object') {
+        if (dateString.toDate && typeof dateString.toDate === 'function') {
+          date = dateString.toDate();
+        } else if (dateString.ISO) {
+          date = new Date(dateString.ISO);
+        } else {
+          console.warn('Formato de data não reconhecido para input:', dateString);
+          return '';
+        }
+      } else {
+        console.warn('Formato de data não reconhecido para input:', dateString);
+        return '';
+      }
+      
+      // Verificar se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida para input:', dateString);
+        return '';
+      }
+      
       return format(date, 'yyyy-MM-dd');
     } catch (error) {
-      console.error('Error formatting date for input:', error);
+      console.error('Error formatting date for input:', error, 'Value:', dateString);
       return '';
     }
   };
 
   const formatDateForSave = (inputDate) => {
-    if (!inputDate) return '';
+    if (!inputDate) return null;
     try {
       // Create date at noon to avoid timezone issues
       const [year, month, day] = inputDate.split('-').map(Number);
+      
+      // Verificar se os valores são válidos
+      if (isNaN(year) || isNaN(month) || isNaN(day)) {
+        console.warn('Data inválida para salvar:', inputDate);
+        return null;
+      }
+      
+      // Cria uma data às 12:00 para evitar problemas de timezone
       const date = new Date(year, month - 1, day, 12, 0, 0);
-      return date.toISOString();
+      
+      // Verificar se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida para salvar após conversão:', inputDate);
+        return null;
+      }
+      
+      // Cria um Timestamp do Firestore
+      return Timestamp.fromDate(date);
     } catch (error) {
-      console.error('Error formatting date for save:', error);
-      return '';
+      console.error('Error formatting date for save:', error, 'Value:', inputDate);
+      return null;
     }
   };
 
   const formatDateForDisplay = (dateString) => {
     if (!dateString) return '';
     try {
-      // Add 12 hours to the date to ensure it's in the middle of the day
-      const date = new Date(dateString);
+      let date;
+      
+      // Se for um timestamp do Firestore (objeto com seconds e nanoseconds)
+      if (dateString && typeof dateString === 'object' && dateString.seconds !== undefined) {
+        // Converter timestamp do Firestore para Date
+        date = new Date(dateString.seconds * 1000);
+      }
+      // Se for um timestamp ISO ou string de data
+      else if (typeof dateString === 'string') {
+        date = new Date(dateString);
+      }
+      // Se for um Date object
+      else if (dateString instanceof Date) {
+        date = dateString;
+      }
+      // Se for um objeto com formato de data personalizado
+      else if (dateString && typeof dateString === 'object') {
+        // Tentar procurar por campos auxiliares
+        if (dateString.toDate && typeof dateString.toDate === 'function') {
+          // Se for um Timestamp do Firebase (diferente do Firestore)
+          date = dateString.toDate();
+        } else if (dateString.ISO) {
+          // Se usamos o campo ISO do nosso script de importação
+          date = new Date(dateString.ISO);
+        } else if (dateString.formatted) {
+          // Se já temos o valor formatado, retorna ele diretamente
+          return dateString.formatted;
+        } else {
+          // Último recurso: converter para string e tentar extrair a data
+          console.warn('Formato de data não reconhecido:', dateString);
+          return '';
+        }
+      } else {
+        console.warn('Formato de data não reconhecido:', dateString);
+        return '';
+      }
+      
+      // Verificar se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida:', dateString);
+        return '';
+      }
+      
+      // Definir para meio-dia para evitar problemas de fuso horário
       date.setHours(12);
       return format(date, 'dd/MM/yy', { locale: ptBR });
     } catch (error) {
-      console.error('Error formatting date for display:', error);
+      console.error('Error formatting date for display:', error, 'Value:', dateString);
       return '';
+    }
+  };
+
+  // Função auxiliar para converter qualquer formato de data para um objeto dayjs
+  const convertToDateObject = (dateValue) => {
+    if (!dateValue) return null;
+    
+    try {
+      // Se for um timestamp do Firestore (objeto com seconds e nanoseconds)
+      if (typeof dateValue === 'object' && dateValue.seconds !== undefined) {
+        return dayjs(new Date(dateValue.seconds * 1000));
+      }
+      // Se for um objeto Timestamp do Firebase
+      else if (dateValue && typeof dateValue.toDate === 'function') {
+        return dayjs(dateValue.toDate());
+      }
+      // Se for uma string ISO
+      else if (typeof dateValue === 'string') {
+        return dayjs(dateValue);
+      }
+      // Se for um objeto Date
+      else if (dateValue instanceof Date) {
+        return dayjs(dateValue);
+      }
+      // Se for um objeto com campo ISO
+      else if (typeof dateValue === 'object' && dateValue.ISO) {
+        return dayjs(dateValue.ISO);
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('Erro ao converter data:', error, dateValue);
+      return null;
     }
   };
 
@@ -271,33 +401,77 @@ export default function CRM() {
     handleTurmaAEFilterClose();
   };
 
-  // Filter logic
-  const filterLeads = (leadsToFilter) => {
-    let result = [...leadsToFilter];
-
-    // Apply search term filter
-    if (searchTerm) {
-      const normalizedSearchTerm = searchTerm.toLowerCase().trim();
-      result = result.filter(lead => 
-        (lead.nome && lead.nome.toLowerCase().includes(normalizedSearchTerm)) || 
-        (lead.whatsapp && lead.whatsapp.toLowerCase().includes(normalizedSearchTerm))
-      );
+  // Implementar debounce para o searchTerm com indicador visual
+  useEffect(() => {
+    if (searchTerm !== debouncedSearchTerm) {
+      setIsSearching(true);
     }
+    
+    // Configurar um timer para atualizar o debouncedSearchTerm após 300ms
+    const timerId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setIsSearching(false);
+    }, 300);
 
-    // Filter by status (if any selected)
+    // Limpar o timer se searchTerm mudar antes do timeout
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [searchTerm, debouncedSearchTerm]);
+
+  // Otimizar a função filterLeads dividindo em partes para melhor desempenho
+  const applySearchTermFilter = useCallback((leads) => {
+    if (!debouncedSearchTerm) return leads;
+    
+    const normalizedSearchTerm = debouncedSearchTerm.toLowerCase().trim();
+    
+    // Não aplicar o filtro para termos de busca muito curtos
+    if (normalizedSearchTerm.length < 2) return leads;
+    
+    return leads.filter(lead => {
+      // Verifica o nome (se existir e for string)
+      const nameMatches = lead.nome && 
+                        typeof lead.nome === 'string' && 
+                        lead.nome.toLowerCase().includes(normalizedSearchTerm);
+    
+      // Verifica o WhatsApp (se existir)
+      let whatsappMatches = false;
+      if (lead.whatsapp) {
+        if (typeof lead.whatsapp === 'string') {
+          // Se for string, faz a busca normalmente
+          whatsappMatches = lead.whatsapp.toLowerCase().includes(normalizedSearchTerm);
+        } else if (typeof lead.whatsapp === 'number') {
+          // Se for número, converte para string para buscar
+          whatsappMatches = String(lead.whatsapp).includes(normalizedSearchTerm);
+        }
+      }
+      
+      return nameMatches || whatsappMatches;
+    });
+  }, [debouncedSearchTerm]);
+
+  const applyStatusFilter = useCallback((leads) => {
     if (selectedStatuses.length > 0) {
-      result = result.filter(lead => selectedStatuses.includes(lead.status));
+      return leads.filter(lead => selectedStatuses.includes(lead.status));
     } else if (statusFilter) {
-      result = result.filter(lead => lead.status === statusFilter);
+      return leads.filter(lead => lead.status === statusFilter);
     }
+    return leads;
+  }, [selectedStatuses, statusFilter]);
 
+  const applyDateFilters = useCallback((leads) => {
+    let result = leads;
+    
     // Apply próximo contato filter
     if (proxContatoFilter) {
       const filterDate = dayjs(proxContatoFilter).startOf('day');
       result = result.filter(lead => {
         if (!lead.proximoContato) return false;
-        const leadDate = dayjs(lead.proximoContato).startOf('day');
-        return leadDate.isSame(filterDate);
+        
+        const leadDate = convertToDateObject(lead.proximoContato);
+        if (!leadDate) return false;
+        
+        return leadDate.startOf('day').isSame(filterDate);
       });
     }
 
@@ -306,8 +480,11 @@ export default function CRM() {
       const filterDate = dayjs(dataAEFilter).startOf('day');
       result = result.filter(lead => {
         if (!lead.dataAE) return false;
-        const leadDate = dayjs(lead.dataAE).startOf('day');
-        return leadDate.isSame(filterDate);
+        
+        const leadDate = convertToDateObject(lead.dataAE);
+        if (!leadDate) return false;
+        
+        return leadDate.startOf('day').isSame(filterDate);
       });
     }
 
@@ -316,31 +493,34 @@ export default function CRM() {
       result = result.filter(lead => lead.turmaAE === turmaAEFilter);
     }
 
-    // Apply sorting
-    result.sort((a, b) => {
+    return result;
+  }, [proxContatoFilter, dataAEFilter, turmaAEFilter]);
+
+  const applySorting = useCallback((leads) => {
+    return [...leads].sort((a, b) => {
       // Primeiro, tentamos ordenar por próximo contato se essa ordenação estiver ativa
       if (proxContatoSort) {
-        if (!a.proximoContato && !b.proximoContato) {
+        const dateA = convertToDateObject(a.proximoContato);
+        const dateB = convertToDateObject(b.proximoContato);
+        
+        if (!dateA && !dateB) {
           // Se ambos não têm próximo contato, usamos o status como critério
-      if (statusSort && a.status !== b.status) {
-        const aStatus = a.status || '';
-        const bStatus = b.status || '';
-        return statusSort === 'asc' 
-          ? aStatus.localeCompare(bStatus)
-          : bStatus.localeCompare(aStatus);
+          if (statusSort && a.status !== b.status) {
+            const aStatus = a.status || '';
+            const bStatus = b.status || '';
+            return statusSort === 'asc' 
+              ? aStatus.localeCompare(bStatus)
+              : bStatus.localeCompare(aStatus);
           }
           return 0;
-      }
-
-        if (!a.proximoContato) return 1;
-        if (!b.proximoContato) return -1;
-
-        const dateA = new Date(a.proximoContato);
-        const dateB = new Date(b.proximoContato);
-
+        }
+        
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
         return proxContatoSort === 'asc'
-          ? dateA.getTime() - dateB.getTime()
-          : dateB.getTime() - dateA.getTime();
+          ? dateA.unix() - dateB.unix()
+          : dateB.unix() - dateA.unix();
       } 
       // Se não há ordenação por próximo contato, mas há por status
       else if (statusSort) {
@@ -355,16 +535,24 @@ export default function CRM() {
 
       return 0;
     });
+  }, [proxContatoSort, statusSort]);
 
-    return result;
-  };
+  // Memoizar os resultados filtrados com otimização em pipeline
+  const memoizedFilteredLeads = useMemo(() => {
+    // Aplicar filtros em pipeline para melhor desempenho
+    return applySorting(
+      applyDateFilters(
+        applyStatusFilter(
+          applySearchTermFilter(leads)
+        )
+      )
+    );
+  }, [leads, applySearchTermFilter, applyStatusFilter, applyDateFilters, applySorting]);
 
   // Update filtered leads when filters or leads change
   useEffect(() => {
-    const filtered = filterLeads(leads);
-    setFilteredLeads(filtered);
-  }, [leads, statusFilter, selectedStatuses, proxContatoFilter, dataAEFilter, turmaAEFilter,
-      statusSort, proxContatoSort, searchTerm]);
+    setFilteredLeads(memoizedFilteredLeads);
+  }, [memoizedFilteredLeads]);
 
   useEffect(() => {
     setLoading(true);
@@ -456,7 +644,7 @@ export default function CRM() {
       setFormError('');
 
       // Validar se WhatsApp está preenchido
-      if (!formData.whatsapp.trim()) {
+      if (!formData.whatsapp || !formData.whatsapp.trim()) {
         setFormError('O campo WhatsApp é obrigatório.');
         return;
       }
@@ -475,7 +663,12 @@ export default function CRM() {
         // Verifica se o WhatsApp já existe em algum lead
         const whatsAppExists = leads.some(lead => {
           if (!lead.whatsapp) return false;
-          const leadWhatsApp = lead.whatsapp.replace(/\D/g, '');
+          
+          // Garante que lead.whatsapp é uma string antes de chamar replace
+          const leadWhatsApp = typeof lead.whatsapp === 'string' 
+            ? lead.whatsapp.replace(/\D/g, '') 
+            : String(lead.whatsapp);
+            
           return leadWhatsApp === normalizedWhatsApp;
         });
         
@@ -485,13 +678,20 @@ export default function CRM() {
         }
       } else if (editingLead.whatsapp) {
         // Se estiver editando e o WhatsApp atual for diferente do original
-        const originalWhatsApp = editingLead.whatsapp.replace(/\D/g, '');
+        const originalWhatsApp = typeof editingLead.whatsapp === 'string'
+          ? editingLead.whatsapp.replace(/\D/g, '')
+          : String(editingLead.whatsapp);
         
         if (normalizedWhatsApp !== originalWhatsApp) {
           // Verifica se o novo número já existe em outro lead
           const whatsAppExists = leads.some(lead => {
             if (lead.id === editingLead.id || !lead.whatsapp) return false;
-            const leadWhatsApp = lead.whatsapp.replace(/\D/g, '');
+            
+            // Garante que lead.whatsapp é uma string antes de chamar replace
+            const leadWhatsApp = typeof lead.whatsapp === 'string' 
+              ? lead.whatsapp.replace(/\D/g, '') 
+              : String(lead.whatsapp);
+              
             return leadWhatsApp === normalizedWhatsApp;
           });
           
@@ -576,7 +776,13 @@ export default function CRM() {
   };
 
   const handleWhatsAppClick = (whatsapp) => {
-    const formattedNumber = whatsapp.replace(/\D/g, '');
+    // Verifica se whatsapp é uma string antes de chamar replace
+    if (!whatsapp) return;
+    
+    const formattedNumber = typeof whatsapp === 'string' 
+      ? whatsapp.replace(/\D/g, '') 
+      : String(whatsapp);
+      
     window.open(`https://wa.me/55${formattedNumber}`, '_blank');
   };
 
@@ -707,6 +913,12 @@ export default function CRM() {
     }
   };
 
+  // Otimizar a renderização da tabela exibindo apenas os itens da página atual
+  const paginatedLeads = useMemo(() => {
+    const startIndex = page * rowsPerPage;
+    return memoizedFilteredLeads.slice(startIndex, startIndex + rowsPerPage);
+  }, [memoizedFilteredLeads, page, rowsPerPage]);
+
   if (loading) {
     return (
       <MainLayout title="CRM">
@@ -754,7 +966,11 @@ export default function CRM() {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
+                  {isSearching ? (
+                    <CircularProgress size={16} thickness={4} />
+                  ) : (
+                    <SearchIcon fontSize="small" />
+                  )}
                 </InputAdornment>
               ),
               endAdornment: searchTerm && (
@@ -984,10 +1200,7 @@ export default function CRM() {
                 </TableRow>
               </TableHead>
               <TableBody sx={{ '& tr': { height: '36px !important' } }}>
-                {(rowsPerPage > 0
-                  ? filteredLeads.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  : filteredLeads
-                ).map((lead) => (
+                {paginatedLeads.map((lead) => (
                   <TableRow key={lead.id} sx={{ 
                     height: '36px !important', 
                     maxHeight: '36px !important', 
@@ -1064,7 +1277,7 @@ export default function CRM() {
                       </FormControl>
                     </TableCell>
                     <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                      {lead.whatsapp}
+                      {lead.whatsapp ? (typeof lead.whatsapp === 'string' ? lead.whatsapp : String(lead.whatsapp)) : '-'}
                     </TableCell>
                     <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {editingCell === lead.id ? (

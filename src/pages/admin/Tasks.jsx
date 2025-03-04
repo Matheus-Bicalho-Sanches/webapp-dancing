@@ -713,6 +713,26 @@ export default function Tasks() {
     } else if (log.details?.taskType === 'tecnica') {
       taskTypeLabel = 'técnica';
     }
+    
+    // Função auxiliar para extrair status de diferentes locais no objeto log
+    const getStatusInfo = () => {
+      // Verificar todas as possíveis localizações dos campos de status
+      let oldStatus;
+      let newStatus;
+      
+      // Verificar diretamente no log
+      if (log.oldStatus !== undefined && log.newStatus !== undefined) {
+        oldStatus = log.oldStatus;
+        newStatus = log.newStatus;
+      } 
+      // Verificar dentro de log.details
+      else if (log.details?.oldStatus !== undefined && log.details?.newStatus !== undefined) {
+        oldStatus = log.details.oldStatus;
+        newStatus = log.details.newStatus;
+      }
+      
+      return { oldStatus, newStatus };
+    };
 
     if (log.action === 'create' || log.action === 'create_daily' || log.action === 'create_weekly' || log.action === 'create_monthly' || log.action === 'create_scheduled' || log.action === 'create_technical') {
       if (log.action === 'create_technical' && log.details?.taskType === 'tecnica') {
@@ -734,6 +754,13 @@ export default function Tasks() {
     }
 
     if (log.action === 'update' || log.action === 'update_daily' || log.action === 'update_weekly' || log.action === 'edit_monthly' || log.action === 'edit_scheduled' || log.action === 'update_technical') {
+      // Mostrar status anterior e posterior quando editadas
+      const { oldStatus, newStatus } = getStatusInfo();
+      
+      if (oldStatus && newStatus && oldStatus !== newStatus) {
+        return `Editou tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Status alterado de "${oldStatus}" para "${newStatus}"`;
+      }
+      
       if (log.action === 'update_technical' && log.details?.taskType === 'tecnica') {
         const responsaveis = log.details.responsavel ? 
           (Array.isArray(log.details.responsavel) ? 
@@ -766,17 +793,28 @@ export default function Tasks() {
     }
 
     if (log.action === 'status-change' || log.action === 'status_change_daily' || log.action === 'status_change_weekly' || log.action === 'status_change_monthly' || log.action === 'status_change_scheduled' || log.action === 'status_change_technical') {
-      if (log.details && log.details.oldStatus && log.details.newStatus) {
-        if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'diaria') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
-        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'semanal') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana})`;
-        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'mensal') {
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (dia ${log.details.diaDoMes})`;
-        } else if (log.details.oldStatus === 'AUTO-RESET' && log.details.taskType === 'agendada') {
-          const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
-          return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario})`;
-        } else if (log.action === 'status_change_technical' && log.details.taskType === 'tecnica') {
+      // Utilizar a função auxiliar para obter os status
+      const { oldStatus, newStatus } = getStatusInfo();
+      
+      console.log('[DEBUG getActionName]', { action: log.action, taskType: taskTypeLabel, oldStatus, newStatus, logObj: JSON.stringify(log) });
+      
+      if (oldStatus && newStatus) {
+        // Casos especiais de AUTO-RESET
+        if (oldStatus === 'AUTO-RESET') {
+          if (log.details?.taskType === 'diaria') {
+            return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+          } else if (log.details?.taskType === 'semanal') {
+            return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana})`;
+          } else if (log.details?.taskType === 'mensal') {
+            return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (dia ${log.details.diaDoMes})`;
+          } else if (log.details?.taskType === 'agendada') {
+            const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
+            return `Resetou automaticamente tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario})`;
+          }
+        }
+        
+        // Casos especiais para tarefas técnicas
+        if (log.action === 'status_change_technical' && log.details?.taskType === 'tecnica') {
           const responsaveis = log.details.responsavel ? 
             (Array.isArray(log.details.responsavel) ? 
               log.details.responsavel.map(userId => users.find(u => u.id === userId)?.nome || userId).join(', ') : 
@@ -789,37 +827,30 @@ export default function Tasks() {
               typeof log.details.prazoLimite === 'string' ? log.details.prazoLimite : 'Não especificado') : 
             'Não especificado';
           
-          if (log.details.newStatus === 'Finalizada') {
+          if (newStatus === 'Finalizada') {
             return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
-          } else if (log.details.newStatus === 'Pendente' && log.details.oldStatus === 'Finalizada') {
+          } else if (newStatus === 'Pendente' && oldStatus === 'Finalizada') {
             return `Desmarcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
           } else {
-            return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
+            return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${oldStatus}" para "${newStatus}" - Responsável: ${responsaveis} - Prazo: ${prazo}`;
           }
-        } else if (log.details.taskType === 'diaria') {
-          if (log.details.newStatus === 'Finalizada') {
-            return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
-          } else if (log.details.newStatus === 'Pendente') {
-            return `Desmarcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
-          } else {
-            return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-          }
-        } else if (log.details.taskType === 'semanal') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${log.details.diaDaSemana}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-        } else if (log.details.taskType === 'mensal') {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (dia ${log.details.diaDoMes}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-        } else if (log.details.taskType === 'agendada') {
-          const diasFormatados = formatDiasDaSemana(log.details.diasDaSemana);
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" (${diasFormatados}, ${log.details.horario}) de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-        } else if (log.details.taskType === 'tecnica' && !log.action.includes('technical')) {
-          // Skip this case as it's handled by the action === 'status_change_technical' case above
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
-        } else {
-          return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${log.details.oldStatus}" para "${log.details.newStatus}"`;
         }
-      } else {
-        return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+        
+        // Outros casos específicos por tipo de tarefa
+        if (log.details?.taskType === 'diaria') {
+          if (newStatus === 'Finalizada') {
+            return `Marcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+          } else if (newStatus === 'Pendente') {
+            return `Desmarcou como concluída tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
+          }
+        }
+        
+        // Para todos os outros casos, mostre a mudança de status
+        return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}" de "${oldStatus}" para "${newStatus}"`;
       }
+      
+      // Se não tiver informações de status, exibe mensagem genérica
+      return `Alterou status da tarefa ${taskTypeLabel}: "${log.taskDescription || log.descricao}"`;
     }
 
     if (log.action === 'reset_daily') {

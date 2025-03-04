@@ -39,3 +39,14 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Firebase credentials
+serviceAccountKey.json
+googleCredentials.json
+
+# Temporary Office files
+~$*
+*.tmp
+*.bak
+*.old
+*.xlk
