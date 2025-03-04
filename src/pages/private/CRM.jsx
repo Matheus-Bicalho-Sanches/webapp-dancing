@@ -1130,7 +1130,7 @@ export default function CRM() {
             }}>
               <TableHead>
                 <TableRow sx={{ height: '40px' }}>
-                  <TableCell width="16%" sx={{ minWidth: 110, maxWidth: 130, py: 1, px: 0.5 }}>Nome</TableCell>
+                  <TableCell width="14%" sx={{ minWidth: 110, maxWidth: 130, py: 1, px: 0.5 }}>Nome</TableCell>
                   <TableCell width="8%" sx={{ minWidth: 70, maxWidth: 80, py: 1, px: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       Status
@@ -1235,10 +1235,10 @@ export default function CRM() {
                     </Box>
                   </TableCell>
                   <TableCell width="10%" sx={{ minWidth: 80, maxWidth: 90, py: 1, px: 0.5 }}>WhatsApp</TableCell>
-                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>Últ.</TableCell>
-                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
+                  <TableCell width="9%" sx={{ minWidth: 70, maxWidth: 90, py: 1, px: 0.5 }}>Últ. Contato</TableCell>
+                  <TableCell width="9%" sx={{ minWidth: 80, maxWidth: 100, py: 1, px: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      Próx.
+                      Próx. Contato
                       <IconButton 
                         size="small" 
                         onClick={handleProxContatoFilterClick}
@@ -1260,10 +1260,10 @@ export default function CRM() {
                       )}
                     </Box>
                   </TableCell>
-                  <TableCell width="7%" sx={{ minWidth: 60, maxWidth: 70, py: 1, px: 0.5 }}>
+                  <TableCell width="9%" sx={{ minWidth: 70, maxWidth: 90, py: 1, px: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      Data
-                      <IconButton 
+                      Data AE
+                      <IconButton
                         size="small" 
                         onClick={handleDataAEFilterClick}
                         sx={{ 
@@ -1393,7 +1393,7 @@ export default function CRM() {
                     <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {lead.whatsapp ? (typeof lead.whatsapp === 'string' ? lead.whatsapp : String(lead.whatsapp)) : '-'}
                     </TableCell>
-                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                    <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {editingCell === lead.id ? (
                         <TextField
                           type="date"
@@ -1418,7 +1418,7 @@ export default function CRM() {
                         </Box>
                       )}
                     </TableCell>
-                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                    <TableCell sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {editingCell === `${lead.id}-prox` ? (
                         <TextField
                           type="date"
@@ -1446,7 +1446,7 @@ export default function CRM() {
                         </Box>
                       )}
                     </TableCell>
-                    <TableCell sx={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+                    <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                       {editingCell === `${lead.id}-ae` ? (
                         <TextField
                           type="date"

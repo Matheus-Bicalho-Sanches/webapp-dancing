@@ -10,7 +10,8 @@
     "build": "vite build && node vercel-build.cjs",
     "vercel-build": "vite build && node vercel-build.cjs",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "update-inactive-leads": "node scripts/update-inactive-leads.js"
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
