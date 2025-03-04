@@ -1411,7 +1411,11 @@ export default function CRM() {
                         />
                       ) : (
                         <Box
-                          onClick={() => handleStartEditing(lead.id, lead.ultimoContato)}
+                          onClick={() => {
+                            setEditingCell(lead.id);
+                            // Usar a data de hoje como valor padrão para edição do último contato
+                            setEditValue(formatDateForInput(new Date()));
+                          }}
                           style={{ cursor: 'pointer', minHeight: '20px' }}
                         >
                           {lead.ultimoContato ? formatDateForDisplay(lead.ultimoContato) : ''}
