@@ -50,3 +50,6 @@ googleCredentials.json
 *.bak
 *.old
 *.xlk
+
+# Data files
+data/dados.xlsx

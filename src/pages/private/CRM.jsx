@@ -42,9 +42,10 @@ import {
   WhatsApp as WhatsAppIcon,
   FilterList as FilterListIcon,
   Clear as ClearIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp, getDocsFromCache, getDocsFromServer, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, parse } from 'date-fns';
@@ -554,45 +555,93 @@ export default function CRM() {
     setFilteredLeads(memoizedFilteredLeads);
   }, [memoizedFilteredLeads]);
 
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [dataSource, setDataSource] = useState('cache'); // 'cache' ou 'server'
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Use Effect para carregar leads do Cache ou do Server com controle manual
   useEffect(() => {
     setLoading(true);
-    try {
-      const q = query(
-        collection(db, 'leads'),
-        orderBy('createdAt', 'desc')
-      );
-
-      const unsubscribe = onSnapshot(q, 
-        (querySnapshot) => {
-          const leadsData = querySnapshot.docs.map(doc => ({
+    
+    const loadLeads = async () => {
+      try {
+        const leadsCollection = collection(db, 'leads');
+        const q = query(leadsCollection, orderBy('createdAt', 'desc'));
+        
+        // Tentar carregar do cache primeiro
+        if (dataSource === 'cache' && !isInitialLoad) {
+          try {
+            const cachedSnapshot = await getDocsFromCache(q);
+            
+            if (!cachedSnapshot.empty) {
+              const leadsData = cachedSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }));
+              
+              console.log(`Carregados ${leadsData.length} leads do cache.`);
+              setLeads(leadsData);
+              setLoading(false);
+              return;
+            } else {
+              console.log('Cache vazio, carregando do servidor...');
+              // Se o cache estiver vazio, carregaremos do servidor
+              setDataSource('server');
+            }
+          } catch (error) {
+            console.warn('Erro ao carregar do cache:', error);
+            setDataSource('server');
+          }
+        }
+        
+        // Se chegarmos aqui, precisamos carregar do servidor
+        if (dataSource === 'server' || isInitialLoad) {
+          const serverSnapshot = await getDocsFromServer(q);
+          const leadsData = serverSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
+          
+          console.log(`Carregados ${leadsData.length} leads do servidor.`);
           setLeads(leadsData);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error loading leads:", error);
-          setSnackbar({
-            open: true,
-            message: 'Erro ao carregar leads. Por favor, tente novamente.',
-            severity: 'error'
-          });
-          setLoading(false);
+          setLastUpdate(new Date());
+          setIsInitialLoad(false);
+          setDataSource('cache'); // Voltar para cache nas próximas atualizações
         }
-      );
+      } catch (error) {
+        console.error("Erro ao carregar leads:", error);
+        setSnackbar({
+          open: true,
+          message: 'Erro ao carregar leads. Por favor, tente novamente.',
+          severity: 'error'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadLeads();
+  }, [dataSource, isInitialLoad]);
 
-      return () => unsubscribe();
-    } catch (error) {
-      console.error("Error setting up leads listener:", error);
-      setLoading(false);
-      setSnackbar({
-        open: true,
-        message: 'Erro ao configurar monitoramento de leads.',
-        severity: 'error'
-      });
+  // Funções para operações CRUD que mantêm o estado local atualizado
+  const syncLocalLeads = (leadId, newData = null, operation = 'update') => {
+    if (operation === 'delete') {
+      setLeads(currentLeads => currentLeads.filter(lead => lead.id !== leadId));
+    } else if (operation === 'update' && newData) {
+      setLeads(currentLeads => 
+        currentLeads.map(lead => 
+          lead.id === leadId ? { ...lead, ...newData } : lead
+        )
+      );
+    } else if (operation === 'add' && newData) {
+      setLeads(currentLeads => [newData, ...currentLeads]);
     }
-  }, []);
+  };
+
+  // Função para forçar atualização de dados do servidor
+  const handleRefreshData = () => {
+    setDataSource('server');
+  };
 
   const handleOpenDialog = (lead = null) => {
     if (lead) {
@@ -726,17 +775,35 @@ export default function CRM() {
 
       if (editingLead) {
         await updateDoc(doc(db, 'leads', editingLead.id), leadData);
+        
+        // Atualizar o estado local imediatamente
+        syncLocalLeads(editingLead.id, { 
+          ...leadData, 
+          id: editingLead.id, 
+          updatedAt: new Date() // Usamos uma data local para a UI
+        }, 'update');
+        
         setSnackbar({
           open: true,
           message: 'Lead atualizado com sucesso!',
           severity: 'success'
         });
       } else {
-        await addDoc(collection(db, 'leads'), {
+        // Ao adicionar um novo documento
+        const docRef = await addDoc(collection(db, 'leads'), {
           ...leadData,
           createdAt: serverTimestamp(),
           createdBy: currentUser.uid
         });
+        
+        // Atualizar o estado local imediatamente
+        syncLocalLeads(docRef.id, {
+          ...leadData,
+          id: docRef.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }, 'add');
+        
         setSnackbar({
           open: true,
           message: 'Lead criado com sucesso!',
@@ -759,6 +826,10 @@ export default function CRM() {
     if (window.confirm('Tem certeza que deseja excluir este lead?')) {
       try {
         await deleteDoc(doc(db, 'leads', leadId));
+        
+        // Atualizar o estado local imediatamente
+        syncLocalLeads(leadId, null, 'delete');
+        
         setSnackbar({
           open: true,
           message: 'Lead excluído com sucesso!',
@@ -786,14 +857,23 @@ export default function CRM() {
     window.open(`https://wa.me/55${formattedNumber}`, '_blank');
   };
 
-  // Add this new handler for inline status update
+  // Modificar handleStatusUpdate
   const handleStatusUpdate = async (leadId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'leads', leadId), {
+      const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
-      });
+      };
+      
+      await updateDoc(doc(db, 'leads', leadId), updateData);
+      
+      // Atualizar o estado local imediatamente
+      syncLocalLeads(leadId, {
+        ...updateData,
+        updatedAt: new Date() // Usamos uma data local para a UI
+      }, 'update');
+      
       setSnackbar({
         open: true,
         message: 'Status atualizado com sucesso!',
@@ -809,14 +889,23 @@ export default function CRM() {
     }
   };
 
-  // Add this new handler for turma updates
+  // Modificar handleTurmaUpdate
   const handleTurmaUpdate = async (leadId, newTurma) => {
     try {
-      await updateDoc(doc(db, 'leads', leadId), {
+      const updateData = {
         turmaAE: newTurma,
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
-      });
+      };
+      
+      await updateDoc(doc(db, 'leads', leadId), updateData);
+      
+      // Atualizar o estado local imediatamente
+      syncLocalLeads(leadId, {
+        ...updateData,
+        updatedAt: new Date() // Usamos uma data local para a UI
+      }, 'update');
+      
       setSnackbar({
         open: true,
         message: 'Turma atualizada com sucesso!',
@@ -843,7 +932,7 @@ export default function CRM() {
     setEditValue(formatDateForInput(value) || '');
   };
 
-  // Update handleSaveEdit
+  // Modificar handleSaveEdit
   const handleSaveEdit = async (leadId, field) => {
     try {
       const leadRef = doc(db, 'leads', leadId);
@@ -858,10 +947,18 @@ export default function CRM() {
         valueToSave = editValue;
       }
       
-      await updateDoc(leadRef, {
+      const updateData = {
         [field]: valueToSave,
         updatedAt: serverTimestamp(),
-      });
+      };
+      
+      await updateDoc(leadRef, updateData);
+      
+      // Atualizar o estado local imediatamente
+      syncLocalLeads(leadId, {
+        ...updateData,
+        updatedAt: new Date() // Usamos uma data local para a UI
+      }, 'update');
 
       setSnackbar({
         open: true,
@@ -943,16 +1040,33 @@ export default function CRM() {
           <Typography variant="h5" sx={{ color: '#000', fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>
             Gestão de Leads
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            size="small"
-            sx={{ height: '28px', fontSize: '0.8rem' }}
-          >
-            Novo Lead
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRefreshData}
+              size="small"
+              sx={{ height: '28px', fontSize: '0.8rem' }}
+            >
+              Atualizar
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              size="small"
+              sx={{ height: '28px', fontSize: '0.8rem' }}
+            >
+              Novo Lead
+            </Button>
+          </Box>
         </Box>
+        
+        {lastUpdate && (
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary', mb: 0.5, px: 0.25 }}>
+            Última atualização: {lastUpdate.toLocaleString()}
+          </Typography>
+        )}
         
         {/* Campo de pesquisa */}
         <Box sx={{ mb: 1, px: 0.25 }}>
