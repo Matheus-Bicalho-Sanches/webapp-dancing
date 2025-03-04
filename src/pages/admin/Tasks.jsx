@@ -172,7 +172,15 @@ export default function Tasks() {
           id: doc.id,
           ...doc.data()
         }));
-        setUsers(usersData);
+        
+        // Ordenar usuários alfabeticamente pelo nome
+        const sortedUsers = usersData.sort((a, b) => {
+          const nameA = (a.name || a.email || '').toLowerCase();
+          const nameB = (b.name || b.email || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        
+        setUsers(sortedUsers);
       } catch (error) {
         console.error('Erro ao carregar usuários:', error);
       }
