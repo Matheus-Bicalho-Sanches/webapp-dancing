@@ -32,6 +32,7 @@ import {
   Avatar,
   Tooltip,
   FormHelperText,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -95,6 +96,7 @@ export default function Tasks() {
   const [dailyTasksLoading, setDailyTasksLoading] = useState(true);
   const [openDailyDialog, setOpenDailyDialog] = useState(false);
   const [editingDailyTask, setEditingDailyTask] = useState(null);
+  const [showCompletedDailyTasks, setShowCompletedDailyTasks] = useState(false);
   const [dailyFormData, setDailyFormData] = useState({
     descricao: '',
     status: 'Pendente'
@@ -2358,7 +2360,18 @@ export default function Tasks() {
         {/* Aba de Tarefas Diárias */}
         {getCurrentTab() === 2 && (
           <>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showCompletedDailyTasks}
+                    onChange={(e) => setShowCompletedDailyTasks(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Mostrar tarefas finalizadas"
+                sx={{ color: '#000000' }}
+              />
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -2374,7 +2387,7 @@ export default function Tasks() {
               </Box>
             ) : (
               <TableContainer component={Paper}>
-                <Table>
+                <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell>Descrição</TableCell>
@@ -2383,7 +2396,9 @@ export default function Tasks() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dailyTasks.map((task) => (
+                    {dailyTasks
+                      .filter(task => showCompletedDailyTasks || task.status !== 'Finalizada')
+                      .map((task) => (
                       <TableRow key={task.id}>
                         <TableCell>{task.descricao}</TableCell>
                         <TableCell>
@@ -2908,7 +2923,7 @@ export default function Tasks() {
                 onChange={(e) => setDailyFormData({ ...dailyFormData, descricao: e.target.value })}
                 required
                 multiline
-                rows={2}
+                rows={4}
               />
 
               <FormControl fullWidth required>
