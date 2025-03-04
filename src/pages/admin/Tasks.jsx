@@ -2461,7 +2461,7 @@ export default function Tasks() {
               </Box>
             ) : (
               <TableContainer component={Paper}>
-                <Table>
+                <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell>Descrição</TableCell>
@@ -2469,7 +2469,11 @@ export default function Tasks() {
                       <TableCell>Feito em</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Observações</TableCell>
-                      <TableCell align="right">Ações</TableCell>
+                      <TableCell align="right" sx={{ minWidth: '100px' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          Ações
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2488,7 +2492,7 @@ export default function Tasks() {
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <Chip 
                                   label={selected} 
-                                  size="small" 
+                                  size="small"
                                   color={getStatusColorByName(selected)}
                                 />
                               </Box>
@@ -2503,22 +2507,24 @@ export default function Tasks() {
                         </TableCell>
                         <TableCell>{task.observacoes}</TableCell>
                         <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleOpenWeeklyDialog(task)}
-                            size="small"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          {hasDeletePermission && (
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                             <IconButton
-                              color="error"
-                              onClick={() => handleWeeklyDelete(task.id)}
+                              color="primary"
+                              onClick={() => handleOpenWeeklyDialog(task)}
                               size="small"
                             >
-                              <DeleteIcon />
+                              <EditIcon />
                             </IconButton>
-                          )}
+                            {hasDeletePermission && (
+                              <IconButton
+                                color="error"
+                                onClick={() => handleWeeklyDelete(task.id)}
+                                size="small"
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -2555,7 +2561,7 @@ export default function Tasks() {
               </Box>
             ) : (
               <TableContainer component={Paper}>
-                <Table>
+                <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell>Descrição</TableCell>
@@ -2563,7 +2569,11 @@ export default function Tasks() {
                       <TableCell>Feito em</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Observações</TableCell>
-                      <TableCell align="right">Ações</TableCell>
+                      <TableCell align="right" sx={{ minWidth: '100px' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          Ações
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2582,7 +2592,7 @@ export default function Tasks() {
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <Chip 
                                   label={selected} 
-                                  size="small" 
+                                  size="small"
                                   color={getStatusColorByName(selected)}
                                 />
                               </Box>
@@ -2597,22 +2607,24 @@ export default function Tasks() {
                         </TableCell>
                         <TableCell>{task.observacoes}</TableCell>
                         <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleOpenMonthlyDialog(task)}
-                            size="small"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          {hasDeletePermission && (
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                             <IconButton
-                              color="error"
-                              onClick={() => handleMonthlyDelete(task.id)}
+                              color="primary"
+                              onClick={() => handleOpenMonthlyDialog(task)}
                               size="small"
                             >
-                              <DeleteIcon />
+                              <EditIcon />
                             </IconButton>
-                          )}
+                            {hasDeletePermission && (
+                              <IconButton
+                                color="error"
+                                onClick={() => handleMonthlyDelete(task.id)}
+                                size="small"
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
