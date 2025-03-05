@@ -35,7 +35,8 @@ import {
   Assignment as AssignmentIcon,
   Close as CloseIcon,
   FilterList as FilterListIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  Groups as GroupsIcon
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -50,13 +51,15 @@ import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 import FinancialReport from '../../components/reports/FinancialReport';
 import TaskReport from '../../components/reports/TaskReport';
+import ClassReport from '../../components/reports/ClassReport';
 
 export default function Reports() {
   const [openDialog, setOpenDialog] = useState({
     matriculas: false,
     financeiro: false,
     frequencia: false,
-    tarefas: false
+    tarefas: false,
+    turmas: false
   });
   const [enrollmentData, setEnrollmentData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -203,6 +206,12 @@ export default function Reports() {
       title: 'Tarefas',
       icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
       color: '#9c27b0' // roxo
+    },
+    {
+      id: 'turmas',
+      title: 'Turmas',
+      icon: <GroupsIcon sx={{ fontSize: 40 }} />,
+      color: '#d32f2f' // vermelho
     }
   ];
 
@@ -648,6 +657,8 @@ export default function Reports() {
                 <FinancialReport />
               ) : category.id === 'tarefas' ? (
                 <TaskReport />
+              ) : category.id === 'turmas' ? (
+                <ClassReport />
               ) : (
                 <Typography>
                   Os relatórios de {category.title.toLowerCase()} serão implementados em breve.
