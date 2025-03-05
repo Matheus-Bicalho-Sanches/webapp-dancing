@@ -159,6 +159,11 @@ export default function Tasks() {
     ultimaExecucao: null
   });
 
+  // Estados
+  const [adminMasterUsers, setAdminMasterUsers] = useState([]);
+  const [masterTeacherUsers, setMasterTeacherUsers] = useState([]);
+  const [tabValue, setTabValue] = useState(0);
+
   // Verificar se o usuário tem permissão de master
   const hasDeletePermission = currentUser?.userType === 'master';
 
@@ -180,7 +185,19 @@ export default function Tasks() {
           return nameA.localeCompare(nameB);
         });
         
+        // Separar usuários administrativos e master
+        const administrativeAndMasterUsers = sortedUsers.filter(user => 
+          user.userType === 'administrative' || user.userType === 'master'
+        );
+        
+        // Separar usuários master e professor
+        const masterAndTeacherUsers = sortedUsers.filter(user => 
+          user.userType === 'master' || user.userType === 'teacher'
+        );
+        
         setUsers(sortedUsers);
+        setAdminMasterUsers(administrativeAndMasterUsers);
+        setMasterTeacherUsers(masterAndTeacherUsers);
       } catch (error) {
         console.error('Erro ao carregar usuários:', error);
       }
@@ -2257,7 +2274,7 @@ export default function Tasks() {
                 label="Filtrar por Responsável"
               >
                 <MenuItem value="all">Todos os responsáveis</MenuItem>
-                {users.map((user) => (
+                {adminMasterUsers.map((user) => (
                   <MenuItem key={user.id} value={user.id}>
                     {user.name || user.email}
                   </MenuItem>
@@ -3488,7 +3505,7 @@ export default function Tasks() {
                       label="Filtrar por Responsável"
                     >
                       <MenuItem value="all">Todos os responsáveis</MenuItem>
-                      {users.map((user) => (
+                      {masterTeacherUsers.map((user) => (
                         <MenuItem key={user.id} value={user.id}>
                           {user.name || user.email}
                         </MenuItem>
