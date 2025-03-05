@@ -396,10 +396,21 @@ export default function Reports() {
   const renderFilters = () => (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FilterListIcon />
-          Filtros
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FilterListIcon />
+            Filtros
+          </Typography>
+          {openDialog.matriculas && (
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintEnrollments}
+            >
+              Imprimir Relatório
+            </Button>
+          )}
+        </Box>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth size="small">
@@ -512,20 +523,6 @@ export default function Reports() {
 
     return (
       <>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FilterListIcon />
-            Filtros
-          </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrintEnrollments}
-            sx={{ ml: 2 }}
-          >
-            Imprimir Relatório
-          </Button>
-        </Box>
         {renderFilters()}
         <TableContainer component={Paper}>
           <Table>

@@ -159,10 +159,19 @@ export default function FinancialReport() {
   const renderFilters = () => (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FilterListIcon />
-          Filtros
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FilterListIcon />
+            Filtros
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={handlePrint}
+          >
+            Imprimir Relatório
+          </Button>
+        </Box>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={2}>
             <FormControl fullWidth size="small">
@@ -371,20 +380,6 @@ export default function FinancialReport() {
 
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FilterListIcon />
-          Filtros
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<PrintIcon />}
-          onClick={handlePrint}
-          sx={{ ml: 2 }}
-        >
-          Imprimir Relatório
-        </Button>
-      </Box>
       {renderFilters()}
       <TableContainer component={Paper}>
         <Table>
