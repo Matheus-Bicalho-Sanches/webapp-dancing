@@ -416,6 +416,7 @@ export default function Students() {
                           handleEditClick(student);
                         }}
                         size="small"
+                        color="primary"
                       >
                         <EditIcon />
                       </IconButton>

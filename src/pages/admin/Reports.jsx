@@ -283,6 +283,8 @@ export default function Reports() {
           return dayjs(b.dataInicio).diff(dayjs(a.dataInicio));
         case 'data_termino':
           return dayjs(b.dataTermino).diff(dayjs(a.dataTermino));
+        case 'alfabetica':
+          return a.nomeAluno.localeCompare(b.nomeAluno);
         default:
           return 0;
       }
@@ -490,6 +492,7 @@ export default function Reports() {
                 <MenuItem value="valor_desc">Valor (maior → menor)</MenuItem>
                 <MenuItem value="data_inicio">Data de Início</MenuItem>
                 <MenuItem value="data_termino">Data de Término</MenuItem>
+                <MenuItem value="alfabetica">Ordem alfabética</MenuItem>
               </Select>
             </FormControl>
           </Grid>

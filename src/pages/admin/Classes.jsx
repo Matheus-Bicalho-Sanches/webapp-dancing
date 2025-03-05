@@ -271,10 +271,10 @@ export default function Classes() {
                     <TableCell>{turma.horario}</TableCell>
                     <TableCell>{turma.horarioTermino}</TableCell>
                     <TableCell align="right">
-                      <IconButton onClick={() => handleOpenDialog(turma)}>
+                      <IconButton onClick={() => handleOpenDialog(turma)} color="primary">
                         <EditIcon />
                       </IconButton>
-                      <IconButton onClick={() => handleDelete(turma.id)}>
+                      <IconButton onClick={() => handleDelete(turma.id)} color="error">
                         <DeleteIcon />
                       </IconButton>
                     </TableCell>
@@ -361,7 +361,7 @@ export default function Classes() {
             <Button 
               onClick={handleSubmit} 
               variant="contained" 
-              disabled={loading || !formData.nome || !formData.dias || !formData.dias.length || !formData.horario || !formData.horarioTermino || error}
+              disabled={loading || !formData.nome || !formData.dias || !formData.dias.length || !formData.horario || !formData.horarioTermino || !!error}
             >
               {loading ? 'Salvando...' : 'Salvar'}
             </Button>
