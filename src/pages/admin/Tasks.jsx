@@ -3365,23 +3365,6 @@ export default function Tasks() {
                   value={technicalFormData.responsavel}
                   onChange={(e) => setTechnicalFormData({ ...technicalFormData, responsavel: e.target.value })}
                   label="Responsável"
-                  MenuProps={{
-                    PaperProps: {
-                      style: {
-                        maxHeight: 150, // Reduced height
-                        overflow: 'auto',
-                      },
-                    },
-                    // Control the positioning of the menu
-                    anchorOrigin: {
-                      vertical: 'bottom',
-                      horizontal: 'left',
-                    },
-                    transformOrigin: {
-                      vertical: 'top',
-                      horizontal: 'left',
-                    },
-                  }}
                   renderValue={(selected) => (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                       {selected.map((value) => (
@@ -3412,43 +3395,6 @@ export default function Tasks() {
                       fullWidth: true,
                       error: !technicalFormData.prazoLimite,
                       helperText: !technicalFormData.prazoLimite ? 'Prazo é obrigatório' : ''
-                    },
-                    // Customize popper to fit smaller screens
-                    popper: {
-                      sx: {
-                        // Make the calendar pop-up smaller
-                        '& .MuiPickersCalendarHeader-root': {
-                          paddingLeft: '8px',
-                          paddingRight: '8px',
-                          marginTop: '8px',
-                        },
-                        '& .MuiDayCalendar-header, & .MuiDayCalendar-weekContainer': {
-                          display: 'flex',
-                          justifyContent: 'space-around',
-                          paddingLeft: '8px',
-                          paddingRight: '8px',
-                        },
-                        '& .MuiPickersDay-root': {
-                          width: '32px',
-                          height: '32px',
-                          fontSize: '0.75rem',
-                        },
-                        // Ensure calendar is positioned properly within viewport
-                        '& .MuiPaper-root': {
-                          overflow: 'auto',
-                          maxHeight: '280px',
-                        }
-                      }
-                    },
-                    // Use mobile-friendly action bar
-                    actionBar: {
-                      actions: ['cancel', 'accept']
-                    },
-                    // Make day selection more compact
-                    day: {
-                      sx: {
-                        margin: '1px',
-                      }
                     }
                   }}
                   format="DD/MM/YYYY"

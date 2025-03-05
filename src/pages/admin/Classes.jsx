@@ -44,7 +44,8 @@ export default function Classes() {
   const [formData, setFormData] = useState({
     nome: '',
     dias: [],
-    horario: ''
+    horario: '',
+    horarioTermino: ''
   });
   const [editingId, setEditingId] = useState(null);
 
@@ -100,14 +101,16 @@ export default function Classes() {
       setFormData({
         nome: turma.nome,
         dias: turma.dias || [],
-        horario: turma.horario
+        horario: turma.horario,
+        horarioTermino: turma.horarioTermino
       });
       setEditingId(turma.id);
     } else {
       setFormData({
         nome: '',
         dias: [],
-        horario: ''
+        horario: '',
+        horarioTermino: ''
       });
       setEditingId(null);
     }
@@ -119,7 +122,8 @@ export default function Classes() {
     setFormData({
       nome: '',
       dias: [],
-      horario: ''
+      horario: '',
+      horarioTermino: ''
     });
     setEditingId(null);
     setError('');
@@ -133,9 +137,9 @@ export default function Classes() {
   };
 
   const handleInputChange = (field, value) => {
-    if (field === 'horario') {
+    if (field === 'horario' || field === 'horarioTermino') {
       if (!validateTime(value)) {
-        setError('O horário deve estar entre 06:00 e 20:00');
+        setError(`O ${field === 'horario' ? 'horário de início' : 'horário de término'} deve estar entre 06:00 e 20:00`);
       } else {
         setError('');
       }
@@ -154,7 +158,12 @@ export default function Classes() {
     }
 
     if (!validateTime(formData.horario)) {
-      setError('O horário deve estar entre 06:00 e 20:00');
+      setError('O horário de início deve estar entre 06:00 e 20:00');
+      return;
+    }
+
+    if (!validateTime(formData.horarioTermino)) {
+      setError('O horário de término deve estar entre 06:00 e 20:00');
       return;
     }
 
@@ -236,14 +245,15 @@ export default function Classes() {
               <TableRow>
                 <TableCell>Nome da Turma</TableCell>
                 <TableCell>Dias da Turma</TableCell>
-                <TableCell>Horário</TableCell>
+                <TableCell>Horário de início</TableCell>
+                <TableCell>Horário de término</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
@@ -259,6 +269,7 @@ export default function Classes() {
                       </Stack>
                     </TableCell>
                     <TableCell>{turma.horario}</TableCell>
+                    <TableCell>{turma.horarioTermino}</TableCell>
                     <TableCell align="right">
                       <IconButton onClick={() => handleOpenDialog(turma)}>
                         <EditIcon />
@@ -271,7 +282,7 @@ export default function Classes() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     Nenhuma turma cadastrada
                   </TableCell>
                 </TableRow>
@@ -315,11 +326,23 @@ export default function Classes() {
                 </Select>
               </FormControl>
               <TextField
-                label="Horário"
+                label="Horário de início"
                 type="time"
                 fullWidth
                 value={formData.horario}
                 onChange={(e) => handleInputChange('horario', e.target.value)}
+                inputProps={{
+                  min: '06:00',
+                  max: '20:00'
+                }}
+                helperText="Horário entre 06:00 e 20:00"
+              />
+              <TextField
+                label="Horário de término"
+                type="time"
+                fullWidth
+                value={formData.horarioTermino}
+                onChange={(e) => handleInputChange('horarioTermino', e.target.value)}
                 inputProps={{
                   min: '06:00',
                   max: '20:00'
@@ -338,7 +361,7 @@ export default function Classes() {
             <Button 
               onClick={handleSubmit} 
               variant="contained" 
-              disabled={loading || !formData.nome || !formData.dias || !formData.dias.length || !formData.horario || error}
+              disabled={loading || !formData.nome || !formData.dias || !formData.dias.length || !formData.horario || !formData.horarioTermino || error}
             >
               {loading ? 'Salvando...' : 'Salvar'}
             </Button>
