@@ -26,11 +26,13 @@ export function AuthProvider({ children }) {
       const userDocRef = doc(db, 'users', userCredential.user.uid);
       const userDoc = await getDoc(userDocRef);
       
+      let updatedUser = { ...userCredential.user };
+      
       if (userDoc.exists()) {
         const userData = userDoc.data();
         console.log('Dados do usuário encontrados:', userData);
         // Atualizar o currentUser com as informações do Firestore
-        const updatedUser = {
+        updatedUser = {
           ...userCredential.user,
           ...userData,
           id: userDoc.id
@@ -41,7 +43,7 @@ export function AuthProvider({ children }) {
         console.log('Documento do usuário não encontrado no Firestore');
       }
 
-      return userCredential;
+      return updatedUser;
     } catch (error) {
       console.error('Erro no login:', error);
       throw error;

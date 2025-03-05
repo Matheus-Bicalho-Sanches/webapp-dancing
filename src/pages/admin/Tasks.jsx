@@ -195,8 +195,9 @@ export default function Tasks() {
           user.userType === 'master' || user.userType === 'teacher'
         );
         
+        // Incluir usuários do tipo 'cleaning' nas filtragens apropriadas
         setUsers(sortedUsers);
-        setAdminMasterUsers(administrativeAndMasterUsers);
+        setAdminMasterUsers([...administrativeAndMasterUsers, ...sortedUsers.filter(user => user.userType === 'cleaning')]);
         setMasterTeacherUsers(masterAndTeacherUsers);
       } catch (error) {
         console.error('Erro ao carregar usuários:', error);

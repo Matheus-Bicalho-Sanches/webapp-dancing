@@ -59,7 +59,7 @@ const Sidebar = ({ open, onClose }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <HomeIcon />, path: '/admin/dashboard', allowedTypes: ['master', 'administrative'] },
-    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas', allowedTypes: ['master', 'administrative', 'teacher'] },
+    { text: 'Tarefas', icon: <AssignmentIcon />, path: '/admin/tarefas', allowedTypes: ['master', 'administrative', 'teacher', 'cleaning'] },
     { text: 'CRM', icon: <PeopleIcon />, path: '/admin/crm', allowedTypes: ['master', 'administrative', 'teacher'] },
     { text: 'Uniforme', icon: <CheckroomIcon />, path: '/admin/uniforme', allowedTypes: ['master', 'administrative', 'atelier'] },
     { text: 'Alunos', icon: <PersonIcon />, path: '/admin/alunos', allowedTypes: ['master', 'administrative'] },
@@ -69,7 +69,7 @@ const Sidebar = ({ open, onClose }) => {
     { text: 'Aulas Individuais', icon: <PersonIcon />, path: '/admin/aulas', allowedTypes: ['master', 'administrative', 'teacher'] },
     { text: 'Controle de Caixa', icon: <AttachMoneyIcon />, path: '/admin/caixa', allowedTypes: ['master', 'administrative'] },
     { text: 'Relatórios', icon: <AssignmentIcon />, path: '/admin/relatorios', allowedTypes: ['master', 'administrative'] },
-    { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios', allowedTypes: ['master', 'administrative', 'teacher', 'atelier'] },
+    { text: 'Usuários', icon: <PersonIcon />, path: '/admin/usuarios', allowedTypes: ['master', 'administrative', 'teacher', 'atelier', 'cleaning'] },
     { text: 'Cantina', icon: <RestaurantIcon />, path: '/admin/cantina', allowedTypes: ['master', 'administrative'] }
   ];
 

@@ -24,6 +24,12 @@ service cloud.firestore {
       return userDoc != null && userDoc.data.userType == 'atelier';
     }
     
+    // Função auxiliar para verificar se o usuário é do tipo limpeza
+    function isCleaningUser(userId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(userId));
+      return userDoc != null && userDoc.data.userType == 'cleaning';
+    }
+    
     // Função auxiliar para verificar se o usuário atual é master
     function isCurrentUserMaster() {
       return isAuthenticated() && isMasterUser(request.auth.uid);
@@ -39,6 +45,12 @@ service cloud.firestore {
     function isCurrentUserMasterOrAdminOrAtelier() {
       return isAuthenticated() && 
         (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid) || isAtelierUser(request.auth.uid));
+    }
+    
+    // Função auxiliar para verificar se o usuário atual pode gerenciar tarefas
+    function canManageTasks() {
+      return isAuthenticated() && 
+        (isMasterUser(request.auth.uid) || isAdministrativeUser(request.auth.uid) || isCleaningUser(request.auth.uid));
     }
 
     // Regras para a coleção users
@@ -117,42 +129,42 @@ service cloud.firestore {
     // Regras para a coleção tarefas
     match /tarefas/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção tarefas_diarias
     match /tarefas_diarias/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção tarefas_semanais
     match /tarefas_semanais/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção tarefas_mensais
     match /tarefas_mensais/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção tarefas_tecnicas
     match /tarefas_tecnicas/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
     // Regras para a coleção tarefas_por_horario
     match /tarefas_por_horario/{tarefaId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      allow create, update: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
       allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
     
@@ -196,8 +208,8 @@ service cloud.firestore {
       // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação/atualização/exclusão para master ou administrativo
-      allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+      // Permitir criação/atualização/exclusão para master, administrativo ou limpeza
+      allow write: if isAuthenticated() && (isCurrentUserMasterOrAdmin() || isCleaningUser(request.auth.uid));
     }
 
     // Regras para a coleção leads

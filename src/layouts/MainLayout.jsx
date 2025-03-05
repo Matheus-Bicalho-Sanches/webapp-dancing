@@ -141,7 +141,7 @@ export default function MainLayout({ children, title }) {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/agendar');
+      navigate('/');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     }

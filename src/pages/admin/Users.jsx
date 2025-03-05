@@ -35,7 +35,8 @@ const USER_TYPES = {
   master: 'Master',
   administrative: 'Administrativo',
   teacher: 'Professor',
-  atelier: 'Ateliê'
+  atelier: 'Ateliê',
+  cleaning: 'Limpeza'
 };
 
 export default function Users() {

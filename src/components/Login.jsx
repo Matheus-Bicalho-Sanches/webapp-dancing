@@ -14,15 +14,23 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     try {
       setError('');
-      await login(email, password);
-      navigate('/admin/dashboard');
+      const user = await login(email, password);
+      
+      // Redirect based on user type
+      if (user.userType === 'teacher' || user.userType === 'cleaning') {
+        navigate('/admin/tarefas');
+      } else if (user.userType === 'atelier') {
+        navigate('/admin/uniforme');
+      } else {
+        navigate('/admin/dashboard');
+      }
     } catch (error) {
       setError('Falha ao fazer login. Verifique suas credenciais.');
     }
