@@ -796,6 +796,17 @@ export default function CRM() {
           updatedAt: new Date() // Usamos uma data local para a UI
         }, 'update');
         
+        // Criar log para atualização de lead
+        await createLogEntry('update', {
+          ...leadData,
+          id: editingLead.id,
+          nome: leadData.nome || editingLead.nome
+        }, {
+          previousData: editingLead,
+          newData: leadData,
+          message: 'Lead atualizado'
+        });
+        
         setSnackbar({
           open: true,
           message: 'Lead atualizado com sucesso!',
@@ -810,12 +821,22 @@ export default function CRM() {
         });
         
         // Atualizar o estado local imediatamente
-        syncLocalLeads(docRef.id, {
+        const newLeadData = {
           ...leadData,
           id: docRef.id,
           createdAt: new Date(),
           updatedAt: new Date()
-        }, 'add');
+        };
+        
+        syncLocalLeads(docRef.id, newLeadData, 'add');
+        
+        // Criar log para criação de lead
+        await createLogEntry('create', {
+          ...newLeadData,
+          nome: leadData.nome
+        }, {
+          message: 'Novo lead criado'
+        });
         
         setSnackbar({
           open: true,
@@ -838,10 +859,20 @@ export default function CRM() {
   const handleDelete = async (leadId) => {
     if (window.confirm('Tem certeza que deseja excluir este lead?')) {
       try {
+        // Buscar os dados do lead antes de excluir
+        const leadToDelete = leads.find(lead => lead.id === leadId);
+        
         await deleteDoc(doc(db, 'leads', leadId));
         
         // Atualizar o estado local imediatamente
         syncLocalLeads(leadId, null, 'delete');
+        
+        // Criar log para exclusão de lead
+        if (leadToDelete) {
+          await createLogEntry('delete', leadToDelete, {
+            message: `Lead excluído: ${leadToDelete.nome || 'Lead sem nome'}`
+          });
+        }
         
         setSnackbar({
           open: true,
@@ -882,6 +913,10 @@ export default function CRM() {
   // Modificar handleStatusUpdate
   const handleStatusUpdate = async (leadId, newStatus) => {
     try {
+      // Buscar o lead atual para registrar o status anterior
+      const leadToUpdate = leads.find(lead => lead.id === leadId);
+      const oldStatus = leadToUpdate?.status || '';
+      
       const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp(),
@@ -895,6 +930,18 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
+      
+      // Criar log para alteração de status
+      if (leadToUpdate) {
+        await createLogEntry('status_change', {
+          ...leadToUpdate,
+          status: newStatus // Status atualizado
+        }, {
+          oldStatus: oldStatus,
+          newStatus: newStatus,
+          message: `Status alterado de '${oldStatus || 'Não definido'}' para '${newStatus}'`
+        });
+      }
       
       setSnackbar({
         open: true,
@@ -914,6 +961,10 @@ export default function CRM() {
   // Modificar handleTurmaUpdate
   const handleTurmaUpdate = async (leadId, newTurma) => {
     try {
+      // Buscar o lead atual para registrar a turma anterior
+      const leadToUpdate = leads.find(lead => lead.id === leadId);
+      const oldTurma = leadToUpdate?.turmaAE || '';
+      
       const updateData = {
         turmaAE: newTurma,
         updatedAt: serverTimestamp(),
@@ -927,6 +978,18 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
+      
+      // Criar log para alteração de turma
+      if (leadToUpdate) {
+        await createLogEntry('turma_change', {
+          ...leadToUpdate,
+          turmaAE: newTurma // Turma atualizada
+        }, {
+          oldTurma: oldTurma,
+          newTurma: newTurma,
+          message: `Turma alterada de '${oldTurma || 'Não definida'}' para '${newTurma || 'Não definida'}'`
+        });
+      }
       
       setSnackbar({
         open: true,
@@ -958,6 +1021,8 @@ export default function CRM() {
   const handleSaveEdit = async (leadId, field) => {
     try {
       const leadRef = doc(db, 'leads', leadId);
+      const leadToUpdate = leads.find(lead => lead.id === leadId);
+      const oldValue = leadToUpdate ? leadToUpdate[field] : null;
       
       // Tratamento diferenciado conforme o tipo de campo
       let valueToSave;
@@ -981,6 +1046,30 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
+      
+      // Criar log para edição de campo
+      if (leadToUpdate) {
+        // Definir uma mensagem amigável para o campo
+        let fieldName = field;
+        switch(field) {
+          case 'ultimoContato': fieldName = 'Último contato'; break;
+          case 'proximoContato': fieldName = 'Próximo contato'; break;
+          case 'dataAE': fieldName = 'Data da aula experimental'; break;
+          case 'observacoes': fieldName = 'Observações'; break;
+          case 'origemLead': fieldName = 'Origem do lead'; break;
+          default: fieldName = field.charAt(0).toUpperCase() + field.slice(1);
+        }
+        
+        await createLogEntry('field_update', {
+          ...leadToUpdate,
+          [field]: valueToSave // Campo atualizado
+        }, {
+          field: fieldName,
+          oldValue: oldValue,
+          newValue: valueToSave,
+          message: `Campo "${fieldName}" atualizado`
+        });
+      }
 
       setSnackbar({
         open: true,
@@ -1152,12 +1241,12 @@ export default function CRM() {
     }
   };
   
-  // Carregar logs quando a aba de logs for aberta
+  // Efeito para carregar logs quando necessário
   useEffect(() => {
-    if (showLogs) {
+    if (showLogs && currentUser) {
       loadLogs();
     }
-  }, [showLogs, logFilter]);
+  }, [showLogs, currentUser, logFilter]);
 
   // Funções para navegação entre páginas de logs
   const handleLogPageChange = (event, newPage) => {
@@ -1174,6 +1263,33 @@ export default function CRM() {
     const startIndex = logPage * logRowsPerPage;
     return logs.slice(startIndex, startIndex + logRowsPerPage);
   }, [logs, logPage, logRowsPerPage]);
+
+  // Função para registrar logs nas operações com leads
+  const createLogEntry = async (action, leadData, details = {}) => {
+    try {
+      if (!currentUser) return;
+      
+      const logData = {
+        action: action, // 'create', 'update', 'delete', 'status_change', etc.
+        leadId: leadData.id,
+        leadName: leadData.nome || 'Lead sem nome',
+        userId: currentUser.uid,
+        userName: currentUser.name || currentUser.email || 'Usuário desconhecido',
+        timestamp: serverTimestamp(),
+        details: details
+      };
+      
+      await addDoc(collection(db, 'logs'), logData);
+      
+      // Atualizar a lista de logs se a aba estiver visível
+      if (showLogs) {
+        loadLogs();
+      }
+    } catch (error) {
+      console.error('Erro ao criar log:', error);
+      // Não exibimos mensagem de erro para o usuário, pois é uma operação em segundo plano
+    }
+  };
 
   if (loading) {
     return (
