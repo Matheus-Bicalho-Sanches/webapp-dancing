@@ -158,27 +158,59 @@ export default function CRM() {
   // Add date conversion helpers
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
+    
+    // Add debugging to see what type of value we're receiving
+    console.log('formatDateForInput received:', dateString, 'Type:', typeof dateString);
+    
+    if (typeof dateString === 'number') {
+      // If it's a raw number (like a timestamp in milliseconds)
+      console.log('Converting number to date:', dateString);
+      try {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          return format(date, 'yyyy-MM-dd');
+        } else {
+          console.warn('Invalid date from number:', dateString);
+          return '';
+        }
+      } catch (error) {
+        console.error('Error converting number to date:', error);
+        return '';
+      }
+    }
+    
     try {
       let date;
       
       // Se for um timestamp do Firestore (objeto com seconds e nanoseconds)
       if (dateString && typeof dateString === 'object' && dateString.seconds !== undefined) {
         date = new Date(dateString.seconds * 1000);
+        console.log('Converting Firestore timestamp to date:', date);
       }
       // Se for um timestamp ISO ou string de data
       else if (typeof dateString === 'string') {
-        date = new Date(dateString);
+        // Check if it's a numeric string that might be a timestamp
+        if (/^\d+(\.\d+)?$/.test(dateString)) {
+          console.log('Converting numeric string to date:', dateString);
+          date = new Date(parseFloat(dateString));
+        } else {
+          console.log('Converting date string to date:', dateString);
+          date = new Date(dateString);
+        }
       }
       // Se for um Date object
       else if (dateString instanceof Date) {
         date = dateString;
+        console.log('Already a Date object:', date);
       }
       // Se for um objeto com formato de data personalizado
       else if (dateString && typeof dateString === 'object') {
         if (dateString.toDate && typeof dateString.toDate === 'function') {
           date = dateString.toDate();
+          console.log('Converting object with toDate() to date:', date);
         } else if (dateString.ISO) {
           date = new Date(dateString.ISO);
+          console.log('Converting object with ISO to date:', date);
         } else {
           console.warn('Formato de data não reconhecido para input:', dateString);
           return '';
@@ -194,7 +226,9 @@ export default function CRM() {
         return '';
       }
       
-      return format(date, 'yyyy-MM-dd');
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      console.log('Formatted date for input:', formattedDate);
+      return formattedDate;
     } catch (error) {
       console.error('Error formatting date for input:', error, 'Value:', dateString);
       return '';
@@ -663,9 +697,9 @@ export default function CRM() {
         nome: lead.nome,
         status: lead.status,
         whatsapp: lead.whatsapp,
-        ultimoContato: lead.ultimoContato || '',
-        proximoContato: lead.proximoContato || '',
-        dataAE: lead.dataAE || '',
+        ultimoContato: formatDateForInput(lead.ultimoContato),
+        proximoContato: formatDateForInput(lead.proximoContato),
+        dataAE: formatDateForInput(lead.dataAE),
         turmaAE: lead.turmaAE || '',
         observacoes: lead.observacoes || '',
         origemLead: lead.origemLead || ''
@@ -796,17 +830,6 @@ export default function CRM() {
           updatedAt: new Date() // Usamos uma data local para a UI
         }, 'update');
         
-        // Criar log para atualização de lead
-        await createLogEntry('update', {
-          ...leadData,
-          id: editingLead.id,
-          nome: leadData.nome || editingLead.nome
-        }, {
-          previousData: editingLead,
-          newData: leadData,
-          message: 'Lead atualizado'
-        });
-        
         setSnackbar({
           open: true,
           message: 'Lead atualizado com sucesso!',
@@ -821,22 +844,12 @@ export default function CRM() {
         });
         
         // Atualizar o estado local imediatamente
-        const newLeadData = {
+        syncLocalLeads(docRef.id, {
           ...leadData,
           id: docRef.id,
           createdAt: new Date(),
           updatedAt: new Date()
-        };
-        
-        syncLocalLeads(docRef.id, newLeadData, 'add');
-        
-        // Criar log para criação de lead
-        await createLogEntry('create', {
-          ...newLeadData,
-          nome: leadData.nome
-        }, {
-          message: 'Novo lead criado'
-        });
+        }, 'add');
         
         setSnackbar({
           open: true,
@@ -859,20 +872,10 @@ export default function CRM() {
   const handleDelete = async (leadId) => {
     if (window.confirm('Tem certeza que deseja excluir este lead?')) {
       try {
-        // Buscar os dados do lead antes de excluir
-        const leadToDelete = leads.find(lead => lead.id === leadId);
-        
         await deleteDoc(doc(db, 'leads', leadId));
         
         // Atualizar o estado local imediatamente
         syncLocalLeads(leadId, null, 'delete');
-        
-        // Criar log para exclusão de lead
-        if (leadToDelete) {
-          await createLogEntry('delete', leadToDelete, {
-            message: `Lead excluído: ${leadToDelete.nome || 'Lead sem nome'}`
-          });
-        }
         
         setSnackbar({
           open: true,
@@ -913,10 +916,6 @@ export default function CRM() {
   // Modificar handleStatusUpdate
   const handleStatusUpdate = async (leadId, newStatus) => {
     try {
-      // Buscar o lead atual para registrar o status anterior
-      const leadToUpdate = leads.find(lead => lead.id === leadId);
-      const oldStatus = leadToUpdate?.status || '';
-      
       const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp(),
@@ -930,18 +929,6 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
-      
-      // Criar log para alteração de status
-      if (leadToUpdate) {
-        await createLogEntry('status_change', {
-          ...leadToUpdate,
-          status: newStatus // Status atualizado
-        }, {
-          oldStatus: oldStatus,
-          newStatus: newStatus,
-          message: `Status alterado de '${oldStatus || 'Não definido'}' para '${newStatus}'`
-        });
-      }
       
       setSnackbar({
         open: true,
@@ -961,10 +948,6 @@ export default function CRM() {
   // Modificar handleTurmaUpdate
   const handleTurmaUpdate = async (leadId, newTurma) => {
     try {
-      // Buscar o lead atual para registrar a turma anterior
-      const leadToUpdate = leads.find(lead => lead.id === leadId);
-      const oldTurma = leadToUpdate?.turmaAE || '';
-      
       const updateData = {
         turmaAE: newTurma,
         updatedAt: serverTimestamp(),
@@ -978,18 +961,6 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
-      
-      // Criar log para alteração de turma
-      if (leadToUpdate) {
-        await createLogEntry('turma_change', {
-          ...leadToUpdate,
-          turmaAE: newTurma // Turma atualizada
-        }, {
-          oldTurma: oldTurma,
-          newTurma: newTurma,
-          message: `Turma alterada de '${oldTurma || 'Não definida'}' para '${newTurma || 'Não definida'}'`
-        });
-      }
       
       setSnackbar({
         open: true,
@@ -1020,20 +991,63 @@ export default function CRM() {
   // Modificar handleSaveEdit
   const handleSaveEdit = async (leadId, field) => {
     try {
-      const leadRef = doc(db, 'leads', leadId);
-      const leadToUpdate = leads.find(lead => lead.id === leadId);
-      const oldValue = leadToUpdate ? leadToUpdate[field] : null;
+      // Get the lead from local state
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) {
+        console.error('Lead not found:', leadId);
+        setEditingCell(null);
+        setEditValue('');
+        return;
+      }
       
       // Tratamento diferenciado conforme o tipo de campo
       let valueToSave;
       if (['ultimoContato', 'proximoContato', 'dataAE'].includes(field)) {
         // Formata como data apenas os campos que são datas
         valueToSave = formatDateForSave(editValue);
+        
+        // Get the original value
+        const originalValue = lead[field];
+        
+        // Check if the values are effectively the same
+        let noChange = false;
+        
+        // If both are null/empty, no change
+        if ((!valueToSave && !originalValue) || 
+            (valueToSave === '' && !originalValue) ||
+            (!valueToSave && originalValue === '')) {
+          noChange = true;
+        } 
+        // If both exist, compare them
+        else if (valueToSave && originalValue) {
+          // If it's a Firestore Timestamp, convert to milliseconds for comparison
+          const originalTime = originalValue.toDate ? originalValue.toDate().getTime() : new Date(originalValue).getTime();
+          const newTime = valueToSave.toDate ? valueToSave.toDate().getTime() : new Date(valueToSave).getTime();
+          
+          // Compare the timestamps (ignoring milliseconds which are insignificant)
+          noChange = Math.floor(originalTime / 1000) === Math.floor(newTime / 1000);
+        }
+        
+        if (noChange) {
+          console.log(`No changes detected in ${field}, skipping update`);
+          setEditingCell(null);
+          setEditValue('');
+          return;
+        }
       } else {
         // Para campos de texto, usa o valor como está
         valueToSave = editValue;
+        
+        // Skip update if no changes
+        if (valueToSave === lead[field]) {
+          console.log(`No changes in ${field}, skipping update`);
+          setEditingCell(null);
+          setEditValue('');
+          return;
+        }
       }
       
+      const leadRef = doc(db, 'leads', leadId);
       const updateData = {
         [field]: valueToSave,
         updatedAt: serverTimestamp(),
@@ -1046,30 +1060,6 @@ export default function CRM() {
         ...updateData,
         updatedAt: new Date() // Usamos uma data local para a UI
       }, 'update');
-      
-      // Criar log para edição de campo
-      if (leadToUpdate) {
-        // Definir uma mensagem amigável para o campo
-        let fieldName = field;
-        switch(field) {
-          case 'ultimoContato': fieldName = 'Último contato'; break;
-          case 'proximoContato': fieldName = 'Próximo contato'; break;
-          case 'dataAE': fieldName = 'Data da aula experimental'; break;
-          case 'observacoes': fieldName = 'Observações'; break;
-          case 'origemLead': fieldName = 'Origem do lead'; break;
-          default: fieldName = field.charAt(0).toUpperCase() + field.slice(1);
-        }
-        
-        await createLogEntry('field_update', {
-          ...leadToUpdate,
-          [field]: valueToSave // Campo atualizado
-        }, {
-          field: fieldName,
-          oldValue: oldValue,
-          newValue: valueToSave,
-          message: `Campo "${fieldName}" atualizado`
-        });
-      }
 
       setSnackbar({
         open: true,
@@ -1241,12 +1231,12 @@ export default function CRM() {
     }
   };
   
-  // Efeito para carregar logs quando necessário
+  // Carregar logs quando a aba de logs for aberta
   useEffect(() => {
-    if (showLogs && currentUser) {
+    if (showLogs) {
       loadLogs();
     }
-  }, [showLogs, currentUser, logFilter]);
+  }, [showLogs, logFilter]);
 
   // Funções para navegação entre páginas de logs
   const handleLogPageChange = (event, newPage) => {
@@ -1263,33 +1253,6 @@ export default function CRM() {
     const startIndex = logPage * logRowsPerPage;
     return logs.slice(startIndex, startIndex + logRowsPerPage);
   }, [logs, logPage, logRowsPerPage]);
-
-  // Função para registrar logs nas operações com leads
-  const createLogEntry = async (action, leadData, details = {}) => {
-    try {
-      if (!currentUser) return;
-      
-      const logData = {
-        action: action, // 'create', 'update', 'delete', 'status_change', etc.
-        leadId: leadData.id,
-        leadName: leadData.nome || 'Lead sem nome',
-        userId: currentUser.uid,
-        userName: currentUser.name || currentUser.email || 'Usuário desconhecido',
-        timestamp: serverTimestamp(),
-        details: details
-      };
-      
-      await addDoc(collection(db, 'logs'), logData);
-      
-      // Atualizar a lista de logs se a aba estiver visível
-      if (showLogs) {
-        loadLogs();
-      }
-    } catch (error) {
-      console.error('Erro ao criar log:', error);
-      // Não exibimos mensagem de erro para o usuário, pois é uma operação em segundo plano
-    }
-  };
 
   if (loading) {
     return (
@@ -1718,21 +1681,7 @@ export default function CRM() {
                               autoFocus
                               size="small"
                               InputProps={{
-                                style: { fontSize: '0.875rem' },
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    <IconButton
-                                      size="small"
-                                      edge="end"
-                                      onClick={(e) => e.stopPropagation()}
-                                      sx={{ padding: 0 }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-                                        <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
-                                      </svg>
-                                    </IconButton>
-                                  </InputAdornment>
-                                )
+                                style: { fontSize: '0.875rem' }
                               }}
                             />
                           ) : (
@@ -1761,21 +1710,7 @@ export default function CRM() {
                               autoFocus
                               size="small"
                               InputProps={{
-                                style: { fontSize: '0.875rem' },
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    <IconButton
-                                      size="small"
-                                      edge="end"
-                                      onClick={(e) => e.stopPropagation()}
-                                      sx={{ padding: 0 }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-                                        <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
-                                      </svg>
-                                    </IconButton>
-                                  </InputAdornment>
-                                )
+                                style: { fontSize: '0.875rem' }
                               }}
                             />
                           ) : (
@@ -1803,21 +1738,7 @@ export default function CRM() {
                               autoFocus
                               size="small"
                               InputProps={{
-                                style: { fontSize: '0.875rem' },
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    <IconButton
-                                      size="small"
-                                      edge="end"
-                                      onClick={(e) => e.stopPropagation()}
-                                      sx={{ padding: 0 }}
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-                                        <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
-                                      </svg>
-                                    </IconButton>
-                                  </InputAdornment>
-                                )
+                                style: { fontSize: '0.875rem' }
                               }}
                             />
                           ) : (
