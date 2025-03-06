@@ -56,6 +56,172 @@ import { ptBR } from 'date-fns/locale';
 import dayjs from 'dayjs';
 import { where, limit } from 'firebase/firestore';
 
+// Custom DateInput component that accepts dd-mm-yy format
+function CustomDateInput({ label, value, onChange, required, autoFocus, InputProps, ...props }) {
+  const [displayValue, setDisplayValue] = useState('');
+  
+  // Convert yyyy-MM-dd to dd-mm-yy when component mounts or value changes
+  useEffect(() => {
+    if (value) {
+      try {
+        const dateParts = value.split('-');
+        if (dateParts.length === 3) {
+          const year = dateParts[0];
+          const month = dateParts[1];
+          const day = dateParts[2];
+          
+          // Use last 2 digits of year
+          const shortYear = year.slice(2);
+          setDisplayValue(`${day}-${month}-${shortYear}`);
+        } else {
+          setDisplayValue(value);
+        }
+      } catch (e) {
+        console.error('Error formatting date for display:', e);
+        setDisplayValue(value);
+      }
+    } else {
+      setDisplayValue('');
+    }
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const inputValue = e.target.value;
+    setDisplayValue(inputValue);
+    
+    // Try to parse the dd-mm-yy input to yyyy-MM-dd format
+    if (inputValue) {
+      try {
+        const regex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+        const match = inputValue.match(regex);
+        
+        if (match) {
+          const day = match[1].padStart(2, '0');
+          const month = match[2].padStart(2, '0');
+          let year = match[3];
+          
+          // Convert 2-digit year to 4-digit (20xx)
+          if (year.length === 2) {
+            year = '20' + year;
+          }
+          
+          // Call original onChange with yyyy-MM-dd format
+          onChange({ target: { value: `${year}-${month}-${day}` } });
+        } else {
+          // Pass the raw value if it doesn't match the expected format
+          onChange({ target: { value: inputValue } });
+        }
+      } catch (e) {
+        console.error('Error parsing date input:', e);
+        onChange({ target: { value: inputValue } });
+      }
+    } else {
+      // Handle empty input
+      onChange({ target: { value: '' } });
+    }
+  };
+  
+  return (
+    <TextField
+      label={label}
+      value={displayValue}
+      onChange={handleChange}
+      placeholder="dd-mm-yy"
+      required={required}
+      autoFocus={autoFocus}
+      InputProps={{
+        ...InputProps,
+      }}
+      InputLabelProps={{ shrink: true }}
+      {...props}
+    />
+  );
+}
+
+// Custom inline date editor component for the table cells
+function CustomDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }) {
+  const [displayValue, setDisplayValue] = useState('');
+  
+  // Initialize with the input value in dd-mm-yy format
+  useEffect(() => {
+    if (value) {
+      try {
+        const dateParts = value.split('-');
+        if (dateParts.length === 3) {
+          const year = dateParts[0];
+          const month = dateParts[1];
+          const day = dateParts[2];
+          
+          // Use last 2 digits of year
+          const shortYear = year.slice(2);
+          setDisplayValue(`${day}-${month}-${shortYear}`);
+        } else {
+          setDisplayValue(value);
+        }
+      } catch (e) {
+        console.error('Error formatting date for inline editor:', e);
+        setDisplayValue(value);
+      }
+    } else {
+      setDisplayValue('');
+    }
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const inputValue = e.target.value;
+    setDisplayValue(inputValue);
+    
+    // Parse the input to the expected format
+    if (inputValue) {
+      try {
+        const regex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+        const match = inputValue.match(regex);
+        
+        if (match) {
+          const day = match[1].padStart(2, '0');
+          const month = match[2].padStart(2, '0');
+          let year = match[3];
+          
+          // Convert 2-digit year to 4-digit (20xx)
+          if (year.length === 2) {
+            year = '20' + year;
+          }
+          
+          // Call original onChange with yyyy-MM-dd format
+          onChange({ target: { value: `${year}-${month}-${day}` } });
+        } else {
+          // Pass the raw value if it doesn't match the expected format
+          onChange({ target: { value: inputValue } });
+        }
+      } catch (e) {
+        console.error('Error parsing date for inline editor:', e);
+        onChange({ target: { value: inputValue } });
+      }
+    } else {
+      // Handle empty input
+      onChange({ target: { value: '' } });
+    }
+  };
+  
+  return (
+    <TextField
+      fullWidth
+      variant="standard"
+      value={displayValue}
+      onChange={handleChange}
+      onKeyDown={onKeyDown}
+      onBlur={onBlur}
+      autoFocus
+      placeholder="dd-mm-yy"
+      size="small"
+      InputProps={{
+        style: { fontSize: '0.875rem' }
+      }}
+      {...props}
+    />
+  );
+}
+
 // Adicionar uma constante para o número de linhas a serem exibidas por página
 const ROWS_PER_PAGE = 50;
 
@@ -1670,19 +1836,11 @@ export default function CRM() {
                         </TableCell>
                         <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                           {editingCell === lead.id ? (
-                            <TextField
-                              type="date"
-                              fullWidth
-                              variant="standard"
+                            <CustomDateInlineEditor
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={(e) => handleSaveEdit(lead.id, 'ultimoContato')}
                               onKeyDown={(e) => handleKeyPress(e, lead.id, 'ultimoContato')}
-                              onBlur={() => handleSaveEdit(lead.id, 'ultimoContato')}
-                              autoFocus
-                              size="small"
-                              InputProps={{
-                                style: { fontSize: '0.875rem' }
-                              }}
                             />
                           ) : (
                             <Box
@@ -1699,19 +1857,11 @@ export default function CRM() {
                         </TableCell>
                         <TableCell sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                           {editingCell === `${lead.id}-prox` ? (
-                            <TextField
-                              type="date"
-                              fullWidth
-                              variant="standard"
+                            <CustomDateInlineEditor
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={(e) => handleSaveEdit(lead.id, 'proximoContato')}
                               onKeyDown={(e) => handleKeyPress(e, lead.id, 'proximoContato')}
-                              onBlur={() => handleSaveEdit(lead.id, 'proximoContato')}
-                              autoFocus
-                              size="small"
-                              InputProps={{
-                                style: { fontSize: '0.875rem' }
-                              }}
                             />
                           ) : (
                             <Box
@@ -1727,19 +1877,11 @@ export default function CRM() {
                         </TableCell>
                         <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                           {editingCell === `${lead.id}-ae` ? (
-                            <TextField
-                              type="date"
-                              fullWidth
-                              variant="standard"
+                            <CustomDateInlineEditor
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={(e) => handleSaveEdit(lead.id, 'dataAE')}
                               onKeyDown={(e) => handleKeyPress(e, lead.id, 'dataAE')}
-                              onBlur={() => handleSaveEdit(lead.id, 'dataAE')}
-                              autoFocus
-                              size="small"
-                              InputProps={{
-                                style: { fontSize: '0.875rem' }
-                              }}
                             />
                           ) : (
                             <Box
@@ -2079,31 +2221,25 @@ export default function CRM() {
                 required
               />
 
-              <TextField
+              <CustomDateInput
                 fullWidth
                 label="Último Contato"
-                type="date"
                 value={formData.ultimoContato}
                 onChange={(e) => setFormData({ ...formData, ultimoContato: e.target.value })}
-                InputLabelProps={{ shrink: true }}
               />
 
-              <TextField
+              <CustomDateInput
                 fullWidth
                 label="Próximo Contato"
-                type="date"
                 value={formData.proximoContato}
                 onChange={(e) => setFormData({ ...formData, proximoContato: e.target.value })}
-                InputLabelProps={{ shrink: true }}
               />
 
-              <TextField
+              <CustomDateInput
                 fullWidth
                 label="Data da Aula Experimental"
-                type="date"
                 value={formData.dataAE}
                 onChange={(e) => setFormData({ ...formData, dataAE: e.target.value })}
-                InputLabelProps={{ shrink: true }}
               />
 
               <FormControl fullWidth>
