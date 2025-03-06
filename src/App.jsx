@@ -173,7 +173,7 @@ function App() {
           } />
           
           {/* Redirecionamentos */}
-          <Route path="/" element={<Navigate to="/agendar" />} />
+          <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/admin" element={<Navigate to="/admin/dashboard" />} />
           <Route path="/schedule" element={<AppointmentBooking />} />
           <Route path="/success" element={<PaymentSuccess />} />
