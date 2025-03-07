@@ -107,6 +107,7 @@ export default function Tasks() {
   const [weeklyTasksLoading, setWeeklyTasksLoading] = useState(true);
   const [openWeeklyDialog, setOpenWeeklyDialog] = useState(false);
   const [editingWeeklyTask, setEditingWeeklyTask] = useState(null);
+  const [showCompletedWeeklyTasks, setShowCompletedWeeklyTasks] = useState(false);
   const [weeklyFormData, setWeeklyFormData] = useState({
     descricao: '',
     diaDaSemana: 1, // 1-7 (Segunda a Domingo)
@@ -120,6 +121,7 @@ export default function Tasks() {
   const [monthlyTasksLoading, setMonthlyTasksLoading] = useState(true);
   const [openMonthlyDialog, setOpenMonthlyDialog] = useState(false);
   const [editingMonthlyTask, setEditingMonthlyTask] = useState(null);
+  const [showCompletedMonthlyTasks, setShowCompletedMonthlyTasks] = useState(false);
   const [monthlyFormData, setMonthlyFormData] = useState({
     descricao: '',
     diaDoMes: 1, // 1-31 (Dia do mês)
@@ -2502,7 +2504,18 @@ export default function Tasks() {
         {/* Aba de Tarefas Semanais */}
         {getCurrentTab() === 3 && (
           <>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showCompletedWeeklyTasks}
+                    onChange={(e) => setShowCompletedWeeklyTasks(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Mostrar tarefas finalizadas"
+                sx={{ color: '#000000' }}
+              />
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -2534,7 +2547,9 @@ export default function Tasks() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {weeklyTasks.map((task) => (
+                    {weeklyTasks
+                      .filter(task => showCompletedWeeklyTasks || task.status !== 'Finalizada')
+                      .map((task) => (
                       <TableRow key={task.id}>
                         <TableCell>{task.descricao}</TableCell>
                         <TableCell>{getDiaSemanaTexto(task.diaDaSemana)}</TableCell>
@@ -2585,10 +2600,10 @@ export default function Tasks() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {weeklyTasks.length === 0 && (
+                    {weeklyTasks.filter(task => showCompletedWeeklyTasks || task.status !== 'Finalizada').length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6} align="center">
-                          Nenhuma tarefa semanal encontrada
+                          {weeklyTasks.length > 0 ? 'Não há tarefas semanais para mostrar com o filtro atual' : 'Nenhuma tarefa semanal encontrada'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -2602,7 +2617,18 @@ export default function Tasks() {
         {/* Aba de Tarefas Mensais */}
         {getCurrentTab() === 4 && (
           <>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showCompletedMonthlyTasks}
+                    onChange={(e) => setShowCompletedMonthlyTasks(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Mostrar tarefas finalizadas"
+                sx={{ color: '#000000' }}
+              />
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -2634,7 +2660,9 @@ export default function Tasks() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {monthlyTasks.map((task) => (
+                    {monthlyTasks
+                      .filter(task => showCompletedMonthlyTasks || task.status !== 'Finalizada')
+                      .map((task) => (
                       <TableRow key={task.id}>
                         <TableCell>{task.descricao}</TableCell>
                         <TableCell>{task.diaDoMes}</TableCell>
@@ -2685,10 +2713,10 @@ export default function Tasks() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {monthlyTasks.length === 0 && (
+                    {monthlyTasks.filter(task => showCompletedMonthlyTasks || task.status !== 'Finalizada').length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6} align="center">
-                          Nenhuma tarefa mensal encontrada
+                          {monthlyTasks.length > 0 ? 'Não há tarefas mensais para mostrar com o filtro atual' : 'Nenhuma tarefa mensal encontrada'}
                         </TableCell>
                       </TableRow>
                     )}
