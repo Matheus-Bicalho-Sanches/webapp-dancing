@@ -38,6 +38,8 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -46,7 +48,8 @@ import {
   FilterList as FilterListIcon,
   Clear as ClearIcon,
   Search as SearchIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, Timestamp, getDocsFromCache, getDocsFromServer, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -141,6 +144,8 @@ function CustomDateInput({ label, value, onChange, required, autoFocus, InputPro
 // Custom inline date editor component for the table cells
 function CustomDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }) {
   const [displayValue, setDisplayValue] = useState('');
+  const [error, setError] = useState(false);
+  const [helperText, setHelperText] = useState('');
   
   // Initialize with the input value in dd-mm-yy format
   useEffect(() => {
@@ -155,17 +160,67 @@ function CustomDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }
           // Use last 2 digits of year
           const shortYear = year.slice(2);
           setDisplayValue(`${day}-${month}-${shortYear}`);
+          setError(false);
+          setHelperText('');
         } else {
           setDisplayValue(value);
+          setError(false);
+          setHelperText('');
         }
       } catch (e) {
         console.error('Error formatting date for inline editor:', e);
         setDisplayValue(value);
+        setError(false);
+        setHelperText('');
       }
     } else {
       setDisplayValue('');
+      setError(false);
+      setHelperText('');
     }
   }, [value]);
+  
+  const validateDateFormat = (input) => {
+    if (!input) return true; // Empty is ok
+    
+    const regex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+    const match = input.match(regex);
+    
+    if (!match) {
+      setError(true);
+      setHelperText('Formato inválido. Use dd-mm-yy');
+      return false;
+    }
+    
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10) < 100 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+    
+    // Validar valores
+    if (month < 1 || month > 12) {
+      setError(true);
+      setHelperText('Mês inválido (1-12)');
+      return false;
+    }
+    
+    if (day < 1 || day > 31) {
+      setError(true);
+      setHelperText('Dia inválido (1-31)');
+      return false;
+    }
+    
+    // Verificar se a data existe no calendário
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    if (date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+      setError(true);
+      setHelperText('Data inexistente no calendário');
+      return false;
+    }
+    
+    setError(false);
+    setHelperText('');
+    return true;
+  };
   
   const handleChange = (e) => {
     const inputValue = e.target.value;
@@ -187,19 +242,42 @@ function CustomDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }
             year = '20' + year;
           }
           
+          // Validar o formato
+          validateDateFormat(inputValue);
+          
           // Call original onChange with yyyy-MM-dd format
           onChange({ target: { value: `${year}-${month}-${day}` } });
         } else {
+          // Validar formato e mostrar erro se não estiver no padrão esperado
+          if (inputValue.length > 0) {
+            validateDateFormat(inputValue);
+          }
+          
           // Pass the raw value if it doesn't match the expected format
           onChange({ target: { value: inputValue } });
         }
       } catch (e) {
         console.error('Error parsing date for inline editor:', e);
+        setError(true);
+        setHelperText('Erro ao processar a data');
         onChange({ target: { value: inputValue } });
       }
     } else {
       // Handle empty input
+      setError(false);
+      setHelperText('');
       onChange({ target: { value: '' } });
+    }
+  };
+  
+  // Custom onBlur handler to validate the date format when user leaves the field
+  const handleBlur = (e) => {
+    // Validate on blur
+    validateDateFormat(displayValue);
+    
+    // Call the original onBlur if provided
+    if (onBlur) {
+      onBlur(e);
     }
   };
   
@@ -210,15 +288,332 @@ function CustomDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }
       value={displayValue}
       onChange={handleChange}
       onKeyDown={onKeyDown}
-      onBlur={onBlur}
+      onBlur={handleBlur}
       autoFocus
       placeholder="dd-mm-yy"
       size="small"
+      error={error}
+      helperText={helperText}
       InputProps={{
         style: { fontSize: '0.875rem' }
       }}
       {...props}
     />
+  );
+}
+
+// Custom calendar date editor component for specific table cells
+function CalendarDateInlineEditor({ value, onChange, onBlur, onKeyDown, ...props }) {
+  const [dateValue, setDateValue] = useState(null);
+  
+  // Initialize date value when component mounts
+  useEffect(() => {
+    if (value) {
+      try {
+        // Try to parse the value to a date
+        const date = dayjs(value);
+        if (date.isValid()) {
+          setDateValue(date);
+        } else {
+          setDateValue(null);
+        }
+      } catch (e) {
+        console.error('Error parsing date for calendar editor:', e);
+        setDateValue(null);
+      }
+    } else {
+      setDateValue(null);
+    }
+  }, [value]);
+  
+  // Handle date selection from DatePicker
+  const handleDateChange = (newDate) => {
+    if (newDate && newDate.isValid()) {
+      // Update state
+      setDateValue(newDate);
+      
+      // Formatar a data como dd-mm-yy para compatibilidade com o resto do sistema
+      // Garante que o dia vem primeiro, depois o mês, depois o ano com 2 dígitos
+      const day = newDate.format('DD'); // Dia com 2 dígitos (01-31)
+      const month = newDate.format('MM'); // Mês com 2 dígitos (01-12)
+      const yearShort = newDate.format('YY'); // Ano com 2 dígitos (00-99)
+      
+      const formattedForDisplay = `${day}-${month}-${yearShort}`;
+      console.log('Calendar selected date formatted as dd-mm-yy:', formattedForDisplay);
+      
+      // Limpamos qualquer valor anterior
+      setEditValue('');
+      
+      // Set no formato dd-mm-yy para compatibilidade com o resto do sistema
+      onChange({ target: { value: formattedForDisplay } });
+      
+      // Para debug
+      console.log('Valor enviado para onChange:', formattedForDisplay);
+      
+      // Salvar imediatamente após a seleção, sem esperar o onBlur
+      if (onBlur) {
+        // Usar um pequeno delay para garantir que o estado foi atualizado
+        setTimeout(() => {
+          console.log('Chamando onBlur com valor:', formattedForDisplay);
+          onBlur();
+        }, 100);
+      }
+    }
+  };
+  
+  return (
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <DatePicker
+        value={dateValue}
+        onChange={handleDateChange}
+        slotProps={{
+          textField: {
+            fullWidth: true,
+            variant: "standard",
+            size: "small",
+            autoFocus: true,
+            onKeyDown: onKeyDown,
+            InputProps: {
+              style: { fontSize: '0.875rem' }
+            }
+          },
+          popper: {
+            sx: {
+              zIndex: 9999
+            }
+          }
+        }}
+        {...props}
+      />
+    </LocalizationProvider>
+  );
+}
+
+// Custom date input with calendar component for forms
+function CalendarDateInput({ label, value, onChange, required, autoFocus, InputProps, ...props }) {
+  const [displayValue, setDisplayValue] = useState('');
+  const [error, setError] = useState(false);
+  const [helperText, setHelperText] = useState('');
+  const [openCalendar, setOpenCalendar] = useState(false);
+  
+  // Convert yyyy-MM-dd to dd-mm-yy when component mounts or value changes
+  useEffect(() => {
+    if (value) {
+      try {
+        const dateParts = value.split('-');
+        if (dateParts.length === 3) {
+          const year = dateParts[0];
+          const month = dateParts[1];
+          const day = dateParts[2];
+          
+          // Use last 2 digits of year
+          const shortYear = year.slice(2);
+          setDisplayValue(`${day}-${month}-${shortYear}`);
+          setError(false);
+          setHelperText('');
+        } else {
+          setDisplayValue(value);
+          setError(false);
+          setHelperText('');
+        }
+      } catch (e) {
+        console.error('Error formatting date for display:', e);
+        setDisplayValue(value);
+        setError(false);
+        setHelperText('');
+      }
+    } else {
+      setDisplayValue('');
+      setError(false);
+      setHelperText('');
+    }
+  }, [value]);
+  
+  const validateDateFormat = (input) => {
+    if (!input) return true; // Empty is ok
+    
+    const regex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+    const match = input.match(regex);
+    
+    if (!match) {
+      setError(true);
+      setHelperText('Formato inválido. Use dd-mm-yy');
+      return false;
+    }
+    
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10) < 100 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+    
+    // Validar valores
+    if (month < 1 || month > 12) {
+      setError(true);
+      setHelperText('Mês inválido (1-12)');
+      return false;
+    }
+    
+    if (day < 1 || day > 31) {
+      setError(true);
+      setHelperText('Dia inválido (1-31)');
+      return false;
+    }
+    
+    // Verificar se a data existe no calendário
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    if (date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+      setError(true);
+      setHelperText('Data inexistente no calendário');
+      return false;
+    }
+    
+    setError(false);
+    setHelperText('');
+    return true;
+  };
+  
+  const handleChange = (e) => {
+    const inputValue = e.target.value;
+    setDisplayValue(inputValue);
+    
+    // Try to parse the dd-mm-yy input to yyyy-MM-dd format
+    if (inputValue) {
+      try {
+        const regex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+        const match = inputValue.match(regex);
+        
+        if (match) {
+          const day = match[1].padStart(2, '0');
+          const month = match[2].padStart(2, '0');
+          let year = match[3];
+          
+          // Convert 2-digit year to 4-digit (20xx)
+          if (year.length === 2) {
+            year = '20' + year;
+          }
+          
+          // Validar o formato
+          validateDateFormat(inputValue);
+          
+          // Call original onChange with yyyy-MM-dd format
+          onChange({ target: { value: `${year}-${month}-${day}` } });
+        } else {
+          // Validate and show error if not matching expected pattern
+          if (inputValue.length > 0) {
+            validateDateFormat(inputValue);
+          }
+          
+          // Pass the raw value if it doesn't match the expected format
+          onChange({ target: { value: inputValue } });
+        }
+      } catch (e) {
+        console.error('Error parsing date input:', e);
+        setError(true);
+        setHelperText('Erro ao processar a data');
+        onChange({ target: { value: inputValue } });
+      }
+    } else {
+      // Handle empty input
+      setError(false);
+      setHelperText('');
+      onChange({ target: { value: '' } });
+    }
+  };
+  
+  // Handle date selection from the DatePicker
+  const handleDatePickerChange = (date) => {
+    if (date && date.isValid && date.isValid()) {
+      // Formatar a data como dd-mm-yy para compatibilidade com o resto do sistema
+      const day = date.format('DD');
+      const month = date.format('MM');
+      const yearShort = date.format('YY'); // Apenas os dois últimos dígitos do ano
+      
+      const formattedDate = `${day}-${month}-${yearShort}`;
+      console.log('CalendarDateInput - Data selecionada como dd-mm-yy:', formattedDate);
+      
+      setDisplayValue(formattedDate);
+      onChange({ target: { value: formattedDate } });
+      setError(false);
+      setHelperText('');
+      
+      // Fechar o calendário após selecionar a data
+      setOpenCalendar(false);
+    } else if (date) {
+      // Se for uma data, mas não estiver no formato do dayjs
+      try {
+        const dateObj = dayjs(date);
+        if (dateObj.isValid()) {
+          // Formatar a data como dd-mm-yy para compatibilidade
+          const dayFmt = dateObj.format('DD');
+          const monthFmt = dateObj.format('MM');
+          const yearFmt = dateObj.format('YY'); // Apenas os dois últimos dígitos do ano
+          
+          const formattedDateAlt = `${dayFmt}-${monthFmt}-${yearFmt}`;
+          console.log('CalendarDateInput - Data convertida como dd-mm-yy:', formattedDateAlt);
+          
+          setDisplayValue(formattedDateAlt);
+          onChange({ target: { value: formattedDateAlt } });
+          setError(false);
+          setHelperText('');
+        } else {
+          console.error('Data inválida recebida pelo calendário:', date);
+          setError(true);
+          setHelperText('Data inválida');
+        }
+      } catch (e) {
+        console.error('Erro ao processar data do calendário:', e);
+        setError(true);
+        setHelperText('Erro ao processar data');
+      }
+      
+      // Fechar o calendário após selecionar a data
+      setOpenCalendar(false);
+    }
+  };
+  
+  return (
+    <Box>
+      <TextField
+        label={label}
+        value={displayValue}
+        onChange={handleChange}
+        placeholder="dd-mm-yy"
+        required={required}
+        autoFocus={autoFocus}
+        error={error}
+        helperText={helperText}
+        InputProps={{
+          ...InputProps,
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                edge="end"
+                onClick={() => setOpenCalendar(true)}
+              >
+                <CalendarIcon fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          )
+        }}
+        InputLabelProps={{ shrink: true }}
+        {...props}
+      />
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <DatePicker
+          open={openCalendar}
+          onClose={() => setOpenCalendar(false)}
+          onChange={handleDatePickerChange}
+          value={value ? dayjs(value) : null}
+          slotProps={{
+            popper: {
+              sx: {
+                zIndex: 9999
+              }
+            }
+          }}
+        />
+      </LocalizationProvider>
+    </Box>
   );
 }
 
@@ -352,6 +747,13 @@ export default function CRM() {
       if (dateString && typeof dateString === 'object' && dateString.seconds !== undefined) {
         date = new Date(dateString.seconds * 1000);
         console.log('Converting Firestore timestamp to date:', date);
+        
+        // Verificar se o timestamp é válido - alguns timestamps antigos podem causar problemas
+        if (date.getFullYear() < 1950 || date.getFullYear() > 2100) {
+          console.warn('Data fora do intervalo válido:', date);
+          // Usar data atual como fallback
+          date = new Date();
+        }
       }
       // Se for um timestamp ISO ou string de data
       else if (typeof dateString === 'string') {
@@ -374,6 +776,13 @@ export default function CRM() {
         if (dateString.toDate && typeof dateString.toDate === 'function') {
           date = dateString.toDate();
           console.log('Converting object with toDate() to date:', date);
+          
+          // Verificar se o timestamp é válido - alguns timestamps antigos podem causar problemas
+          if (date.getFullYear() < 1950 || date.getFullYear() > 2100) {
+            console.warn('Data fora do intervalo válido:', date);
+            // Usar data atual como fallback
+            date = new Date();
+          }
         } else if (dateString.ISO) {
           date = new Date(dateString.ISO);
           console.log('Converting object with ISO to date:', date);
@@ -403,12 +812,101 @@ export default function CRM() {
 
   const formatDateForSave = (inputDate) => {
     if (!inputDate) return null;
+    
+    console.log('formatDateForSave recebeu:', inputDate);
+    
     try {
-      // Create date at noon to avoid timezone issues
-      const [year, month, day] = inputDate.split('-').map(Number);
+      // Verificar se a entrada está no formato dd-mm-yy
+      const ddMmYyRegex = /^(\d{1,2})-(\d{1,2})-(\d{1,2})$/;
+      const ddMmYyMatch = inputDate.match(ddMmYyRegex);
+      
+      let year, month, day;
+      
+      if (ddMmYyMatch) {
+        // Formato dd-mm-yy
+        day = parseInt(ddMmYyMatch[1], 10);
+        month = parseInt(ddMmYyMatch[2], 10);
+        let shortYear = parseInt(ddMmYyMatch[3], 10);
+        
+        // Converter ano de 2 dígitos para 4 dígitos (assumindo anos 2000)
+        year = shortYear < 100 ? 2000 + shortYear : shortYear;
+        
+        console.log(`Data no formato dd-mm-yy: dia=${day}, mês=${month}, ano=${year}`);
+      } else {
+        // Verificar se está no formato yyyy-MM-dd
+        const yyyyMmDdRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+        const yyyyMmDdMatch = inputDate.match(yyyyMmDdRegex);
+        
+        if (yyyyMmDdMatch) {
+          // Formato yyyy-MM-dd
+          year = parseInt(yyyyMmDdMatch[1], 10);
+          month = parseInt(yyyyMmDdMatch[2], 10);
+          day = parseInt(yyyyMmDdMatch[3], 10);
+          
+          console.log(`Data no formato yyyy-MM-dd: ano=${year}, mês=${month}, dia=${day}`);
+          
+          // Convertendo para formato dd-mm-yy para consistência
+          const shortYear = year.toString().slice(2);
+          inputDate = `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${shortYear}`;
+          console.log('Convertido para formato dd-mm-yy:', inputDate);
+        } else {
+          // Nenhum formato reconhecido, dividir por traço e tentar determinar
+          const parts = inputDate.split('-').map(Number);
+          
+          if (parts.length === 3) {
+            // Se o primeiro número for maior que 31, assume que é o ano
+            if (parts[0] > 31) {
+              year = parts[0];
+              month = parts[1];
+              day = parts[2];
+              console.log('Formato detectado como ano-mês-dia:', year, month, day);
+              
+              // Convertendo para formato dd-mm-yy para consistência
+              const shortYear = year.toString().slice(2);
+              inputDate = `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${shortYear}`;
+              console.log('Convertido para formato dd-mm-yy:', inputDate);
+            } 
+            // Se o último número for maior que 31 ou menor que 1000, assume que é o ano
+            else if (parts[2] > 31 || (parts[2] < 100 && parts[0] <= 31)) {
+              day = parts[0];
+              month = parts[1];
+              year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
+              console.log('Formato detectado como dia-mês-ano:', day, month, year);
+              
+              // Já está no formato dd-mm-yy, só padroniza
+              inputDate = `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${year.toString().slice(-2)}`;
+              console.log('Padronizado para formato dd-mm-yy:', inputDate);
+            } else {
+              // Último caso, assumir formato ISO (yyyy-MM-dd)
+              year = parts[0];
+              month = parts[1];
+              day = parts[2];
+              console.log('Formato assumido como padrão ISO:', year, month, day);
+              
+              // Convertendo para formato dd-mm-yy para consistência
+              const shortYear = year.toString().slice(2);
+              inputDate = `${day.toString().padStart(2, '0')}-${month.toString().padStart(2, '0')}-${shortYear}`;
+              console.log('Convertido para formato dd-mm-yy:', inputDate);
+            }
+          } else {
+            console.warn('Formato de data não reconhecido:', inputDate);
+            return null;
+          }
+        }
+      }
+      
+      // Depois de toda a tentativa de normalização, tenta extrair novamente os valores
+      const finalMatch = inputDate.match(ddMmYyRegex);
+      if (finalMatch) {
+        day = parseInt(finalMatch[1], 10);
+        month = parseInt(finalMatch[2], 10);
+        let shortYear = parseInt(finalMatch[3], 10);
+        year = shortYear < 100 ? 2000 + shortYear : shortYear;
+      }
       
       // Verificar se os valores são válidos
-      if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      if (isNaN(year) || isNaN(month) || isNaN(day) || 
+          month < 1 || month > 12 || day < 1 || day > 31) {
         console.warn('Data inválida para salvar:', inputDate);
         return null;
       }
@@ -421,6 +919,15 @@ export default function CRM() {
         console.warn('Data inválida para salvar após conversão:', inputDate);
         return null;
       }
+      
+      // Verificar se a data resultante é a mesma que foi solicitada
+      // Isso detecta datas inexistentes como 31/02
+      if (date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+        console.warn(`Data inexistente no calendário: ${day}/${month}/${year} convertida para ${date.getDate()}/${date.getMonth()+1}/${date.getFullYear()}`);
+        return null;
+      }
+      
+      console.log('Data válida, criando timestamp com:', date);
       
       // Cria um Timestamp do Firestore
       return Timestamp.fromDate(date);
@@ -1154,8 +1661,8 @@ export default function CRM() {
     setEditValue(formatDateForInput(value) || '');
   };
 
-  // Modificar handleSaveEdit
-  const handleSaveEdit = async (leadId, field) => {
+  // Modificar handleSaveEdit para aceitar um valor customizado
+  const handleSaveEdit = async (leadId, field, customValue = null) => {
     try {
       // Get the lead from local state
       const lead = leads.find(l => l.id === leadId);
@@ -1166,11 +1673,74 @@ export default function CRM() {
         return;
       }
       
+      // Usar o valor customizado se fornecido, caso contrário, usar editValue do estado
+      const valueToProcess = customValue !== null ? customValue : editValue;
+      
+      // Log para debug
+      console.log(`Salvando ${field} com valor:`, valueToProcess);
+      
+      // Se o valor estiver vazio e for um campo opcional, definir como null
+      if (!valueToProcess && ['ultimoContato', 'proximoContato', 'dataAE'].includes(field)) {
+        console.log(`Limpando campo ${field} (valor vazio)`);
+        
+        // Se o campo já estiver vazio, não faz nada
+        if (!lead[field]) {
+          console.log(`Campo ${field} já está vazio, skipping update`);
+          setEditingCell(null);
+          setEditValue('');
+          return;
+        }
+        
+        // Atualizar com null para limpar o campo
+        const leadRef = doc(db, 'leads', leadId);
+        const updateData = {
+          [field]: null,
+          updatedAt: serverTimestamp(),
+        };
+        
+        await updateDoc(leadRef, updateData);
+        
+        // Atualizar o estado local
+        syncLocalLeads(leadId, {
+          ...updateData,
+          updatedAt: new Date()
+        }, 'update');
+        
+        setSnackbar({
+          open: true,
+          message: `Campo ${field} limpo com sucesso!`,
+          severity: 'success'
+        });
+        
+        setEditingCell(null);
+        setEditValue('');
+        return;
+      }
+      
+      // Detectar se o valor está já formatado corretamente como dd-mm-yy
+      const isDDMMYYFormat = /^\d{1,2}-\d{1,2}-\d{1,2}$/.test(valueToProcess);
+      console.log('Valor está no formato dd-mm-yy?', isDDMMYYFormat);
+      
       // Tratamento diferenciado conforme o tipo de campo
       let valueToSave;
       if (['ultimoContato', 'proximoContato', 'dataAE'].includes(field)) {
         // Formata como data apenas os campos que são datas
-        valueToSave = formatDateForSave(editValue);
+        valueToSave = formatDateForSave(valueToProcess);
+        
+        // Log para debug
+        console.log('Valor formatado para salvar:', valueToSave);
+        
+        // Se o valor não for válido, exibe mensagem de erro e não salva
+        if (!valueToSave) {
+          setSnackbar({
+            open: true,
+            message: `Formato de data inválido para o campo ${field}`,
+            severity: 'error'
+          });
+          setEditingCell(null);
+          setEditValue('');
+          return;
+        }
         
         // Get the original value
         const originalValue = lead[field];
@@ -1186,12 +1756,20 @@ export default function CRM() {
         } 
         // If both exist, compare them
         else if (valueToSave && originalValue) {
-          // If it's a Firestore Timestamp, convert to milliseconds for comparison
-          const originalTime = originalValue.toDate ? originalValue.toDate().getTime() : new Date(originalValue).getTime();
-          const newTime = valueToSave.toDate ? valueToSave.toDate().getTime() : new Date(valueToSave).getTime();
-          
-          // Compare the timestamps (ignoring milliseconds which are insignificant)
-          noChange = Math.floor(originalTime / 1000) === Math.floor(newTime / 1000);
+          try {
+            // If it's a Firestore Timestamp, convert to milliseconds for comparison
+            const originalTime = originalValue.toDate ? originalValue.toDate().getTime() : new Date(originalValue).getTime();
+            const newTime = valueToSave.toDate ? valueToSave.toDate().getTime() : new Date(valueToSave).getTime();
+            
+            // Log para debug
+            console.log('Comparando datas:', new Date(originalTime), 'vs', new Date(newTime));
+            
+            // Compare the timestamps (ignoring milliseconds which are insignificant)
+            noChange = Math.floor(originalTime / 1000) === Math.floor(newTime / 1000);
+          } catch (error) {
+            console.error('Erro ao comparar datas:', error);
+            noChange = false; // Em caso de erro, tenta salvar
+          }
         }
         
         if (noChange) {
@@ -1202,7 +1780,7 @@ export default function CRM() {
         }
       } else {
         // Para campos de texto, usa o valor como está
-        valueToSave = editValue;
+        valueToSave = valueToProcess;
         
         // Skip update if no changes
         if (valueToSave === lead[field]) {
@@ -1213,11 +1791,16 @@ export default function CRM() {
         }
       }
       
+      console.log('Prosseguindo com o salvamento para:', field, 'com valor:', valueToSave);
+      
       const leadRef = doc(db, 'leads', leadId);
       const updateData = {
         [field]: valueToSave,
         updatedAt: serverTimestamp(),
       };
+      
+      // Log para debug
+      console.log('Atualizando documento com:', updateData);
       
       await updateDoc(leadRef, updateData);
       
@@ -1419,6 +2002,143 @@ export default function CRM() {
     const startIndex = logPage * logRowsPerPage;
     return logs.slice(startIndex, startIndex + logRowsPerPage);
   }, [logs, logPage, logRowsPerPage]);
+
+  // Componente para células de data com calendário
+  function TableCellWithInlineCalendar({ lead, field, fieldId, formatValue, formatInput }) {
+    const [editing, setEditing] = useState(false);
+    const [localEditValue, setLocalEditValue] = useState('');
+    
+    // Adaptador genérico para o handler de edição
+    const handleEditComplete = (valueToSave = null) => {
+      if (editing) {
+        // Usar o valor passado como parâmetro ou o valor atual do estado
+        const valueToSubmit = valueToSave !== null ? valueToSave : localEditValue;
+        console.log(`Salvando ${field} com valor editado:`, valueToSubmit);
+        
+        // IMPORTANTE: Usamos diretamente o valor formatado como dd-mm-yy
+        handleSaveEdit(lead.id, field, valueToSubmit);
+        setEditing(false);
+      }
+    };
+    
+    // Função para converter a data do Firestore para formato dd-mm-yy
+    const convertToDisplayFormat = (dateValue) => {
+      if (!dateValue) return '';
+      
+      try {
+        // Se for um timestamp, converte para Date
+        if (dateValue && typeof dateValue === 'object' && dateValue.seconds !== undefined) {
+          const date = new Date(dateValue.seconds * 1000);
+          // Formata diretamente para dd-mm-yy
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = String(date.getFullYear()).slice(2);
+          return `${day}-${month}-${year}`;
+        } 
+        // Se já for uma string formatada
+        else if (typeof dateValue === 'string') {
+          // Verifica se já está no formato dd-mm-yy
+          if (/^\d{1,2}-\d{1,2}-\d{1,2}$/.test(dateValue)) {
+            return dateValue;
+          }
+          
+          // Verifica se está no formato yyyy-MM-dd
+          const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (match) {
+            const year = match[1].slice(2);
+            const month = match[2];
+            const day = match[3];
+            return `${day}-${month}-${year}`;
+          }
+        }
+        
+        // Fallback: tenta usar o formatDateForInput e converter
+        const formatted = formatDateForInput(dateValue);
+        if (formatted) {
+          const parts = formatted.split('-');
+          if (parts.length === 3) {
+            return `${parts[2]}-${parts[1]}-${parts[0].slice(2)}`;
+          }
+        }
+        
+        return '';
+      } catch (e) {
+        console.error('Erro ao converter data para exibição:', e);
+        return '';
+      }
+    };
+    
+    // Handler para seleção de data no calendário
+    const handleDateSelection = (newDate) => {
+      if (newDate && newDate.isValid()) {
+        // Formatar explicitamente no formato dd-mm-yy
+        const day = newDate.format('DD');
+        const month = newDate.format('MM');
+        const yearShort = newDate.format('YY');
+        
+        const formattedDate = `${day}-${month}-${yearShort}`;
+        console.log(`Data selecionada no calendário para ${field}:`, formattedDate);
+        
+        // Atualizar estado local com o formato dd-mm-yy
+        setLocalEditValue(formattedDate);
+        
+        // Destacar que o valor está no formato dd-mm-yy para debug
+        console.log(`Valor formatado dd-mm-yy para salvar ${field}:`, formattedDate);
+        
+        // Iniciar o salvamento após um pequeno delay
+        setTimeout(() => {
+          // IMPORTANTE: Passamos o formattedDate diretamente para o handleEditComplete
+          // em vez de depender do estado localEditValue que pode não ter sido atualizado ainda
+          handleEditComplete(formattedDate);
+        }, 100);
+      }
+    };
+    
+    // Quando o componente abre, preparar valor inicial no formato dd-mm-yy
+    useEffect(() => {
+      if (editing && lead[field]) {
+        const formattedValue = convertToDisplayFormat(lead[field]);
+        console.log(`Valor inicial convertido para edição (${field}):`, formattedValue);
+        setLocalEditValue(formattedValue);
+      }
+    }, [editing, field, lead]);
+    
+    return (
+      <TableCell sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
+        {editing ? (
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DatePicker
+              open
+              onClose={() => setEditing(false)}
+              onChange={handleDateSelection}
+              value={lead[field] ? dayjs(formatDateForInput(lead[field])) : null}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  variant: "standard",
+                  size: "small",
+                  autoFocus: true,
+                  style: { fontSize: '0.875rem' }
+                },
+                popper: {
+                  sx: { zIndex: 9999 }
+                }
+              }}
+            />
+          </LocalizationProvider>
+        ) : (
+          <Box
+            onClick={() => {
+              setEditing(true);
+            }}
+            style={{ cursor: 'pointer', minHeight: '20px' }}
+          >
+            {lead[field] ? formatValue(lead[field]) : '-'}
+          </Box>
+        )}
+      </TableCell>
+    );
+  }
 
   if (loading) {
     return (
@@ -1841,6 +2561,7 @@ export default function CRM() {
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={(e) => handleSaveEdit(lead.id, 'ultimoContato')}
                               onKeyDown={(e) => handleKeyPress(e, lead.id, 'ultimoContato')}
+                              field="ultimoContato"
                             />
                           ) : (
                             <Box
@@ -1855,46 +2576,22 @@ export default function CRM() {
                             </Box>
                           )}
                         </TableCell>
-                        <TableCell sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                          {editingCell === `${lead.id}-prox` ? (
-                            <CustomDateInlineEditor
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={(e) => handleSaveEdit(lead.id, 'proximoContato')}
-                              onKeyDown={(e) => handleKeyPress(e, lead.id, 'proximoContato')}
-                            />
-                          ) : (
-                            <Box
-                              onClick={() => {
-                                setEditingCell(`${lead.id}-prox`);
-                                setEditValue(formatDateForInput(lead.proximoContato));
-                              }}
-                              style={{ cursor: 'pointer', minHeight: '20px' }}
-                            >
-                              {lead.proximoContato ? formatDateForDisplay(lead.proximoContato) : '-'}
-                            </Box>
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
-                          {editingCell === `${lead.id}-ae` ? (
-                            <CustomDateInlineEditor
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={(e) => handleSaveEdit(lead.id, 'dataAE')}
-                              onKeyDown={(e) => handleKeyPress(e, lead.id, 'dataAE')}
-                            />
-                          ) : (
-                            <Box
-                              onClick={() => {
-                                setEditingCell(`${lead.id}-ae`);
-                                setEditValue(formatDateForInput(lead.dataAE));
-                              }}
-                              style={{ cursor: 'pointer', minHeight: '20px' }}
-                            >
-                              {lead.dataAE ? formatDateForDisplay(lead.dataAE) : '-'}
-                            </Box>
-                          )}
-                        </TableCell>
+                        <TableCellWithInlineCalendar 
+                          lead={lead}
+                          field="proximoContato"
+                          fieldId={`${lead.id}-prox`}
+                          formatValue={formatDateForDisplay}
+                          formatInput={formatDateForInput}
+                        />
+                        
+                        <TableCellWithInlineCalendar 
+                          lead={lead}
+                          field="dataAE"
+                          fieldId={`${lead.id}-ae`}
+                          formatValue={formatDateForDisplay}
+                          formatInput={formatDateForInput}
+                        />
+                        
                         <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
                           <FormControl size="small" fullWidth>
                             <Select
@@ -2228,14 +2925,14 @@ export default function CRM() {
                 onChange={(e) => setFormData({ ...formData, ultimoContato: e.target.value })}
               />
 
-              <CustomDateInput
+              <CalendarDateInput
                 fullWidth
                 label="Próximo Contato"
                 value={formData.proximoContato}
                 onChange={(e) => setFormData({ ...formData, proximoContato: e.target.value })}
               />
 
-              <CustomDateInput
+              <CalendarDateInput
                 fullWidth
                 label="Data da Aula Experimental"
                 value={formData.dataAE}
@@ -2327,15 +3024,29 @@ export default function CRM() {
             <Typography variant="subtitle2">
               Filtrar por próximo contato
             </Typography>
-            <TextField
-              type="date"
-              size="small"
-              value={tempProxContatoFilter || ''}
-              onChange={(e) => setTempProxContatoFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ max: '2100-12-31' }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                value={tempProxContatoFilter ? dayjs(tempProxContatoFilter) : null}
+                onChange={(date) => {
+                  if (date && date.isValid()) {
+                    // Formatar no formato dd-mm-yy
+                    const day = date.format('DD');
+                    const month = date.format('MM');
+                    const shortYear = date.format('YY');
+                    
+                    setTempProxContatoFilter(`${day}-${month}-${shortYear}`);
+                  } else {
+                    setTempProxContatoFilter('');
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    size: "small",
+                    sx: { minWidth: 200 }
+                  }
+                }}
+              />
+            </LocalizationProvider>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 1 }}>
               <Button 
                 size="small" 
@@ -2386,15 +3097,29 @@ export default function CRM() {
             <Typography variant="subtitle2">
               Filtrar por data da aula experimental
             </Typography>
-            <TextField
-              type="date"
-              size="small"
-              value={tempDataAEFilter || ''}
-              onChange={(e) => setTempDataAEFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ max: '2100-12-31' }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                value={tempDataAEFilter ? dayjs(tempDataAEFilter) : null}
+                onChange={(date) => {
+                  if (date && date.isValid()) {
+                    // Formatar no formato dd-mm-yy
+                    const day = date.format('DD');
+                    const month = date.format('MM');
+                    const shortYear = date.format('YY');
+                    
+                    setTempDataAEFilter(`${day}-${month}-${shortYear}`);
+                  } else {
+                    setTempDataAEFilter('');
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    size: "small",
+                    sx: { minWidth: 200 }
+                  }
+                }}
+              />
+            </LocalizationProvider>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mt: 1 }}>
               <Button 
                 size="small" 
