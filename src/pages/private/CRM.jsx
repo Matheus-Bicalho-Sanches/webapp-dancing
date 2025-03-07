@@ -1471,6 +1471,37 @@ export default function CRM() {
     setFormError('');
   };
 
+  // Função auxiliar para adicionar entradas de log no Firestore
+  const addLogEntry = async (action, leadId, leadName, details) => {
+    try {
+      if (!currentUser) return;
+      
+      // Obter o nome do usuário a partir do perfil
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userName = userDoc.exists() ? 
+                      (userDoc.data().displayName || userDoc.data().name || userDoc.data().email) : 
+                      'Usuário desconhecido';
+      
+      // Criar o objeto de log
+      const logData = {
+        action,
+        timestamp: serverTimestamp(),
+        userId: currentUser.uid,
+        userName,
+        leadId: leadId || '',
+        leadName: leadName || '',
+        details
+      };
+      
+      // Adicionar o log ao Firestore
+      await addDoc(collection(db, 'logs'), logData);
+      
+      console.log('Log adicionado com sucesso:', action, leadName);
+    } catch (error) {
+      console.error('Erro ao adicionar log:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       // Limpa qualquer erro anterior
@@ -1558,7 +1589,47 @@ export default function CRM() {
       };
 
       if (editingLead) {
+        // Registrar informações para o log de edição
+        const oldData = { ...editingLead };
+        const changedFields = {};
+        
+        // Verificar campos alterados
+        if (oldData.nome !== formData.nome) 
+          changedFields.nome = { oldValue: oldData.nome, newValue: formData.nome };
+        
+        if (oldData.whatsapp !== formattedWhatsApp) 
+          changedFields.whatsapp = { oldValue: oldData.whatsapp, newValue: formattedWhatsApp };
+        
+        if (oldData.status !== formData.status) 
+          changedFields.status = { oldValue: oldData.status, newValue: formData.status };
+        
+        if (oldData.ultimoContato !== formData.ultimoContato) 
+          changedFields.ultimoContato = { oldValue: oldData.ultimoContato, newValue: formData.ultimoContato };
+        
+        if (oldData.proximoContato !== formData.proximoContato) 
+          changedFields.proximoContato = { oldValue: oldData.proximoContato, newValue: formData.proximoContato };
+        
+        if (oldData.dataAE !== formData.dataAE) 
+          changedFields.dataAE = { oldValue: oldData.dataAE, newValue: formData.dataAE };
+        
+        if (oldData.turmaAE !== formData.turmaAE) 
+          changedFields.turmaAE = { oldValue: oldData.turmaAE, newValue: formData.turmaAE };
+        
+        if (oldData.observacoes !== formData.observacoes) 
+          changedFields.observacoes = { oldValue: oldData.observacoes, newValue: formData.observacoes };
+        
+        if (oldData.origemLead !== formData.origemLead) 
+          changedFields.origemLead = { oldValue: oldData.origemLead, newValue: formData.origemLead };
+        
         await updateDoc(doc(db, 'leads', editingLead.id), leadData);
+        
+        // Adicionar log se houver alterações
+        if (Object.keys(changedFields).length > 0) {
+          await addLogEntry('update', editingLead.id, formData.nome, {
+            changedFields,
+            leadData: formData
+          });
+        }
         
         // Atualizar o estado local imediatamente
         syncLocalLeads(editingLead.id, { 
@@ -1574,10 +1645,17 @@ export default function CRM() {
         });
       } else {
         // Ao adicionar um novo documento
-        const docRef = await addDoc(collection(db, 'leads'), {
+        const newLeadData = {
           ...leadData,
           createdAt: serverTimestamp(),
           createdBy: currentUser.uid
+        };
+        
+        const docRef = await addDoc(collection(db, 'leads'), newLeadData);
+        
+        // Adicionar log para criação de lead
+        await addLogEntry('create', docRef.id, formData.nome, {
+          leadData: formData
         });
         
         // Atualizar o estado local imediatamente
@@ -1596,6 +1674,11 @@ export default function CRM() {
       }
 
       handleCloseDialog();
+      
+      // Se a aba de logs estiver ativa, recarrega os logs
+      if (showLogs) {
+        loadLogs();
+      }
     } catch (error) {
       console.error('Erro ao salvar lead:', error);
       setSnackbar({
@@ -1609,7 +1692,17 @@ export default function CRM() {
   const handleDelete = async (leadId) => {
     if (window.confirm('Tem certeza que deseja excluir este lead?')) {
       try {
+        // Obter os dados do lead antes da exclusão
+        const leadDoc = await getDoc(doc(db, 'leads', leadId));
+        const leadData = leadDoc.exists() ? leadDoc.data() : null;
+        const leadName = leadData?.nome || 'Lead desconhecido';
+        
         await deleteDoc(doc(db, 'leads', leadId));
+        
+        // Adicionar log para exclusão
+        await addLogEntry('delete', leadId, leadName, {
+          deletedData: leadData
+        });
         
         // Atualizar o estado local imediatamente
         syncLocalLeads(leadId, null, 'delete');
@@ -1619,6 +1712,11 @@ export default function CRM() {
           message: 'Lead excluído com sucesso!',
           severity: 'success'
         });
+        
+        // Se a aba de logs estiver ativa, recarrega os logs
+        if (showLogs) {
+          loadLogs();
+        }
       } catch (error) {
         console.error('Erro ao excluir lead:', error);
         setSnackbar({
@@ -1653,6 +1751,17 @@ export default function CRM() {
   // Modificar handleStatusUpdate
   const handleStatusUpdate = async (leadId, newStatus) => {
     try {
+      // Obter os dados atuais do lead para o log
+      const leadDoc = await getDoc(doc(db, 'leads', leadId));
+      if (!leadDoc.exists()) {
+        console.error('Lead não encontrado:', leadId);
+        return;
+      }
+      
+      const leadData = leadDoc.data();
+      const oldStatus = leadData.status;
+      const leadName = leadData.nome || 'Lead sem nome';
+      
       const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp(),
@@ -1660,6 +1769,13 @@ export default function CRM() {
       };
       
       await updateDoc(doc(db, 'leads', leadId), updateData);
+      
+      // Adicionar log para atualização de status
+      await addLogEntry('status_update', leadId, leadName, {
+        fieldName: 'status',
+        oldValue: oldStatus,
+        newValue: newStatus
+      });
       
       // Atualizar o estado local imediatamente
       syncLocalLeads(leadId, {
@@ -1672,6 +1788,11 @@ export default function CRM() {
         message: 'Status atualizado com sucesso!',
         severity: 'success'
       });
+      
+      // Se a aba de logs estiver ativa, recarrega os logs
+      if (showLogs) {
+        loadLogs();
+      }
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       setSnackbar({
@@ -1685,6 +1806,17 @@ export default function CRM() {
   // Modificar handleTurmaUpdate
   const handleTurmaUpdate = async (leadId, newTurma) => {
     try {
+      // Obter os dados atuais do lead para o log
+      const leadDoc = await getDoc(doc(db, 'leads', leadId));
+      if (!leadDoc.exists()) {
+        console.error('Lead não encontrado:', leadId);
+        return;
+      }
+      
+      const leadData = leadDoc.data();
+      const oldTurma = leadData.turmaAE;
+      const leadName = leadData.nome || 'Lead sem nome';
+      
       const updateData = {
         turmaAE: newTurma,
         updatedAt: serverTimestamp(),
@@ -1692,6 +1824,13 @@ export default function CRM() {
       };
       
       await updateDoc(doc(db, 'leads', leadId), updateData);
+      
+      // Adicionar log para atualização de turma
+      await addLogEntry('turma_update', leadId, leadName, {
+        fieldName: 'turmaAE',
+        oldValue: oldTurma,
+        newValue: newTurma
+      });
       
       // Atualizar o estado local imediatamente
       syncLocalLeads(leadId, {
@@ -1704,6 +1843,11 @@ export default function CRM() {
         message: 'Turma atualizada com sucesso!',
         severity: 'success'
       });
+      
+      // Se a aba de logs estiver ativa, recarrega os logs
+      if (showLogs) {
+        loadLogs();
+      }
     } catch (error) {
       console.error('Erro ao atualizar turma:', error);
       setSnackbar({
@@ -1763,6 +1907,13 @@ export default function CRM() {
         };
         
         await updateDoc(leadRef, updateData);
+        
+        // Adicionar log para campo limpo
+        await addLogEntry('field_update', leadId, lead.nome, {
+          fieldName: field,
+          oldValue: lead[field],
+          newValue: null
+        });
         
         // Atualizar o estado local
         syncLocalLeads(leadId, {
@@ -1868,6 +2019,13 @@ export default function CRM() {
       
       await updateDoc(leadRef, updateData);
       
+      // Adicionar log para atualização de campo
+      await addLogEntry('field_update', leadId, lead.nome, {
+        fieldName: field,
+        oldValue: lead[field],
+        newValue: valueToSave
+      });
+      
       // Atualizar o estado local imediatamente
       syncLocalLeads(leadId, {
         ...updateData,
@@ -1889,6 +2047,11 @@ export default function CRM() {
           : 'Campo atualizado com sucesso!',
         severity: 'success'
       });
+      
+      // Se a aba de logs estiver ativa, recarrega os logs
+      if (showLogs) {
+        loadLogs();
+      }
     } catch (error) {
       console.error('Error updating field:', error);
       setSnackbar({
@@ -1938,8 +2101,100 @@ export default function CRM() {
       // Se os detalhes já estiverem em formato de texto
       if (typeof details === 'string') return details;
       
+      // Para criação de lead
+      if (action === 'create' && details.leadData) {
+        const leadData = details.leadData;
+        const formattedDetails = [];
+        
+        if (leadData.nome) formattedDetails.push(`Nome: ${leadData.nome}`);
+        if (leadData.whatsapp) formattedDetails.push(`WhatsApp: ${leadData.whatsapp}`);
+        if (leadData.status) formattedDetails.push(`Status: ${leadData.status}`);
+        if (leadData.ultimoContato) formattedDetails.push(`Último contato: ${formatDateForDisplay(leadData.ultimoContato)}`);
+        if (leadData.proximoContato) formattedDetails.push(`Próximo contato: ${formatDateForDisplay(leadData.proximoContato)}`);
+        if (leadData.dataAE) formattedDetails.push(`Data AE: ${formatDateForDisplay(leadData.dataAE)}`);
+        if (leadData.turmaAE) formattedDetails.push(`Turma AE: ${leadData.turmaAE}`);
+        if (leadData.observacoes) formattedDetails.push(`Observações: ${leadData.observacoes}`);
+        if (leadData.origemLead) formattedDetails.push(`Origem: ${leadData.origemLead}`);
+        
+        return formattedDetails.join(' | ');
+      }
+      
+      // Para exclusão de lead
+      if (action === 'delete' && details.deletedData) {
+        const leadData = details.deletedData;
+        const formattedDetails = [];
+        
+        if (leadData.nome) formattedDetails.push(`Nome: ${leadData.nome}`);
+        if (leadData.whatsapp) formattedDetails.push(`WhatsApp: ${leadData.whatsapp}`);
+        if (leadData.status) formattedDetails.push(`Status: ${leadData.status}`);
+        if (leadData.ultimoContato) formattedDetails.push(`Último contato: ${formatDateForDisplay(leadData.ultimoContato)}`);
+        if (leadData.proximoContato) formattedDetails.push(`Próximo contato: ${formatDateForDisplay(leadData.proximoContato)}`);
+        if (leadData.dataAE) formattedDetails.push(`Data AE: ${formatDateForDisplay(leadData.dataAE)}`);
+        if (leadData.turmaAE) formattedDetails.push(`Turma AE: ${leadData.turmaAE}`);
+        if (leadData.observacoes) formattedDetails.push(`Observações: ${leadData.observacoes}`);
+        if (leadData.origemLead) formattedDetails.push(`Origem: ${leadData.origemLead}`);
+        
+        return formattedDetails.join(' | ');
+      }
+      
+      // Para atualização completa de lead
+      if (action === 'update' && details.changedFields) {
+        const changedFields = details.changedFields;
+        const changes = [];
+        
+        // Processar cada campo alterado
+        Object.keys(changedFields).forEach(field => {
+          const fieldInfo = changedFields[field];
+          let oldDisplay = fieldInfo.oldValue !== null && fieldInfo.oldValue !== undefined ? fieldInfo.oldValue : '(vazio)';
+          let newDisplay = fieldInfo.newValue !== null && fieldInfo.newValue !== undefined ? fieldInfo.newValue : '(vazio)';
+          
+          // Formatação especial para datas
+          if (['ultimoContato', 'proximoContato', 'dataAE'].includes(field)) {
+            if (fieldInfo.oldValue) oldDisplay = formatDateForDisplay(fieldInfo.oldValue);
+            if (fieldInfo.newValue) newDisplay = formatDateForDisplay(fieldInfo.newValue);
+          }
+          
+          // Mapeamento de nome de campo para exibição
+          let fieldDisplay = field;
+          switch (field) {
+            case 'nome': fieldDisplay = 'Nome'; break;
+            case 'whatsapp': fieldDisplay = 'WhatsApp'; break;
+            case 'status': fieldDisplay = 'Status'; break;
+            case 'ultimoContato': fieldDisplay = 'Último contato'; break;
+            case 'proximoContato': fieldDisplay = 'Próximo contato'; break;
+            case 'dataAE': fieldDisplay = 'Data AE'; break;
+            case 'turmaAE': fieldDisplay = 'Turma AE'; break;
+            case 'observacoes': fieldDisplay = 'Observações'; break;
+            case 'origemLead': fieldDisplay = 'Origem'; break;
+            default: fieldDisplay = field;
+          }
+          
+          changes.push(`${fieldDisplay}: ${oldDisplay} → ${newDisplay}`);
+        });
+        
+        return changes.join(' | ');
+      }
+      
       // Para atualizações de campo específicas
-      if (action === 'field_update' && details.fieldName && details.hasOwnProperty('oldValue') && details.hasOwnProperty('newValue')) {
+      if ((action === 'field_update' || action === 'status_update' || action === 'turma_update') && 
+          details.fieldName && 
+          details.hasOwnProperty('oldValue') && 
+          details.hasOwnProperty('newValue')) {
+        
+        let fieldDisplay = details.fieldName;
+        switch (details.fieldName) {
+          case 'nome': fieldDisplay = 'Nome'; break;
+          case 'whatsapp': fieldDisplay = 'WhatsApp'; break;
+          case 'status': fieldDisplay = 'Status'; break;
+          case 'ultimoContato': fieldDisplay = 'Último contato'; break;
+          case 'proximoContato': fieldDisplay = 'Próximo contato'; break;
+          case 'dataAE': fieldDisplay = 'Data AE'; break;
+          case 'turmaAE': fieldDisplay = 'Turma AE'; break;
+          case 'observacoes': fieldDisplay = 'Observações'; break;
+          case 'origemLead': fieldDisplay = 'Origem'; break;
+          default: fieldDisplay = details.fieldName;
+        }
+        
         let oldDisplay = details.oldValue !== null && details.oldValue !== undefined ? details.oldValue : '(vazio)';
         let newDisplay = details.newValue !== null && details.newValue !== undefined ? details.newValue : '(vazio)';
         
@@ -1949,7 +2204,7 @@ export default function CRM() {
           if (details.newValue) newDisplay = formatDateForDisplay(details.newValue);
         }
         
-        return `Campo "${details.fieldName}": ${oldDisplay} → ${newDisplay}`;
+        return `${fieldDisplay}: ${oldDisplay} → ${newDisplay}`;
       }
       
       // Para outros tipos de logs, retornar representação JSON formatada
@@ -2203,6 +2458,17 @@ export default function CRM() {
       </TableCell>
     );
   }
+
+  // Add this state for expanded log rows
+  const [expandedLogs, setExpandedLogs] = useState({});
+
+  // Function to toggle log expansion
+  const toggleLogExpansion = (logId) => {
+    setExpandedLogs(prev => ({
+      ...prev,
+      [logId]: !prev[logId]
+    }));
+  };
 
   if (loading) {
     return (
@@ -2885,15 +3151,41 @@ export default function CRM() {
                     </TableHead>
                     <TableBody>
                       {paginatedLogs.length > 0 ? (
-                        paginatedLogs.map((log) => (
-                          <TableRow key={log.id} hover>
-                            <TableCell>{log.timestamp.toLocaleString()}</TableCell>
-                            <TableCell>{log.userName}</TableCell>
-                            <TableCell>{formatLogAction(log.action)}</TableCell>
-                            <TableCell>{log.leadName}</TableCell>
-                            <TableCell>{formatLogDetails(log.action, log.details)}</TableCell>
-                          </TableRow>
-                        ))
+                        paginatedLogs.map((log) => {
+                          // Get details formatted
+                          const formattedDetails = formatLogDetails(log.action, log.details);
+                          // Check if details are long and need to be truncated
+                          const isLongDetails = formattedDetails.length > 100;
+                          const isExpanded = expandedLogs[log.id] || false;
+                          const displayDetails = isLongDetails && !isExpanded ? 
+                            `${formattedDetails.substring(0, 100)}...` : formattedDetails;
+                          
+                          return (
+                            <TableRow key={log.id} hover>
+                              <TableCell>{log.timestamp.toLocaleString()}</TableCell>
+                              <TableCell>{log.userName}</TableCell>
+                              <TableCell>{formatLogAction(log.action)}</TableCell>
+                              <TableCell>{log.leadName}</TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2">
+                                    {displayDetails}
+                                  </Typography>
+                                  
+                                  {isLongDetails && (
+                                    <Button 
+                                      size="small" 
+                                      onClick={() => toggleLogExpansion(log.id)}
+                                      sx={{ alignSelf: 'flex-start', mt: 1, py: 0, px: 1 }}
+                                    >
+                                      {isExpanded ? 'Ver menos' : 'Ver mais'}
+                                    </Button>
+                                  )}
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       ) : (
                         <TableRow>
                           <TableCell colSpan={5} align="center">
