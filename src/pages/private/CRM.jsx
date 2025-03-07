@@ -1005,7 +1005,19 @@ export default function CRM() {
       else if (dateValue && typeof dateValue.toDate === 'function') {
         return dayjs(dateValue.toDate());
       }
-      // Se for uma string ISO
+      // Se for uma string no formato dd-mm-yy ou dd/mm/yy
+      else if (typeof dateValue === 'string' && 
+               (/^\d{1,2}-\d{1,2}-\d{1,2}$/.test(dateValue) || /^\d{1,2}\/\d{1,2}\/\d{1,2}$/.test(dateValue))) {
+        // Extraímos os componentes da data usando tanto traço quanto barra como separador
+        const separator = dateValue.includes('-') ? '-' : '/';
+        const [day, month, yearShort] = dateValue.split(separator).map(Number);
+        const year = 2000 + yearShort; // Assumimos anos 2000
+        
+        // Criamos um objeto dayjs com a data corretamente interpretada
+        console.log(`Convertendo data dd${separator}mm${separator}yy: ${day}${separator}${month}${separator}${yearShort} para dayjs`);
+        return dayjs(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+      }
+      // Se for uma string ISO ou outro formato
       else if (typeof dateValue === 'string') {
         return dayjs(dateValue);
       }
@@ -1183,29 +1195,81 @@ export default function CRM() {
   const applyDateFilters = useCallback((leads) => {
     let result = leads;
     
-    // Apply próximo contato filter
+    // Apply proximoContato filter
     if (proxContatoFilter) {
-      const filterDate = dayjs(proxContatoFilter).startOf('day');
+      console.log('Aplicando filtro para Próximo Contato:', proxContatoFilter);
+      // Criamos um objeto dayjs a partir do valor do filtro
+      let filterDate;
+      
+      // Verifica se o valor do filtro está no formato dd-mm-yy ou dd/mm/yy
+      if (typeof proxContatoFilter === 'string' && 
+         (/^\d{1,2}-\d{1,2}-\d{1,2}$/.test(proxContatoFilter) || /^\d{1,2}\/\d{1,2}\/\d{1,2}$/.test(proxContatoFilter))) {
+        // Extraímos os componentes da data usando tanto traço quanto barra como separador
+        const separator = proxContatoFilter.includes('-') ? '-' : '/';
+        const [day, month, yearShort] = proxContatoFilter.split(separator).map(Number);
+        const year = 2000 + yearShort; // Assumimos anos 2000
+        
+        filterDate = dayjs(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+        console.log('Filtro convertido de dd-mm-yy para objeto dayjs:', filterDate.format('YYYY-MM-DD'));
+      } else {
+        // Se não estiver no formato dd-mm-yy, usa o valor como está
+        filterDate = dayjs(proxContatoFilter);
+        console.log('Filtro convertido para objeto dayjs:', filterDate.format('YYYY-MM-DD'));
+      }
+      
+      // Resetar para o início do dia para comparação
+      filterDate = filterDate.startOf('day');
+      
       result = result.filter(lead => {
         if (!lead.proximoContato) return false;
         
         const leadDate = convertToDateObject(lead.proximoContato);
         if (!leadDate) return false;
         
-        return leadDate.startOf('day').isSame(filterDate);
+        const match = leadDate.startOf('day').isSame(filterDate);
+        if (match) {
+          console.log(`Lead ${lead.id} matched filter date for proximoContato:`, leadDate.format('YYYY-MM-DD'));
+        }
+        return match;
       });
     }
 
     // Apply data AE filter
     if (dataAEFilter) {
-      const filterDate = dayjs(dataAEFilter).startOf('day');
+      console.log('Aplicando filtro para Data AE:', dataAEFilter);
+      // Criamos um objeto dayjs a partir do valor do filtro
+      let filterDate;
+      
+      // Verifica se o valor do filtro está no formato dd-mm-yy ou dd/mm/yy
+      if (typeof dataAEFilter === 'string' && 
+         (/^\d{1,2}-\d{1,2}-\d{1,2}$/.test(dataAEFilter) || /^\d{1,2}\/\d{1,2}\/\d{1,2}$/.test(dataAEFilter))) {
+        // Extraímos os componentes da data usando tanto traço quanto barra como separador
+        const separator = dataAEFilter.includes('-') ? '-' : '/';
+        const [day, month, yearShort] = dataAEFilter.split(separator).map(Number);
+        const year = 2000 + yearShort; // Assumimos anos 2000
+        
+        filterDate = dayjs(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+        console.log('Filtro convertido de dd-mm-yy para objeto dayjs:', filterDate.format('YYYY-MM-DD'));
+      } else {
+        // Se não estiver no formato dd-mm-yy, usa o valor como está
+        filterDate = dayjs(dataAEFilter);
+        console.log('Filtro convertido para objeto dayjs:', filterDate.format('YYYY-MM-DD'));
+      }
+      
+      // Resetar para o início do dia para comparação
+      filterDate = filterDate.startOf('day');
+      
       result = result.filter(lead => {
         if (!lead.dataAE) return false;
         
         const leadDate = convertToDateObject(lead.dataAE);
         if (!leadDate) return false;
         
-        return leadDate.startOf('day').isSame(filterDate);
+        const match = leadDate.startOf('day').isSame(filterDate);
+        if (match) {
+          console.log(`Lead ${lead.id} matched filter date:`, leadDate.format('YYYY-MM-DD'));
+        }
+        return match;
       });
     }
 
@@ -3039,10 +3103,16 @@ export default function CRM() {
                     setTempProxContatoFilter('');
                   }
                 }}
+                format="DD/MM/YY"
                 slotProps={{
                   textField: {
                     size: "small",
-                    sx: { minWidth: 200 }
+                    sx: { minWidth: 200 },
+                    placeholder: "dd/mm/yy",
+                    inputProps: {
+                      pattern: "\\d{1,2}/\\d{1,2}/\\d{1,2}",
+                      inputMode: "numeric"
+                    }
                   }
                 }}
               />
@@ -3112,10 +3182,16 @@ export default function CRM() {
                     setTempDataAEFilter('');
                   }
                 }}
+                format="DD/MM/YY"
                 slotProps={{
                   textField: {
                     size: "small",
-                    sx: { minWidth: 200 }
+                    sx: { minWidth: 200 },
+                    placeholder: "dd/mm/yy",
+                    inputProps: {
+                      pattern: "\\d{1,2}/\\d{1,2}/\\d{1,2}",
+                      inputMode: "numeric"
+                    }
                   }
                 }}
               />
