@@ -97,6 +97,11 @@ export default function Tasks() {
   const [logsPage, setLogsPage] = useState(1);
   const [logsPerPage] = useState(50);
   const [totalLogs, setTotalLogs] = useState(0);
+  const [logFilters, setLogFilters] = useState({
+    startDate: null,
+    endDate: null,
+    collaborator: 'all'
+  });
 
   // Estados para tarefas diárias
   const [dailyTasks, setDailyTasks] = useState([]);
@@ -275,30 +280,64 @@ export default function Tasks() {
   useEffect(() => {
     setLogsLoading(true);
     
-    // Primeiro, obter o total de logs para calcular o número de páginas
-    const countQuery = query(
-      collection(db, 'task_logs')
+    // Construir a consulta com filtros
+    let baseQuery = query(
+      collection(db, 'task_logs'),
+      orderBy('timestamp', 'desc')
     );
     
-    getDocs(countQuery).then((snapshot) => {
-      setTotalLogs(snapshot.size);
-    }).catch((error) => {
-      console.error('Erro ao contar logs:', error);
-    });
+    // Consulta para contar o total (sem paginação, mas com filtros)
+    let countQuery = baseQuery;
     
-    // Consulta principal com paginação
-    const q = query(
-      collection(db, 'task_logs'), 
-      orderBy('timestamp', 'desc'),
-      limit(logsPerPage)
-    );
+    // Construir consulta principal com filtros
+    let logsQuery = baseQuery;
     
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const logsData = querySnapshot.docs.map(doc => ({
+    // Aplicar limite de paginação à consulta principal
+    logsQuery = query(logsQuery, limit(logsPerPage));
+    
+    // Função auxiliar para filtrar logs por período e colaborador
+    const applyLocalFilters = (logsData) => {
+      let filteredLogs = [...logsData];
+      
+      // Filtrar por período
+      if (logFilters.startDate) {
+        const startTimestamp = dayjs(logFilters.startDate).startOf('day').valueOf();
+        filteredLogs = filteredLogs.filter(log => log.timestamp >= startTimestamp);
+      }
+      
+      if (logFilters.endDate) {
+        const endTimestamp = dayjs(logFilters.endDate).endOf('day').valueOf();
+        filteredLogs = filteredLogs.filter(log => log.timestamp <= endTimestamp);
+      }
+      
+      // Filtrar por colaborador
+      if (logFilters.collaborator !== 'all') {
+        filteredLogs = filteredLogs.filter(log => log.userId === logFilters.collaborator);
+      }
+      
+      return filteredLogs;
+    };
+    
+    // Primeiro, obtém todos os logs da página atual
+    const unsubscribe = onSnapshot(logsQuery, async (querySnapshot) => {
+      let logsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setLogs(logsData);
+      
+      // Aplica filtros localmente
+      const filteredLogs = applyLocalFilters(logsData);
+      setLogs(filteredLogs);
+      
+      // Contagem aproximada de logs totais com base nos filtros
+      getDocs(countQuery).then((snapshot) => {
+        // Estimativa de total baseada na proporção de filtrados
+        const estimatedTotal = snapshot.size;
+        setTotalLogs(estimatedTotal);
+      }).catch((error) => {
+        console.error('Erro ao contar logs:', error);
+      });
+      
       setLogsLoading(false);
     }, (error) => {
       console.error('Erro ao carregar logs:', error);
@@ -306,7 +345,13 @@ export default function Tasks() {
     });
 
     return () => unsubscribe();
-  }, [logsPerPage]);
+  }, [logsPerPage, logFilters]);
+
+  // Função para aplicar filtros
+  const applyLogFilters = (filters) => {
+    setLogsPage(1); // Volta para a primeira página ao aplicar filtros
+    setLogFilters(filters);
+  };
 
   // Função para carregar mais logs (próxima página)
   const loadMoreLogs = async () => {
@@ -324,10 +369,38 @@ export default function Tasks() {
       );
       
       const querySnapshot = await getDocs(nextQuery);
-      const newLogsData = querySnapshot.docs.map(doc => ({
+      let newLogsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Aplicar filtros localmente
+      if (logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') {
+        // Função auxiliar para filtrar logs por período e colaborador
+        const applyLocalFilters = (logsData) => {
+          let filteredLogs = [...logsData];
+          
+          // Filtrar por período
+          if (logFilters.startDate) {
+            const startTimestamp = dayjs(logFilters.startDate).startOf('day').valueOf();
+            filteredLogs = filteredLogs.filter(log => log.timestamp >= startTimestamp);
+          }
+          
+          if (logFilters.endDate) {
+            const endTimestamp = dayjs(logFilters.endDate).endOf('day').valueOf();
+            filteredLogs = filteredLogs.filter(log => log.timestamp <= endTimestamp);
+          }
+          
+          // Filtrar por colaborador
+          if (logFilters.collaborator !== 'all') {
+            filteredLogs = filteredLogs.filter(log => log.userId === logFilters.collaborator);
+          }
+          
+          return filteredLogs;
+        };
+        
+        newLogsData = applyLocalFilters(newLogsData);
+      }
       
       setLogs(newLogsData);
       setLogsPage(prev => prev + 1);
@@ -359,10 +432,38 @@ export default function Tasks() {
       // Pegamos apenas os últimos 'logsPerPage' documentos
       const docsForPreviousPage = allDocs.slice(Math.max(allDocs.length - logsPerPage, 0));
       
-      const previousLogsData = docsForPreviousPage.map(doc => ({
+      let previousLogsData = docsForPreviousPage.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Aplicar filtros localmente
+      if (logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') {
+        // Função auxiliar para filtrar logs por período e colaborador
+        const applyLocalFilters = (logsData) => {
+          let filteredLogs = [...logsData];
+          
+          // Filtrar por período
+          if (logFilters.startDate) {
+            const startTimestamp = dayjs(logFilters.startDate).startOf('day').valueOf();
+            filteredLogs = filteredLogs.filter(log => log.timestamp >= startTimestamp);
+          }
+          
+          if (logFilters.endDate) {
+            const endTimestamp = dayjs(logFilters.endDate).endOf('day').valueOf();
+            filteredLogs = filteredLogs.filter(log => log.timestamp <= endTimestamp);
+          }
+          
+          // Filtrar por colaborador
+          if (logFilters.collaborator !== 'all') {
+            filteredLogs = filteredLogs.filter(log => log.userId === logFilters.collaborator);
+          }
+          
+          return filteredLogs;
+        };
+        
+        previousLogsData = applyLocalFilters(previousLogsData);
+      }
       
       setLogs(previousLogsData);
       setLogsPage(prev => prev - 1);
@@ -2911,6 +3012,112 @@ export default function Tasks() {
         {/* Aba de Logs */}
         {getCurrentTab() === 6 && (
           <>
+            {/* Filtros de logs */}
+            <Box sx={{ mb: 3 }}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="subtitle1" sx={{ mb: 2 }}>Filtros de Logs</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Colaborador</InputLabel>
+                      <Select
+                        value={logFilters.collaborator}
+                        onChange={(e) => applyLogFilters({...logFilters, collaborator: e.target.value})}
+                        label="Colaborador"
+                      >
+                        <MenuItem value="all">Todos os colaboradores</MenuItem>
+                        {users.map((user) => (
+                          <MenuItem key={user.id} value={user.id}>
+                            {user.name || user.email}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                      <DatePicker
+                        label="Data inicial"
+                        value={logFilters.startDate ? dayjs(logFilters.startDate) : null}
+                        onChange={(date) => applyLogFilters({...logFilters, startDate: date ? date.format('YYYY-MM-DD') : null})}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true
+                          }
+                        }}
+                        format="DD/MM/YYYY"
+                      />
+                    </LocalizationProvider>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                      <DatePicker
+                        label="Data final"
+                        value={logFilters.endDate ? dayjs(logFilters.endDate) : null}
+                        onChange={(date) => applyLogFilters({...logFilters, endDate: date ? date.format('YYYY-MM-DD') : null})}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true
+                          }
+                        }}
+                        format="DD/MM/YYYY"
+                      />
+                    </LocalizationProvider>
+                  </Grid>
+                  <Grid item xs={12} sm={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => applyLogFilters({
+                        startDate: null,
+                        endDate: null,
+                        collaborator: 'all'
+                      })}
+                      fullWidth
+                      size="small"
+                      disabled={
+                        !logFilters.startDate && 
+                        !logFilters.endDate && 
+                        logFilters.collaborator === 'all'
+                      }
+                    >
+                      Limpar Filtros
+                    </Button>
+                  </Grid>
+                </Grid>
+                
+                {/* Indicador de filtros ativos */}
+                {(logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') && (
+                  <Box sx={{ mt: 2, p: 1, bgcolor: 'rgba(0, 0, 0, 0.04)', borderRadius: 1 }}>
+                    <Typography variant="body2">
+                      <strong>Filtros ativos:</strong> {' '}
+                      {logFilters.collaborator !== 'all' && (
+                        <Chip 
+                          size="small" 
+                          label={`Colaborador: ${users.find(u => u.id === logFilters.collaborator)?.name || logFilters.collaborator}`} 
+                          sx={{ mr: 1 }}
+                        />
+                      )}
+                      {logFilters.startDate && (
+                        <Chip 
+                          size="small" 
+                          label={`De: ${dayjs(logFilters.startDate).format('DD/MM/YYYY')}`} 
+                          sx={{ mr: 1 }}
+                        />
+                      )}
+                      {logFilters.endDate && (
+                        <Chip 
+                          size="small" 
+                          label={`Até: ${dayjs(logFilters.endDate).format('DD/MM/YYYY')}`} 
+                        />
+                      )}
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Box>
+
             {logsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress />
