@@ -36,7 +36,8 @@ import {
   Checkbox,
   InputAdornment,
   Tabs,
-  Tab
+  Tab,
+  Tooltip
 } from '@mui/material';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -3011,15 +3012,22 @@ export default function CRM() {
                               }}
                             />
                           ) : (
-                            <Box
-                              onClick={() => {
-                                setEditingCell(`${lead.id}-obs`);
-                                setEditValue(lead.observacoes || '');
-                              }}
-                              style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            <Tooltip 
+                              title={lead.observacoes || '-'} 
+                              enterDelay={1000} 
+                              placement="top"
+                              arrow
                             >
-                              {lead.observacoes || '-'}
-                            </Box>
+                              <Box
+                                onClick={() => {
+                                  setEditingCell(`${lead.id}-obs`);
+                                  setEditValue(lead.observacoes || '');
+                                }}
+                                style={{ cursor: 'pointer', minHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              >
+                                {lead.observacoes || '-'}
+                              </Box>
+                            </Tooltip>
                           )}
                         </TableCell>
                         <TableCell sx={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.5, px: 0.5 }}>
