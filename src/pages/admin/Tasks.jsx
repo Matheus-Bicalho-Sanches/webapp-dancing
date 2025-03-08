@@ -38,6 +38,8 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  NavigateBefore as NavigateBeforeIcon,
+  NavigateNext as NavigateNextIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -56,6 +58,8 @@ import {
   getDocs,
   getDoc,
   setDoc,
+  limit,
+  startAfter,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -90,6 +94,9 @@ export default function Tasks() {
 
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(true);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsPerPage] = useState(50);
+  const [totalLogs, setTotalLogs] = useState(0);
 
   // Estados para tarefas diárias
   const [dailyTasks, setDailyTasks] = useState([]);
@@ -266,16 +273,31 @@ export default function Tasks() {
 
   // Carregar logs
   useEffect(() => {
+    setLogsLoading(true);
+    
+    // Primeiro, obter o total de logs para calcular o número de páginas
+    const countQuery = query(
+      collection(db, 'task_logs')
+    );
+    
+    getDocs(countQuery).then((snapshot) => {
+      setTotalLogs(snapshot.size);
+    }).catch((error) => {
+      console.error('Erro ao contar logs:', error);
+    });
+    
+    // Consulta principal com paginação
     const q = query(
-        collection(db, 'task_logs'), 
-        orderBy('timestamp', 'desc')
+      collection(db, 'task_logs'), 
+      orderBy('timestamp', 'desc'),
+      limit(logsPerPage)
     );
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const logsData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        id: doc.id,
+        ...doc.data()
+      }));
       setLogs(logsData);
       setLogsLoading(false);
     }, (error) => {
@@ -284,7 +306,72 @@ export default function Tasks() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [logsPerPage]);
+
+  // Função para carregar mais logs (próxima página)
+  const loadMoreLogs = async () => {
+    if (logs.length === 0) return;
+    
+    setLogsLoading(true);
+    const lastVisible = logs[logs.length - 1];
+    
+    try {
+      const nextQuery = query(
+        collection(db, 'task_logs'),
+        orderBy('timestamp', 'desc'),
+        startAfter(lastVisible.timestamp),
+        limit(logsPerPage)
+      );
+      
+      const querySnapshot = await getDocs(nextQuery);
+      const newLogsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setLogs(newLogsData);
+      setLogsPage(prev => prev + 1);
+    } catch (error) {
+      console.error('Erro ao carregar mais logs:', error);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // Função para carregar logs da página anterior
+  const loadPreviousLogs = async () => {
+    if (logsPage <= 1) return;
+    
+    setLogsLoading(true);
+    try {
+      // Calcular quantos documentos pular
+      const skipCount = (logsPage - 2) * logsPerPage;
+      
+      const previousQuery = query(
+        collection(db, 'task_logs'),
+        orderBy('timestamp', 'desc'),
+        limit(skipCount + logsPerPage)
+      );
+      
+      const querySnapshot = await getDocs(previousQuery);
+      const allDocs = querySnapshot.docs;
+      
+      // Pegamos apenas os últimos 'logsPerPage' documentos
+      const docsForPreviousPage = allDocs.slice(Math.max(allDocs.length - logsPerPage, 0));
+      
+      const previousLogsData = docsForPreviousPage.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setLogs(previousLogsData);
+      setLogsPage(prev => prev - 1);
+    } catch (error) {
+      console.error('Erro ao carregar logs anteriores:', error);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   // Carregar tarefas diárias
   useEffect(() => {
@@ -2868,6 +2955,35 @@ export default function Tasks() {
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
+            
+            {/* Controles de paginação */}
+            {!logsLoading && logs.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Button 
+                    variant="outlined" 
+                    disabled={logsPage <= 1}
+                    onClick={loadPreviousLogs}
+                    startIcon={<NavigateBeforeIcon />}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  <Typography>
+                    Página {logsPage} • Exibindo {logs.length} de aproximadamente {totalLogs} logs
+                  </Typography>
+                  
+                  <Button 
+                    variant="outlined" 
+                    disabled={logs.length < logsPerPage}
+                    onClick={loadMoreLogs}
+                    endIcon={<NavigateNextIcon />}
+                  >
+                    Próxima
+                  </Button>
+                </Box>
+              </Box>
             )}
           </>
         )}
