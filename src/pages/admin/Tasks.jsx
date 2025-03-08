@@ -2912,7 +2912,7 @@ export default function Tasks() {
                     </Box>
                   )}
                     >
-                      {users.map((user) => (
+                      {adminMasterUsers.map((user) => (
                         <MenuItem key={user.id} value={user.id}>
                           {user.name || user.email}
                         </MenuItem>
@@ -3422,7 +3422,7 @@ export default function Tasks() {
                     </Box>
                   )}
                 >
-                  {users.map((user) => (
+                  {masterTeacherUsers.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
                       {user.name || user.email}
                     </MenuItem>
