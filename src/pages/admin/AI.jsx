@@ -15,8 +15,13 @@ import SendIcon from '@mui/icons-material/Send';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, orderBy, limit } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// Inicializar Firebase Functions
+const functions = getFunctions();
+const queryAIFunction = httpsCallable(functions, 'queryAI');
 
 const AI = () => {
   const { currentUser } = useAuth();
@@ -28,6 +33,7 @@ const AI = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [conversation, setConversation] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
 
   // Verificar se o usuário é do tipo "master"
   useEffect(() => {
@@ -77,25 +83,64 @@ const AI = () => {
     
     // Adicionar a pergunta à conversa
     const newQuestion = { type: 'question', content: question };
-    setConversation([...conversation, newQuestion]);
+    setConversation(prev => [...prev, newQuestion]);
     
     try {
-      // Aqui será implementada a integração com a API da OpenAI
-      // Por enquanto, apenas simulamos uma resposta após 1.5 segundos
-      setTimeout(() => {
-        const mockResponse = {
-          type: 'answer',
-          content: `Esta é uma resposta de demonstração. A funcionalidade de IA será implementada em breve para responder à sua pergunta: "${question}"`
-        };
-        
-        setConversation(prev => [...prev, mockResponse]);
-        setQuestion('');
-        setIsProcessing(false);
-      }, 1500);
+      // Chamar a função Firebase
+      console.log('Enviando pergunta:', question);
+      const result = await queryAIFunction({
+        question: question,
+        conversationId: conversationId
+      });
       
+      console.log('Resposta recebida:', result.data);
+      
+      // Receber a resposta da função
+      const { answer, conversationId: newConversationId, usedBackupModel } = result.data;
+      
+      // Atualizar o ID da conversa para futuras interações
+      setConversationId(newConversationId);
+      
+      // Adicionar a resposta à conversa
+      const newAnswer = { 
+        type: 'answer', 
+        content: answer,
+        // Se usou modelo de backup, adicionar uma nota
+        ...(usedBackupModel ? { note: 'Resposta gerada pelo modelo de backup (gpt-3.5-turbo)' } : {})
+      };
+      setConversation(prev => [...prev, newAnswer]);
+      
+      // Limpar o campo de pergunta
+      setQuestion('');
     } catch (error) {
       console.error('Erro ao processar pergunta:', error);
-      setError('Ocorreu um erro ao processar sua pergunta. Por favor, tente novamente.');
+      
+      let errorMessage = 'Ocorreu um erro ao processar sua pergunta. Por favor, tente novamente.';
+      
+      // Identificar o tipo de erro para mensagem mais específica
+      if (error.code === 'unauthenticated') {
+        errorMessage = 'Você precisa estar autenticado para usar esta funcionalidade.';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Você não tem permissão para acessar esta funcionalidade.';
+      } else if (error.code === 'invalid-argument') {
+        errorMessage = 'Argumento inválido. Verifique sua pergunta e tente novamente.';
+      } else if (error.code === 'resource-exhausted') {
+        errorMessage = 'Limite de uso excedido. Tente novamente mais tarde.';
+      } else if (error.message) {
+        // Se tiver uma mensagem específica, use-a
+        errorMessage = error.message;
+      }
+      
+      // Adicionar mensagem de erro à conversa
+      const errorResponseMessage = { 
+        type: 'answer', 
+        content: errorMessage,
+        isError: true
+      };
+      setConversation(prev => [...prev, errorResponseMessage]);
+      
+      setError(errorMessage);
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -104,6 +149,7 @@ const AI = () => {
     setConversation([]);
     setAnswer('');
     setError(null);
+    setConversationId(null);
   };
 
   // Renderização condicional enquanto verifica o tipo de usuário
@@ -189,17 +235,32 @@ const AI = () => {
                       </Paper>
                     </Box>
                   ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', flexDirection: 'column' }}>
                       <Paper 
                         elevation={1} 
                         sx={{ 
                           p: 2, 
                           maxWidth: '80%',
-                          bgcolor: '#ffffff',
+                          bgcolor: message.isError ? '#ffebee' : '#ffffff',
                           borderRadius: '10px 10px 10px 0'
                         }}
                       >
                         <Typography variant="body1">{message.content}</Typography>
+                        
+                        {/* Mostrar nota sobre modelo de backup, se aplicável */}
+                        {message.note && (
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              display: 'block', 
+                              mt: 1, 
+                              color: 'text.secondary',
+                              fontStyle: 'italic'
+                            }}
+                          >
+                            {message.note}
+                          </Typography>
+                        )}
                       </Paper>
                     </Box>
                   )}
