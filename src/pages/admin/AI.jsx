@@ -14,14 +14,10 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../config/firebase';
+import { db, auth } from '../../config/firebase';
 import { collection, getDocs, query, where, doc, getDoc, orderBy, limit } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-
-// Inicializar Firebase Functions
-const functions = getFunctions();
-const queryAIFunction = httpsCallable(functions, 'queryAI');
+import axios from 'axios';
 
 const AI = () => {
   const { currentUser } = useAuth();
@@ -35,17 +31,25 @@ const AI = () => {
   const [conversation, setConversation] = useState([]);
   const [conversationId, setConversationId] = useState(null);
 
+  // URL base da função Cloud Function
+  const API_URL = 'https://us-central1-webapp-dancing.cloudfunctions.net/queryAI/query';
+  // URL alternativa usando um proxy CORS (usar apenas para desenvolvimento)
+  const CORS_PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(API_URL);
+  // Flag para rastrear tentativas com CORS Proxy
+  const [usingCorsProxy, setUsingCorsProxy] = useState(false);
+
   // Verificar se o usuário é do tipo "master"
   useEffect(() => {
     const checkUserType = async () => {
       try {
-        if (!currentUser) {
+        if (!auth.currentUser) {
+          console.log('Usuário não autenticado, redirecionando para login');
           navigate('/login');
           return;
         }
 
         // Verificar no Firestore o tipo do usuário
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
         
         if (userDoc.exists()) {
           const userData = userDoc.data();
@@ -86,17 +90,39 @@ const AI = () => {
     setConversation(prev => [...prev, newQuestion]);
     
     try {
-      // Chamar a função Firebase
-      console.log('Enviando pergunta:', question);
-      const result = await queryAIFunction({
-        question: question,
-        conversationId: conversationId
-      });
+      // Obter o token de ID do usuário atual
+      // Verificar se o usuário está autenticado
+      if (!auth.currentUser) {
+        setError('Você precisa estar autenticado para usar esta funcionalidade');
+        setIsProcessing(false);
+        return;
+      }
       
-      console.log('Resposta recebida:', result.data);
+      // Usamos o objeto auth.currentUser que tem o método getIdToken
+      const idToken = await auth.currentUser.getIdToken();
       
-      // Receber a resposta da função
-      const { answer, conversationId: newConversationId, usedBackupModel } = result.data;
+      // Definir URL a ser usada (normal ou proxy)
+      const urlToUse = usingCorsProxy ? CORS_PROXY_URL : API_URL;
+      
+      // Chamar a API
+      console.log(`Enviando pergunta usando ${usingCorsProxy ? 'CORS Proxy' : 'URL direta'}:`, question);
+      const response = await axios.post(urlToUse, 
+        {
+          question,
+          conversationId
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('Resposta recebida:', response.data);
+      
+      // Processar a resposta
+      const { answer, conversationId: newConversationId, usedBackupModel } = response.data;
       
       // Atualizar o ID da conversa para futuras interações
       setConversationId(newConversationId);
@@ -106,7 +132,7 @@ const AI = () => {
         type: 'answer', 
         content: answer,
         // Se usou modelo de backup, adicionar uma nota
-        ...(usedBackupModel ? { note: 'Resposta gerada pelo modelo de backup (gpt-3.5-turbo)' } : {})
+        ...(usedBackupModel ? { note: `Resposta gerada pelo modelo de fallback (${usedBackupModel === true ? 'gpt-4o-mini' : usedBackupModel})` } : {})
       };
       setConversation(prev => [...prev, newAnswer]);
       
@@ -115,20 +141,29 @@ const AI = () => {
     } catch (error) {
       console.error('Erro ao processar pergunta:', error);
       
-      let errorMessage = 'Ocorreu um erro ao processar sua pergunta. Por favor, tente novamente.';
+      // Verificar se é um erro de CORS e tentar novamente com o proxy
+      if (!usingCorsProxy && (error.message === 'Network Error' || 
+         (error.response && error.response.status === 0))) {
+        setUsingCorsProxy(true);
+        console.log('Tentando novamente com CORS Proxy...');
+        
+        // Chamar a mesma função novamente (agora com usingCorsProxy = true)
+        handleQuestionSubmit(e);
+        return;
+      }
       
-      // Identificar o tipo de erro para mensagem mais específica
-      if (error.code === 'unauthenticated') {
-        errorMessage = 'Você precisa estar autenticado para usar esta funcionalidade.';
-      } else if (error.code === 'permission-denied') {
-        errorMessage = 'Você não tem permissão para acessar esta funcionalidade.';
-      } else if (error.code === 'invalid-argument') {
-        errorMessage = 'Argumento inválido. Verifique sua pergunta e tente novamente.';
-      } else if (error.code === 'resource-exhausted') {
-        errorMessage = 'Limite de uso excedido. Tente novamente mais tarde.';
-      } else if (error.message) {
-        // Se tiver uma mensagem específica, use-a
-        errorMessage = error.message;
+      let errorMessage = 'Erro ao processar pergunta';
+      
+      if (error.response) {
+        // O servidor respondeu com um código de status diferente de 2xx
+        errorMessage = `Erro do servidor: ${error.response.status} - ${error.response.data.error || 'Erro desconhecido'}`;
+        console.error('Resposta de erro:', error.response.data);
+      } else if (error.request) {
+        // A requisição foi feita mas nenhuma resposta foi recebida
+        errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão de internet.';
+      } else {
+        // Erro ao configurar a requisição
+        errorMessage = `Erro: ${error.message}`;
       }
       
       // Adicionar mensagem de erro à conversa
@@ -199,11 +234,21 @@ const AI = () => {
             Faça perguntas sobre tarefas, funcionários, taxa de renovação de clientes e outras informações disponíveis na base de dados.
           </Typography>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+          <Box mb={4}>
+            <Typography variant="h4" gutterBottom>
+              Assistente IA
+            </Typography>
+            {usingCorsProxy && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Usando CORS Proxy para contornar restrições de CORS. Isso é uma solução temporária apenas para desenvolvimento.
+              </Alert>
+            )}
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+          </Box>
 
           {/* Área de conversa */}
           {conversation.length > 0 && (

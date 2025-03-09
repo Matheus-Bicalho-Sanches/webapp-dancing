@@ -7,19 +7,17 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-const { onCall } = require("firebase-functions/v2/https");
-const { HttpsError } = require("firebase-functions/v1/https");
-const logger = require("firebase-functions/logger");
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { OpenAI } = require("openai");
-const cors = require('cors')({ origin: true });
+const express = require("express");
+const cors = require("cors");
 
 // Carregar variáveis de ambiente quando em desenvolvimento local
 try {
   require('dotenv').config();
 } catch (error) {
-  // Ignorar erro se o dotenv não estiver disponível
-  logger.info('dotenv não encontrado, usando variáveis de ambiente do sistema');
+  console.log('dotenv não encontrado, usando variáveis de ambiente do sistema');
 }
 
 // Create and deploy your first functions
@@ -36,64 +34,82 @@ admin.initializeApp();
 // Inicializar o Firestore
 const db = admin.firestore();
 
-// Obter a chave da API OpenAI de várias fontes possíveis
+// Obter a chave da API OpenAI
 const apiKey = process.env.OPENAI_API_KEY;
 
-logger.info('Configurando API OpenAI');
+console.log('Configurando API OpenAI');
 
 // Inicializar a API da OpenAI com a chave da variável de ambiente
 const openai = new OpenAI({
   apiKey: apiKey,
 });
 
-// Modelo de IA a ser usado - você pode alterar para "gpt-3.5-turbo" se preferir
-const AI_MODEL = "gpt-4o";
+// Modelo de IA a ser usado - usando o3-mini para melhor custo-benefício e mais rápido
+const AI_MODEL = "o3-mini";
+// Modelo de fallback em caso de erro
+const FALLBACK_MODEL = "gpt-4o-mini";
 
-/**
- * Função que recebe uma pergunta, busca dados relevantes no Firestore
- * e usa a API da OpenAI para gerar uma resposta
- */
-exports.queryAI = onCall({ 
-  enforceAppCheck: false,
-  cors: true, // Habilitando CORS para todas as origens
-  region: 'us-central1',
-  timeout: 300, // Aumentando o timeout para 5 minutos
-  maxInstances: 5, // Limitando a 5 instâncias para controle de custos
-}, async (request) => {
+// Criar app Express
+const app = express();
+
+// Configuração CORS mais detalhada
+const corsOptions = {
+  origin: ['http://localhost:3000', 'https://webapp-dancing.web.app', 'https://webapp-dancing.firebaseapp.com'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 86400 // cache preflight por 24 horas
+};
+
+// Aplicar CORS com as opções detalhadas
+app.use(cors(corsOptions));
+
+// Middleware para JSON
+app.use(express.json());
+
+// Rota para processar perguntas da IA
+app.post("/query", async (req, res) => {
   try {
     // Verificar autenticação
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "O usuário precisa estar autenticado para usar esta função."
-      );
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Não autorizado' });
     }
 
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Verificar o token
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (error) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
+    const uid = decodedToken.uid;
+
     // Verificar se o usuário é do tipo master
-    const userSnapshot = await db.collection("users").doc(request.auth.uid).get();
+    const userSnapshot = await db.collection("users").doc(uid).get();
     if (!userSnapshot.exists) {
-      throw new HttpsError("permission-denied", "Usuário não encontrado.");
+      return res.status(403).json({ error: 'Usuário não encontrado' });
     }
 
     const userData = userSnapshot.data();
     if (userData.userType !== "master") {
-      throw new HttpsError(
-        "permission-denied",
-        "Apenas usuários master podem acessar essa funcionalidade."
-      );
+      return res.status(403).json({ error: 'Apenas usuários master podem acessar essa funcionalidade' });
     }
 
-    // Obter a pergunta da requisição
-    const { question, conversationId } = request.data;
+    // Obter a pergunta e o ID da conversa do corpo da requisição
+    const { question, conversationId } = req.body;
     if (!question) {
-      throw new HttpsError("invalid-argument", "A pergunta é obrigatória.");
+      return res.status(400).json({ error: 'A pergunta é obrigatória' });
     }
 
-    logger.info(`Processando pergunta: ${question}`);
+    console.log(`Processando pergunta: ${question}`);
 
     // Registrar a consulta no histórico
     const queryRef = await db.collection("ai_queries").add({
-      userId: request.auth.uid,
+      userId: uid,
       question,
       timestamp: new Date(),
       conversationId: conversationId || null,
@@ -240,7 +256,7 @@ exports.queryAI = onCall({
       } else {
         // Criar nova conversa
         conversationRef = await db.collection("ai_conversations").add({
-          userId: request.auth.uid,
+          userId: uid,
           createdAt: new Date(),
           updatedAt: new Date(),
           messages: [
@@ -265,19 +281,19 @@ exports.queryAI = onCall({
       });
 
       // Retornar a resposta
-      return {
+      return res.json({
         answer: aiResponse,
         conversationId: conversationRef.id
-      };
+      });
     } catch (openaiError) {
-      logger.error("Erro na API da OpenAI:", openaiError);
+      console.error("Erro na API da OpenAI:", openaiError);
       
-      // Se houver erro na API do OpenAI, tentar com o modelo de backup
-      if (AI_MODEL !== "gpt-3.5-turbo") {
-        logger.info("Tentando com modelo de backup gpt-3.5-turbo");
+      // Se houver erro na API do OpenAI, tentar com o modelo de fallback
+      if (AI_MODEL !== FALLBACK_MODEL) {
+        console.log(`Tentando com modelo de fallback ${FALLBACK_MODEL}`);
         
         const backupCompletion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
+          model: FALLBACK_MODEL,
           messages: [
             {
               role: "system",
@@ -294,7 +310,7 @@ exports.queryAI = onCall({
         
         const backupResponse = backupCompletion.choices[0].message.content;
         
-        // Salvar a conversa no Firestore com a resposta do modelo de backup
+        // Salvar a conversa no Firestore com a resposta do modelo de fallback
         let conversationRef;
         if (conversationId) {
           conversationRef = db.collection("ai_conversations").doc(conversationId);
@@ -313,7 +329,7 @@ exports.queryAI = onCall({
           });
         } else {
           conversationRef = await db.collection("ai_conversations").add({
-            userId: request.auth.uid,
+            userId: uid,
             createdAt: new Date(),
             updatedAt: new Date(),
             usedBackupModel: true,
@@ -338,25 +354,20 @@ exports.queryAI = onCall({
           usedBackupModel: true
         });
         
-        return {
+        return res.json({
           answer: backupResponse,
           conversationId: conversationRef.id,
-          usedBackupModel: true
-        };
+          usedBackupModel: FALLBACK_MODEL
+        });
       }
       
-      throw openaiError;
+      return res.status(500).json({ error: 'Erro ao processar a resposta da IA: ' + openaiError.message });
     }
   } catch (error) {
-    logger.error("Erro na função queryAI:", error);
-    
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-    
-    throw new HttpsError(
-      "internal",
-      error.message || "Ocorreu um erro ao processar sua pergunta. Por favor, tente novamente."
-    );
+    console.error("Erro na função queryAI:", error);
+    return res.status(500).json({ error: 'Erro interno: ' + error.message });
   }
 });
+
+// Exportar a função HTTP
+exports.queryAI = functions.https.onRequest(app);
