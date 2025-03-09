@@ -26,6 +26,7 @@ import CRM from './pages/private/CRM';
 import ConfigTest from './components/ConfigTest';
 import Uniform from './pages/admin/Uniform';
 import Subscriptions from './pages/admin/Subscriptions';
+import AI from './pages/admin/AI';
 
 function App() {
   return (
@@ -149,6 +150,11 @@ function App() {
           <Route path="/admin/cantina" element={
             <PrivateRoute>
               <Products />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/ia" element={
+            <PrivateRoute>
+              <AI />
             </PrivateRoute>
           } />
           <Route 

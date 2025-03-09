@@ -249,13 +249,11 @@ service cloud.firestore {
 
     // Regras para a coleção logs
     match /logs/{logId} {
-      // Permitir leitura para usuários autenticados
       allow read: if isAuthenticated();
-      
-      // Permitir criação/atualização/exclusão para master, administrativo ou ateliê
-      allow write: if isAuthenticated() && isCurrentUserMasterOrAdminOrAtelier();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
     }
-
+    
     // Regras para a coleção teacherSchedules e suas subcoleções
     match /teacherSchedules/{professorId} {
       allow read: if isAuthenticated();
@@ -266,6 +264,30 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
       }
+    }
+    
+    // Regras para a coleção ai_conversations - Nova coleção para IA
+    match /ai_conversations/{conversationId} {
+      // Permitir leitura apenas para usuários master
+      allow read: if isAuthenticated() && isCurrentUserMaster();
+      
+      // Permitir criação/atualização apenas para usuários master
+      allow create, update: if isAuthenticated() && isCurrentUserMaster();
+      
+      // Permitir exclusão apenas para usuários master
+      allow delete: if isAuthenticated() && isCurrentUserMaster();
+    }
+    
+    // Regras para a coleção ai_queries - Histórico de consultas à IA
+    match /ai_queries/{queryId} {
+      // Permitir leitura apenas para usuários master
+      allow read: if isAuthenticated() && isCurrentUserMaster();
+      
+      // Permitir criação apenas para usuários master
+      allow create: if isAuthenticated() && isCurrentUserMaster();
+      
+      // Não permitir atualização ou exclusão após criação (para manter o histórico)
+      allow update, delete: if false;
     }
   }
 } 
