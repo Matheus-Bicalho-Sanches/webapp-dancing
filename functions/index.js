@@ -281,18 +281,30 @@ app.post("/query", async (req, res) => {
     async function fetchAllFirebaseData() {
       console.log("Buscando todos os dados do Firebase...");
       
-      // Lista de coleções para buscar
+      // Lista completa de coleções para buscar (baseada na imagem e nas mencionadas)
       const collections = [
+        "agendamentos",
+        "ai_conversations",
+        "ai_queries",
         "alunos",
-        "professores",
-        "matriculas",
-        "pagamentos",
         "aulas",
-        "turmas",
+        "matriculas",
+        "movimentacoes",
+        "pagamentos",
+        "planos",
+        "produtos",
+        "professores",
         "tarefas",
         "tarefas_diarias",
+        "tarefas_mensais",
         "tarefas_por_horario",
+        "tarefas_semanais",
+        "terminados",
+        "uniform_sales",
+        "uniforms",
         "users",
+        "vendas",
+        "valores_aulas",
         "task_logs",
         "eventos",
         "notificacoes",
@@ -348,18 +360,30 @@ app.post("/query", async (req, res) => {
     async function fetchCollectionStats() {
       console.log("Buscando estatísticas das coleções...");
       
-      // Lista de coleções para buscar estatísticas
+      // Lista completa de coleções para buscar estatísticas
       const collections = [
+        "agendamentos",
+        "ai_conversations",
+        "ai_queries",
         "alunos",
-        "professores",
-        "matriculas",
-        "pagamentos",
         "aulas",
-        "turmas",
+        "matriculas",
+        "movimentacoes",
+        "pagamentos",
+        "planos",
+        "produtos",
+        "professores",
         "tarefas",
         "tarefas_diarias",
+        "tarefas_mensais",
         "tarefas_por_horario",
+        "tarefas_semanais",
+        "terminados",
+        "uniform_sales",
+        "uniforms",
         "users",
+        "vendas",
+        "valores_aulas",
         "task_logs",
         "eventos",
         "notificacoes",
@@ -462,22 +486,46 @@ app.post("/query", async (req, res) => {
             role: "system",
             content: `Você é um assistente especializado em analisar dados de uma escola de patinação. 
             Você tem acesso a todas as coleções do banco de dados Firebase, incluindo:
+            - agendamentos: agendamentos de aulas e eventos
+            - ai_conversations: histórico de conversas com a IA
+            - ai_queries: consultas feitas à IA
             - alunos: dados dos alunos matriculados
             - professores: informações sobre os professores
-            - matriculas: registros de matrículas de alunos
-            - pagamentos: histórico de pagamentos realizados
             - aulas: detalhes sobre aulas agendadas e realizadas
-            - turmas: informações sobre as turmas
+            - matriculas: registros de matrículas de alunos
+            - movimentacoes: registro de movimentações financeiras
+            - pagamentos: histórico de pagamentos realizados
+            - planos: planos oferecidos pela escola
+            - produtos: produtos vendidos pela escola
+            - professores: informações sobre os professores
             - tarefas: tarefas a serem realizadas
-            - eventos: calendário de eventos
+            - tarefas_diarias: tarefas que se repetem diariamente
+            - tarefas_mensais: tarefas que se repetem mensalmente
+            - tarefas_por_horario: tarefas organizadas por horário
+            - tarefas_semanais: tarefas que se repetem semanalmente
+            - turmas: informações sobre as turmas
+            - uniform_sales: vendas de uniformes
+            - uniforms: cadastro de uniformes disponíveis
             - users: usuários do sistema
-            - e outras coleções relacionadas à gestão da escola
+            - vendas: registro de vendas realizadas
+            - valores_aulas: preços e valores das aulas
+            - task_logs: registros de execução de tarefas
+            - eventos: calendário de eventos
+            - notificacoes: sistema de notificações
+            - mensagens: mensagens entre usuários
             
             Responda com base nos dados fornecidos, de forma clara e objetiva. Se necessitar de dados que não foram disponibilizados, mencione isso na sua resposta.
             
             Quando for solicitado a mostrar estatísticas ou resumos de coleções, formate os dados em tabelas para melhor visualização. 
             
-            Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.`
+            Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.
+            
+            IMPORTANTE: Sempre explique seu raciocínio de forma detalhada. Divida sua resposta em duas seções:
+            
+            1. RACIOCÍNIO: Explique como chegou à resposta, quais dados analisou, como interpretou os resultados, etc.
+            2. RESPOSTA FINAL: A resposta direta à pergunta do usuário.
+            
+            Use formatação markdown para separar as seções com títulos claros.`
           },
           {
             role: "user",
@@ -497,7 +545,9 @@ app.post("/query", async (req, res) => {
       if (conversationId) {
         // Adicionar à conversa existente
         conversationRef = db.collection("ai_conversations").doc(conversationId);
+        
         await conversationRef.update({
+          updatedAt: new Date(),
           messages: admin.firestore.FieldValue.arrayUnion({
             role: "user",
             content: question,
@@ -506,8 +556,7 @@ app.post("/query", async (req, res) => {
             role: "assistant",
             content: aiResponse,
             timestamp: new Date()
-          }),
-          updatedAt: new Date()
+          })
         });
       } else {
         // Criar nova conversa
@@ -529,17 +578,19 @@ app.post("/query", async (req, res) => {
           ]
         });
       }
-
-      // Atualizar o registro da consulta com a referência da conversa
+      
+      // Atualizar a consulta no histórico
       await queryRef.update({
-        aiResponse,
-        conversationId: conversationRef.id
+        aiResponse: aiResponse,
+        conversationId: conversationRef.id,
+        modelUsed: availableModel
       });
-
-      // Retornar a resposta
+      
+      // Enviar resposta
       return res.json({
         answer: aiResponse,
-        conversationId: conversationRef.id
+        conversationId: conversationRef.id,
+        modelUsed: availableModel
       });
     } catch (openaiError) {
       console.error("Erro na API da OpenAI:", openaiError);
@@ -566,22 +617,45 @@ app.post("/query", async (req, res) => {
               role: "system",
               content: `Você é um assistente especializado em analisar dados de uma escola de patinação. 
               Você tem acesso a todas as coleções do banco de dados Firebase, incluindo:
+              - agendamentos: agendamentos de aulas e eventos
+              - ai_conversations: histórico de conversas com a IA
+              - ai_queries: consultas feitas à IA
               - alunos: dados dos alunos matriculados
-              - professores: informações sobre os professores
-              - matriculas: registros de matrículas de alunos
-              - pagamentos: histórico de pagamentos realizados
               - aulas: detalhes sobre aulas agendadas e realizadas
-              - turmas: informações sobre as turmas
+              - matriculas: registros de matrículas de alunos
+              - movimentacoes: registro de movimentações financeiras
+              - pagamentos: histórico de pagamentos realizados
+              - planos: planos oferecidos pela escola
+              - produtos: produtos vendidos pela escola
+              - professores: informações sobre os professores
               - tarefas: tarefas a serem realizadas
-              - eventos: calendário de eventos
+              - tarefas_diarias: tarefas que se repetem diariamente
+              - tarefas_mensais: tarefas que se repetem mensalmente
+              - tarefas_por_horario: tarefas organizadas por horário
+              - tarefas_semanais: tarefas que se repetem semanalmente
+              - terminados: registros de itens concluídos
+              - uniform_sales: vendas de uniformes
+              - uniforms: cadastro de uniformes disponíveis
               - users: usuários do sistema
-              - e outras coleções relacionadas à gestão da escola
+              - vendas: registro de vendas realizadas
+              - valores_aulas: preços e valores das aulas
+              - task_logs: registros de execução de tarefas
+              - eventos: calendário de eventos
+              - notificacoes: sistema de notificações
+              - mensagens: mensagens entre usuários
               
               Responda com base nos dados fornecidos, de forma clara e objetiva. Se necessitar de dados que não foram disponibilizados, mencione isso na sua resposta.
               
               Quando for solicitado a mostrar estatísticas ou resumos de coleções, formate os dados em tabelas para melhor visualização. 
               
-              Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.`
+              Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.
+              
+              IMPORTANTE: Sempre explique seu raciocínio de forma detalhada. Divida sua resposta em duas seções:
+              
+              1. RACIOCÍNIO: Explique como chegou à resposta, quais dados analisou, como interpretou os resultados, etc.
+              2. RESPOSTA FINAL: A resposta direta à pergunta do usuário.
+              
+              Use formatação markdown para separar as seções com títulos claros.`
             },
             {
               role: "user",
@@ -635,13 +709,15 @@ app.post("/query", async (req, res) => {
         await queryRef.update({
           aiResponse: backupResponse,
           conversationId: conversationRef.id,
-          usedBackupModel: true
+          usedBackupModel: true,
+          modelUsed: FALLBACK_MODEL
         });
         
         return res.json({
           answer: backupResponse,
           conversationId: conversationRef.id,
-          usedBackupModel: FALLBACK_MODEL
+          usedBackupModel: FALLBACK_MODEL,
+          modelUsed: FALLBACK_MODEL
         });
       }
       

@@ -75,8 +75,6 @@ const AI = () => {
     checkUserType();
   }, [currentUser, navigate]);
 
-  console.log('Rendering AI component, userType:', userType, 'loading:', loading);
-
   const handleQuestionSubmit = async (e) => {
     e.preventDefault();
     
@@ -122,7 +120,7 @@ const AI = () => {
       console.log('Resposta recebida:', response.data);
       
       // Processar a resposta
-      const { answer, conversationId: newConversationId, usedBackupModel } = response.data;
+      const { answer, conversationId: newConversationId, usedBackupModel, modelUsed } = response.data;
       
       // Atualizar o ID da conversa para futuras interações
       setConversationId(newConversationId);
@@ -131,8 +129,10 @@ const AI = () => {
       const newAnswer = { 
         type: 'answer', 
         content: answer,
-        // Se usou modelo de backup, adicionar uma nota
-        ...(usedBackupModel ? { note: `Resposta gerada pelo modelo de fallback (${usedBackupModel === true ? 'gpt-4o-mini' : usedBackupModel})` } : {})
+        // Adicionar informação do modelo usado
+        modelInfo: modelUsed ? `Resposta gerada pelo modelo: ${modelUsed}` : 'Modelo desconhecido',
+        // Para compatibilidade com versões anteriores
+        ...(usedBackupModel ? { note: `Modelo de fallback utilizado (${usedBackupModel === true ? 'gpt-4o-mini' : usedBackupModel})` } : {})
       };
       setConversation(prev => [...prev, newAnswer]);
       
@@ -292,13 +292,28 @@ const AI = () => {
                       >
                         <Typography variant="body1">{message.content}</Typography>
                         
+                        {/* Mostrar informação do modelo usado */}
+                        {message.modelInfo && (
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              display: 'block', 
+                              mt: 1, 
+                              color: 'primary.main',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {message.modelInfo}
+                          </Typography>
+                        )}
+                        
                         {/* Mostrar nota sobre modelo de backup, se aplicável */}
                         {message.note && (
                           <Typography 
                             variant="caption" 
                             sx={{ 
                               display: 'block', 
-                              mt: 1, 
+                              mt: message.modelInfo ? 0.5 : 1, 
                               color: 'text.secondary',
                               fontStyle: 'italic'
                             }}
