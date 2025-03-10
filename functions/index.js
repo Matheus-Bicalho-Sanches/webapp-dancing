@@ -507,7 +507,7 @@ app.post("/query", async (req, res) => {
             content: `Baseado nos seguintes dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
           }
         ],
-        max_tokens: 4000,
+        max_tokens: 1000,
         temperature: 0.5,
         ...modelConfig
       });
@@ -647,7 +647,7 @@ app.post("/query", async (req, res) => {
               content: `Baseado nos seguintes dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
             }
           ],
-          max_tokens: 4000,
+          max_tokens: 1000,
           temperature: 0.5,
         });
         

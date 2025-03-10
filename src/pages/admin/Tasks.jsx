@@ -60,6 +60,7 @@ import {
   setDoc,
   limit,
   startAfter,
+  where,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -100,7 +101,8 @@ export default function Tasks() {
   const [logFilters, setLogFilters] = useState({
     startDate: null,
     endDate: null,
-    collaborator: 'all'
+    collaborator: 'all',
+    taskType: 'all'
   });
 
   // Estados para tarefas diárias
@@ -281,21 +283,39 @@ export default function Tasks() {
     setLogsLoading(true);
     
     // Construir a consulta com filtros
-    let baseQuery = query(
-      collection(db, 'task_logs'),
-      orderBy('timestamp', 'desc')
-    );
+    let logsQuery;
     
-    // Consulta para contar o total (sem paginação, mas com filtros)
-    let countQuery = baseQuery;
+    // Aplicar filtro por tipo de tarefa diretamente na consulta do Firebase
+    if (logFilters.taskType !== 'all') {
+      // Para o Firestore, precisamos de um índice composto quando filtramos por um campo
+      // e ordenamos por outro. Vamos criar essa consulta.
+      logsQuery = query(
+        collection(db, 'task_logs'),
+        where('details.taskType', '==', logFilters.taskType),
+        orderBy('timestamp', 'desc'),
+        limit(logsPerPage)
+      );
+    } else {
+      // Consulta padrão sem filtro por tipo
+      logsQuery = query(
+        collection(db, 'task_logs'),
+        orderBy('timestamp', 'desc'),
+        limit(logsPerPage)
+      );
+    }
     
-    // Construir consulta principal com filtros
-    let logsQuery = baseQuery;
+    // Consulta para contagem total com os mesmos filtros
+    let countQuery;
+    if (logFilters.taskType !== 'all') {
+      countQuery = query(
+        collection(db, 'task_logs'),
+        where('details.taskType', '==', logFilters.taskType)
+      );
+    } else {
+      countQuery = query(collection(db, 'task_logs'));
+    }
     
-    // Aplicar limite de paginação à consulta principal
-    logsQuery = query(logsQuery, limit(logsPerPage));
-    
-    // Função auxiliar para filtrar logs por período e colaborador
+    // Função auxiliar para filtrar logs por período e colaborador (aplicados localmente)
     const applyLocalFilters = (logsData) => {
       let filteredLogs = [...logsData];
       
@@ -341,6 +361,17 @@ export default function Tasks() {
       setLogsLoading(false);
     }, (error) => {
       console.error('Erro ao carregar logs:', error);
+      
+      // Verificar se o erro é relacionado a índices ausentes
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        // Mostrar mensagem de erro com link para criar índice
+        setSnackbar({
+          open: true,
+          message: 'É necessário criar um índice no Firebase. Verifique o console para mais informações.',
+          severity: 'error'
+        });
+      }
+      
       setLogsLoading(false);
     });
 
@@ -361,12 +392,25 @@ export default function Tasks() {
     const lastVisible = logs[logs.length - 1];
     
     try {
-      const nextQuery = query(
-        collection(db, 'task_logs'),
-        orderBy('timestamp', 'desc'),
-        startAfter(lastVisible.timestamp),
-        limit(logsPerPage)
-      );
+      let nextQuery;
+      
+      // Aplicar filtro por tipo de tarefa diretamente na consulta
+      if (logFilters.taskType !== 'all') {
+        nextQuery = query(
+          collection(db, 'task_logs'),
+          where('details.taskType', '==', logFilters.taskType),
+          orderBy('timestamp', 'desc'),
+          startAfter(lastVisible.timestamp),
+          limit(logsPerPage)
+        );
+      } else {
+        nextQuery = query(
+          collection(db, 'task_logs'),
+          orderBy('timestamp', 'desc'),
+          startAfter(lastVisible.timestamp),
+          limit(logsPerPage)
+        );
+      }
       
       const querySnapshot = await getDocs(nextQuery);
       let newLogsData = querySnapshot.docs.map(doc => ({
@@ -374,7 +418,7 @@ export default function Tasks() {
         ...doc.data()
       }));
       
-      // Aplicar filtros localmente
+      // Aplicar filtros localmente (apenas para período e colaborador)
       if (logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') {
         // Função auxiliar para filtrar logs por período e colaborador
         const applyLocalFilters = (logsData) => {
@@ -406,6 +450,15 @@ export default function Tasks() {
       setLogsPage(prev => prev + 1);
     } catch (error) {
       console.error('Erro ao carregar mais logs:', error);
+      
+      // Verificar se o erro é relacionado a índices ausentes
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        setSnackbar({
+          open: true,
+          message: 'É necessário criar um índice no Firebase. Verifique o console para mais informações.',
+          severity: 'error'
+        });
+      }
     } finally {
       setLogsLoading(false);
     }
@@ -420,11 +473,23 @@ export default function Tasks() {
       // Calcular quantos documentos pular
       const skipCount = (logsPage - 2) * logsPerPage;
       
-      const previousQuery = query(
-        collection(db, 'task_logs'),
-        orderBy('timestamp', 'desc'),
-        limit(skipCount + logsPerPage)
-      );
+      let previousQuery;
+      
+      // Aplicar filtro por tipo de tarefa diretamente na consulta
+      if (logFilters.taskType !== 'all') {
+        previousQuery = query(
+          collection(db, 'task_logs'),
+          where('details.taskType', '==', logFilters.taskType),
+          orderBy('timestamp', 'desc'),
+          limit(skipCount + logsPerPage)
+        );
+      } else {
+        previousQuery = query(
+          collection(db, 'task_logs'),
+          orderBy('timestamp', 'desc'),
+          limit(skipCount + logsPerPage)
+        );
+      }
       
       const querySnapshot = await getDocs(previousQuery);
       const allDocs = querySnapshot.docs;
@@ -437,7 +502,7 @@ export default function Tasks() {
         ...doc.data()
       }));
       
-      // Aplicar filtros localmente
+      // Aplicar filtros localmente (apenas para período e colaborador)
       if (logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') {
         // Função auxiliar para filtrar logs por período e colaborador
         const applyLocalFilters = (logsData) => {
@@ -469,6 +534,15 @@ export default function Tasks() {
       setLogsPage(prev => prev - 1);
     } catch (error) {
       console.error('Erro ao carregar logs anteriores:', error);
+      
+      // Verificar se o erro é relacionado a índices ausentes
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        setSnackbar({
+          open: true,
+          message: 'É necessário criar um índice no Firebase. Verifique o console para mais informações.',
+          severity: 'error'
+        });
+      }
     } finally {
       setLogsLoading(false);
     }
@@ -3017,7 +3091,25 @@ export default function Tasks() {
               <Paper sx={{ p: 2 }}>
                 <Typography variant="subtitle1" sx={{ mb: 2 }}>Filtros de Logs</Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Tipo de Tarefa</InputLabel>
+                      <Select
+                        value={logFilters.taskType}
+                        onChange={(e) => applyLogFilters({...logFilters, taskType: e.target.value})}
+                        label="Tipo de Tarefa"
+                      >
+                        <MenuItem value="all">Todos os tipos</MenuItem>
+                        <MenuItem value="nao_recorrente">Não recorrente</MenuItem>
+                        <MenuItem value="diaria">Diária</MenuItem>
+                        <MenuItem value="semanal">Semanal</MenuItem>
+                        <MenuItem value="mensal">Mensal</MenuItem>
+                        <MenuItem value="agendada">Por horário</MenuItem>
+                        <MenuItem value="tecnica">Técnico</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Colaborador</InputLabel>
                       <Select
@@ -3072,14 +3164,16 @@ export default function Tasks() {
                       onClick={() => applyLogFilters({
                         startDate: null,
                         endDate: null,
-                        collaborator: 'all'
+                        collaborator: 'all',
+                        taskType: 'all'
                       })}
                       fullWidth
                       size="small"
                       disabled={
                         !logFilters.startDate && 
                         !logFilters.endDate && 
-                        logFilters.collaborator === 'all'
+                        logFilters.collaborator === 'all' &&
+                        logFilters.taskType === 'all'
                       }
                     >
                       Limpar Filtros
@@ -3088,10 +3182,25 @@ export default function Tasks() {
                 </Grid>
                 
                 {/* Indicador de filtros ativos */}
-                {(logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all') && (
+                {(logFilters.startDate || logFilters.endDate || logFilters.collaborator !== 'all' || logFilters.taskType !== 'all') && (
                   <Box sx={{ mt: 2, p: 1, bgcolor: 'rgba(0, 0, 0, 0.04)', borderRadius: 1 }}>
                     <Typography variant="body2">
                       <strong>Filtros ativos:</strong> {' '}
+                      {logFilters.taskType !== 'all' && (
+                        <Chip 
+                          size="small" 
+                          label={`Tipo: ${
+                            logFilters.taskType === 'nao_recorrente' ? 'Não recorrente' :
+                            logFilters.taskType === 'diaria' ? 'Diária' :
+                            logFilters.taskType === 'semanal' ? 'Semanal' :
+                            logFilters.taskType === 'mensal' ? 'Mensal' :
+                            logFilters.taskType === 'agendada' ? 'Por horário' :
+                            logFilters.taskType === 'tecnica' ? 'Técnico' :
+                            logFilters.taskType
+                          }`} 
+                          sx={{ mr: 1 }}
+                        />
+                      )}
                       {logFilters.collaborator !== 'all' && (
                         <Chip 
                           size="small" 
