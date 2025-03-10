@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -34,6 +34,9 @@ const shakeAnimation = keyframes`
   100% { transform: translate(1px, -2px) rotate(-1deg); }
 `;
 
+// Store viewed task IDs across component re-renders
+let viewedTaskIds = [];
+
 export default function MainLayout({ children, title }) {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -42,31 +45,39 @@ export default function MainLayout({ children, title }) {
   const [userName, setUserName] = useState('');
   const [hasUpcomingTasks, setHasUpcomingTasks] = useState(false);
   const [upcomingTasksIds, setUpcomingTasksIds] = useState([]);
+  const [newUpcomingTasksIds, setNewUpcomingTasksIds] = useState([]);
   const [audio] = useState(new Audio('/notification.mp3'));
   const [isPlaying, setIsPlaying] = useState(false);
-  const [notificationSilenced, setNotificationSilenced] = useState(false);
-  const [viewedTasksIds, setViewedTasksIds] = useState([]);
+  
+  // For UI state
+  const [notificationsSilenced, setNotificationsSilenced] = useState(false);
 
   const isNotificationsPage = location.pathname === '/admin/notifications';
-
-  // Silence notifications when visiting the notifications page
+  
+  // When on notifications page, mark current tasks as viewed
   useEffect(() => {
-    if (isNotificationsPage && hasUpcomingTasks) {
-      // Mark current task IDs as viewed
-      setViewedTasksIds(prevViewed => {
-        const newViewed = [...prevViewed];
-        upcomingTasksIds.forEach(id => {
-          if (!newViewed.includes(id)) {
-            newViewed.push(id);
-          }
-        });
-        return newViewed;
+    if (isNotificationsPage && upcomingTasksIds.length > 0) {
+      // Mark all current task IDs as viewed
+      upcomingTasksIds.forEach(taskId => {
+        if (!viewedTaskIds.includes(taskId)) {
+          viewedTaskIds.push(taskId);
+        }
       });
       
-      // Silence current notifications
-      setNotificationSilenced(true);
+      // Update new tasks state
+      updateNewTasksState();
     }
-  }, [isNotificationsPage, hasUpcomingTasks, upcomingTasksIds]);
+  }, [isNotificationsPage, upcomingTasksIds]);
+  
+  // Helper function to update new tasks state
+  const updateNewTasksState = () => {
+    // Find tasks that haven't been viewed yet
+    const newTasks = upcomingTasksIds.filter(id => !viewedTaskIds.includes(id));
+    setNewUpcomingTasksIds(newTasks);
+    
+    // Update silenced state for UI
+    setNotificationsSilenced(newTasks.length === 0);
+  };
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -116,11 +127,8 @@ export default function MainLayout({ children, title }) {
         'domingo': 'domingo'
       };
 
-      // Track upcoming task IDs and new upcoming tasks
-      const currentUpcomingTaskIds = [];
-      let hasNewUpcomingTasks = false;
-
-      const hasUpcoming = tasks.some(task => {
+      // Check for tasks within the 10-minute window
+      const upcomingTasks = tasks.filter(task => {
         if (!task.horario || !task.diasDaSemana) return false;
 
         const [hours, minutes] = task.horario.split(':');
@@ -130,65 +138,71 @@ export default function MainLayout({ children, title }) {
         const diffInMinutes = Math.floor((taskTime - now) / (1000 * 60));
         
         // Check if the task is scheduled for today and coming up within the next 10 minutes
-        const isUpcoming = task.diasDaSemana.includes(dayMapping[currentDay]) && 
+        return task.diasDaSemana.includes(dayMapping[currentDay]) && 
                diffInMinutes >= 0 && 
                diffInMinutes <= 10;
-        
-        if (isUpcoming) {
-          currentUpcomingTaskIds.push(task.id);
-          
-          // Check if this task has not been viewed before
-          if (!viewedTasksIds.includes(task.id)) {
-            hasNewUpcomingTasks = true;
-          }
-        }
-        
-        return isUpcoming;
       });
 
+      // Update upcoming task IDs
+      const currentUpcomingTaskIds = upcomingTasks.map(task => task.id);
       setUpcomingTasksIds(currentUpcomingTaskIds);
 
-      // If there are new upcoming tasks that haven't been viewed
-      if (hasUpcoming) {
-        setHasUpcomingTasks(true);
-        
-        // Un-silence only if there are new tasks that haven't been viewed
-        if (hasNewUpcomingTasks) {
-          setNotificationSilenced(false);
-        }
-      } else {
-        setHasUpcomingTasks(false);
-      }
+      // Determine if there are any upcoming tasks
+      const hasUpcoming = upcomingTasks.length > 0;
+      
+      // Update has upcoming tasks state 
+      setHasUpcomingTasks(hasUpcoming);
+      
+      // Update new tasks state
+      updateNewTasksState();
     });
 
     return () => unsubscribe();
-  }, [currentUser, viewedTasksIds]);
+  }, [currentUser]);
 
   // Handle sound effect
   useEffect(() => {
     let interval;
-    // Only play sound if there are upcoming tasks, not on notifications page, and not silenced
-    if (hasUpcomingTasks && !isNotificationsPage && !notificationSilenced) {
+    
+    // Should play sound ONLY if:
+    // 1. There are upcoming tasks
+    // 2. Not on notifications page 
+    // 3. There are new tasks that haven't been viewed
+    const shouldPlaySound = hasUpcomingTasks && !isNotificationsPage && newUpcomingTasksIds.length > 0;
+    
+    if (shouldPlaySound) {
       setIsPlaying(true);
-      audio.play().catch(error => console.error('Error playing sound:', error));
+      audio.play().catch(error => {
+        console.error('Error playing sound:', error);
+      });
       
       // Restart sound every 30 seconds if notification is still active
       interval = setInterval(() => {
-        if (hasUpcomingTasks && !isNotificationsPage && !notificationSilenced) {
-          audio.play().catch(error => console.error('Error playing sound:', error));
+        if (hasUpcomingTasks && !isNotificationsPage && newUpcomingTasksIds.length > 0) {
+          audio.play().catch(error => {
+            console.error('Error playing sound:', error);
+          });
+        } else {
+          clearInterval(interval);
         }
       }, 30000);
+    } else if (isPlaying) {
+      audio.pause();
+      audio.currentTime = 0;
+      setIsPlaying(false);
     }
 
     return () => {
-      if (interval) clearInterval(interval);
-      if (audio) {
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (isPlaying) {
         audio.pause();
         audio.currentTime = 0;
         setIsPlaying(false);
       }
     };
-  }, [hasUpcomingTasks, audio, isNotificationsPage, notificationSilenced]);
+  }, [hasUpcomingTasks, audio, isNotificationsPage, newUpcomingTasksIds, isPlaying]);
 
   const handleLogout = async () => {
     try {
@@ -204,18 +218,16 @@ export default function MainLayout({ children, title }) {
   };
 
   const handleNotificationsClick = () => {
-    // Mark current task IDs as viewed
-    setViewedTasksIds(prevViewed => {
-      const newViewed = [...prevViewed];
-      upcomingTasksIds.forEach(id => {
-        if (!newViewed.includes(id)) {
-          newViewed.push(id);
-        }
-      });
-      return newViewed;
+    // Mark all current task IDs as viewed
+    upcomingTasksIds.forEach(taskId => {
+      if (!viewedTaskIds.includes(taskId)) {
+        viewedTaskIds.push(taskId);
+      }
     });
     
-    setNotificationSilenced(true);
+    // Update new tasks state
+    updateNewTasksState();
+    
     navigate('/admin/notifications');
   };
 
@@ -261,7 +273,7 @@ export default function MainLayout({ children, title }) {
               onClick={handleNotificationsClick}
               size="large"
               aria-label="show notifications"
-              sx={hasUpcomingTasks && !isNotificationsPage && !notificationSilenced ? {
+              sx={hasUpcomingTasks && !isNotificationsPage && newUpcomingTasksIds.length > 0 ? {
                 animation: `${shakeAnimation} 0.5s infinite`,
                 '&:hover': {
                   animation: 'none'
