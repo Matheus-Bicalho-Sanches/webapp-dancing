@@ -151,7 +151,10 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         schedulesData[dateStr] = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        }));
+        })).sort((a, b) => {
+          // Ordena os horários do mais cedo para o mais tarde
+          return a.horario.localeCompare(b.horario);
+        });
       }
       
       setSchedules(schedulesData);
