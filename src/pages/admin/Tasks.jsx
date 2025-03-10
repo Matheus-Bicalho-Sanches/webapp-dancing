@@ -2005,30 +2005,20 @@ export default function Tasks() {
   const formatDiasDaSemana = (dias) => {
     if (!dias || !Array.isArray(dias) || dias.length === 0) return 'Nenhum';
     
-    // Converter dias numéricos em nomes, se necessário
-    const diasNomes = {
-      1: 'Segunda',
-      2: 'Terça',
-      3: 'Quarta',
-      4: 'Quinta',
-      5: 'Sexta',
-      6: 'Sábado',
-      7: 'Domingo',
-      '1': 'Segunda',
-      '2': 'Terça',
-      '3': 'Quarta',
-      '4': 'Quinta',
-      '5': 'Sexta',
-      '6': 'Sábado',
-      '7': 'Domingo'
+    // Mapeamento de códigos para nomes de exibição
+    const diasNomesExibicao = {
+      'segunda': 'Segunda',
+      'terca': 'Terça',
+      'quarta': 'Quarta',
+      'quinta': 'Quinta',
+      'sexta': 'Sexta',
+      'sabado': 'Sábado',
+      'domingo': 'Domingo'
     };
     
-    // Verificar se dias contém números e converter para nomes
+    // Converter códigos em nomes de exibição
     const diasFormatados = dias.map(dia => {
-      if (typeof dia === 'number' || (typeof dia === 'string' && !isNaN(parseInt(dia)))) {
-        return diasNomes[dia] || dia;
-      }
-      return dia;
+      return diasNomesExibicao[dia] || dia;
     });
     
     // Se forem todos os dias da semana, abreviar
@@ -3751,13 +3741,13 @@ export default function Tasks() {
                     </Box>
                   )}
                 >
-                  <MenuItem value="Segunda">Segunda</MenuItem>
-                  <MenuItem value="Terça">Terça</MenuItem>
-                  <MenuItem value="Quarta">Quarta</MenuItem>
-                  <MenuItem value="Quinta">Quinta</MenuItem>
-                  <MenuItem value="Sexta">Sexta</MenuItem>
-                  <MenuItem value="Sábado">Sábado</MenuItem>
-                  <MenuItem value="Domingo">Domingo</MenuItem>
+                  <MenuItem value="segunda">Segunda</MenuItem>
+                  <MenuItem value="terca">Terça</MenuItem>
+                  <MenuItem value="quarta">Quarta</MenuItem>
+                  <MenuItem value="quinta">Quinta</MenuItem>
+                  <MenuItem value="sexta">Sexta</MenuItem>
+                  <MenuItem value="sabado">Sábado</MenuItem>
+                  <MenuItem value="domingo">Domingo</MenuItem>
                 </Select>
               </FormControl>
 

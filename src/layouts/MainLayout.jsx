@@ -41,10 +41,32 @@ export default function MainLayout({ children, title }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userName, setUserName] = useState('');
   const [hasUpcomingTasks, setHasUpcomingTasks] = useState(false);
+  const [upcomingTasksIds, setUpcomingTasksIds] = useState([]);
   const [audio] = useState(new Audio('/notification.mp3'));
   const [isPlaying, setIsPlaying] = useState(false);
+  const [notificationSilenced, setNotificationSilenced] = useState(false);
+  const [viewedTasksIds, setViewedTasksIds] = useState([]);
 
   const isNotificationsPage = location.pathname === '/admin/notifications';
+
+  // Silence notifications when visiting the notifications page
+  useEffect(() => {
+    if (isNotificationsPage && hasUpcomingTasks) {
+      // Mark current task IDs as viewed
+      setViewedTasksIds(prevViewed => {
+        const newViewed = [...prevViewed];
+        upcomingTasksIds.forEach(id => {
+          if (!newViewed.includes(id)) {
+            newViewed.push(id);
+          }
+        });
+        return newViewed;
+      });
+      
+      // Silence current notifications
+      setNotificationSilenced(true);
+    }
+  }, [isNotificationsPage, hasUpcomingTasks, upcomingTasksIds]);
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -71,8 +93,7 @@ export default function MainLayout({ children, title }) {
     if (!currentUser) return;
 
     const q = query(
-      collection(db, 'tarefas'),
-      where('tipo', '==', 'por_horario'),
+      collection(db, 'tarefas_por_horario'),
       where('status', '!=', 'Finalizada')
     );
 
@@ -82,47 +103,78 @@ export default function MainLayout({ children, title }) {
         ...doc.data()
       }));
 
-      const hasUpcoming = tasks.some(task => {
-        if (!task.horario || !task.diasSemana) return false;
+      const now = new Date();
+      const currentDay = now.toLocaleDateString('pt-BR', { weekday: 'long' }).toLowerCase();
+      
+      const dayMapping = {
+        'segunda-feira': 'segunda',
+        'terça-feira': 'terca',
+        'quarta-feira': 'quarta',
+        'quinta-feira': 'quinta',
+        'sexta-feira': 'sexta',
+        'sábado': 'sabado',
+        'domingo': 'domingo'
+      };
 
-        const now = new Date();
+      // Track upcoming task IDs and new upcoming tasks
+      const currentUpcomingTaskIds = [];
+      let hasNewUpcomingTasks = false;
+
+      const hasUpcoming = tasks.some(task => {
+        if (!task.horario || !task.diasDaSemana) return false;
+
         const [hours, minutes] = task.horario.split(':');
         const taskTime = new Date();
         taskTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0);
 
         const diffInMinutes = Math.floor((taskTime - now) / (1000 * 60));
-        const currentDay = now.toLocaleDateString('pt-BR', { weekday: 'long' }).toLowerCase();
         
-        const dayMapping = {
-          'segunda-feira': 'segunda',
-          'terça-feira': 'terca',
-          'quarta-feira': 'quarta',
-          'quinta-feira': 'quinta',
-          'sexta-feira': 'sexta',
-          'sábado': 'sabado',
-          'domingo': 'domingo'
-        };
-
-        return task.diasSemana.includes(dayMapping[currentDay]) && diffInMinutes > 0 && diffInMinutes <= 10;
+        // Check if the task is scheduled for today and coming up within the next 10 minutes
+        const isUpcoming = task.diasDaSemana.includes(dayMapping[currentDay]) && 
+               diffInMinutes >= 0 && 
+               diffInMinutes <= 10;
+        
+        if (isUpcoming) {
+          currentUpcomingTaskIds.push(task.id);
+          
+          // Check if this task has not been viewed before
+          if (!viewedTasksIds.includes(task.id)) {
+            hasNewUpcomingTasks = true;
+          }
+        }
+        
+        return isUpcoming;
       });
 
-      setHasUpcomingTasks(hasUpcoming);
+      setUpcomingTasksIds(currentUpcomingTaskIds);
+
+      // If there are new upcoming tasks that haven't been viewed
+      if (hasUpcoming) {
+        setHasUpcomingTasks(true);
+        
+        // Un-silence only if there are new tasks that haven't been viewed
+        if (hasNewUpcomingTasks) {
+          setNotificationSilenced(false);
+        }
+      } else {
+        setHasUpcomingTasks(false);
+      }
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser, viewedTasksIds]);
 
   // Handle sound effect
   useEffect(() => {
     let interval;
-    if (hasUpcomingTasks && !isPlaying && !isNotificationsPage) {
+    // Only play sound if there are upcoming tasks, not on notifications page, and not silenced
+    if (hasUpcomingTasks && !isNotificationsPage && !notificationSilenced) {
       setIsPlaying(true);
-      audio.loop = true;
       audio.play().catch(error => console.error('Error playing sound:', error));
       
-      // Restart sound every 30 seconds if it stops
+      // Restart sound every 30 seconds if notification is still active
       interval = setInterval(() => {
-        if (!audio.playing) {
+        if (hasUpcomingTasks && !isNotificationsPage && !notificationSilenced) {
           audio.play().catch(error => console.error('Error playing sound:', error));
         }
       }, 30000);
@@ -130,13 +182,13 @@ export default function MainLayout({ children, title }) {
 
     return () => {
       if (interval) clearInterval(interval);
-      if (isPlaying) {
+      if (audio) {
         audio.pause();
         audio.currentTime = 0;
         setIsPlaying(false);
       }
     };
-  }, [hasUpcomingTasks, audio, isPlaying, isNotificationsPage]);
+  }, [hasUpcomingTasks, audio, isNotificationsPage, notificationSilenced]);
 
   const handleLogout = async () => {
     try {
@@ -152,7 +204,18 @@ export default function MainLayout({ children, title }) {
   };
 
   const handleNotificationsClick = () => {
-    setHasUpcomingTasks(false);
+    // Mark current task IDs as viewed
+    setViewedTasksIds(prevViewed => {
+      const newViewed = [...prevViewed];
+      upcomingTasksIds.forEach(id => {
+        if (!newViewed.includes(id)) {
+          newViewed.push(id);
+        }
+      });
+      return newViewed;
+    });
+    
+    setNotificationSilenced(true);
     navigate('/admin/notifications');
   };
 
@@ -198,7 +261,7 @@ export default function MainLayout({ children, title }) {
               onClick={handleNotificationsClick}
               size="large"
               aria-label="show notifications"
-              sx={hasUpcomingTasks && !isNotificationsPage ? {
+              sx={hasUpcomingTasks && !isNotificationsPage && !notificationSilenced ? {
                 animation: `${shakeAnimation} 0.5s infinite`,
                 '&:hover': {
                   animation: 'none'
