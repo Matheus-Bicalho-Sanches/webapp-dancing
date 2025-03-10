@@ -2484,7 +2484,7 @@ export default function CRM() {
   return (
     <MainLayout title="CRM">
       <Box sx={{ 
-        overflow: 'hidden',
+        overflow: 'auto',
         maxWidth: '100%',
         width: '100%',
         display: 'flex',
@@ -2610,9 +2610,7 @@ export default function CRM() {
                   },
                   "&::-webkit-scrollbar-track": {
                     backgroundColor: "#f5f5f5",
-                  },
-                  maxHeight: "450px",  // Set fixed height for container
-                  overflowY: "auto",   // Enable vertical scrolling
+                  }
                 }}
               >
                 <Table size="small" stickyHeader sx={{ 
@@ -3146,7 +3144,7 @@ export default function CRM() {
               </Box>
             ) : (
               <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 2 }}>
-                <TableContainer sx={{ maxHeight: 'calc(100vh - 280px)' }}>
+                <TableContainer>
                   <Table stickyHeader aria-label="logs table" size="small">
                     <TableHead>
                       <TableRow>

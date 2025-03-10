@@ -1086,8 +1086,6 @@ export default function Tasks() {
       // Utilizar a função auxiliar para obter os status
       const { oldStatus, newStatus } = getStatusInfo();
       
-      console.log('[DEBUG getActionName]', { action: log.action, taskType: taskTypeLabel, oldStatus, newStatus, logObj: JSON.stringify(log) });
-      
       if (oldStatus && newStatus) {
         // Casos especiais de AUTO-RESET
         if (oldStatus === 'AUTO-RESET') {
