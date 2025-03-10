@@ -106,7 +106,19 @@ export default function Products() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const logsData = [];
       querySnapshot.forEach((doc) => {
-        logsData.push({ id: doc.id, ...doc.data() });
+        const logData = doc.data();
+        
+        // Filtrar qualquer log relacionado a uniformes
+        // 1. Vendas de uniformes têm categoria 'Uniforme'
+        // 2. Outros logs de uniformes têm action com prefixo 'uniform' ou relacionado a uniformes
+        if ((logData.action === 'new_sale' && logData.details && logData.details.categoria === 'Uniforme') ||
+            logData.action.includes('uniform') || 
+            (logData.details && logData.details.uniformId)) {
+          // Ignorar este log, pois está relacionado a uniformes
+          return;
+        }
+        
+        logsData.push({ id: doc.id, ...logData });
       });
       setLogs(logsData);
       setLoadingLogs(false);
@@ -485,13 +497,37 @@ export default function Products() {
   const getLogMessage = (log) => {
     switch (log.action) {
       case 'new_sale':
-        return `Venda: ${log.details.quantity}x ${log.details.productName} - ${formatCurrency(log.details.total)} (${log.details.paymentMethod})`;
+        // Verificar se temos todos os detalhes necessários para exibir a venda
+        if (log.details && log.details.quantity && 
+            (log.details.productName || log.details.uniformName)) {
+          const productName = log.details.productName || log.details.uniformName;
+          return `Venda: ${log.details.quantity}x ${productName} - ${formatCurrency(log.details.total)} (${log.details.paymentMethod})`;
+        } else {
+          return 'Venda registrada';
+        }
       case 'create_product':
-        return `Novo produto: ${log.details.productName} - ${formatCurrency(log.details.price)}`;
+        if (log.details && log.details.productName) {
+          return `Novo produto: ${log.details.productName} - ${formatCurrency(log.details.price || 0)}`;
+        } else {
+          return 'Novo produto cadastrado';
+        }
       case 'update_product':
-        return `Produto atualizado: ${log.details.productName}`;
+        if (log.details && log.details.productName) {
+          return `Produto atualizado: ${log.details.productName}`;
+        } else {
+          return 'Produto atualizado';
+        }
+      // Identificar padrões de ações para dar mensagens mais descritivas
       default:
-        return 'Ação desconhecida';
+        if (log.action.includes('delete')) {
+          return 'Item excluído';
+        } else if (log.action.includes('create')) {
+          return 'Novo item cadastrado';
+        } else if (log.action.includes('update')) {
+          return 'Item atualizado';
+        } else {
+          return `Ação: ${log.action}`;
+        }
     }
   };
 
@@ -659,10 +695,18 @@ export default function Products() {
                           <Chip
                             label={log.action === 'new_sale' ? 'Venda' : 
                                   log.action === 'create_product' ? 'Novo Produto' :
-                                  log.action === 'update_product' ? 'Atualização' : 'Outro'}
+                                  log.action === 'update_product' ? 'Atualização' : 
+                                  log.action.includes('delete') ? 'Exclusão' :
+                                  log.action.includes('create') ? 'Criação' :
+                                  log.action.includes('update') ? 'Atualização' :
+                                  'Ação'}
                             color={log.action === 'new_sale' ? 'success' :
                                   log.action === 'create_product' ? 'primary' :
-                                  log.action === 'update_product' ? 'warning' : 'default'}
+                                  log.action === 'update_product' ? 'warning' :
+                                  log.action.includes('delete') ? 'error' :
+                                  log.action.includes('create') ? 'primary' :
+                                  log.action.includes('update') ? 'warning' :
+                                  'default'}
                             size="small"
                             sx={{ borderRadius: 1 }}
                           />
