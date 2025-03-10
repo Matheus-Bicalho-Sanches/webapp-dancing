@@ -3106,7 +3106,10 @@ export default function CRM() {
         
         {/* Conteúdo da aba de Logs */}
         {showLogs && (
-          <>
+          <Box sx={{
+            height: 'calc(100vh - 210px)', // Ajustando para o espaço ocupado pelos elementos acima
+            overflow: 'auto'
+          }}>
             {/* Filtros para logs */}
             <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -3215,7 +3218,7 @@ export default function CRM() {
                 />
               </Paper>
             )}
-          </>
+          </Box>
         )}
 
         <Dialog
