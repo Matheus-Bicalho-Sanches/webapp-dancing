@@ -56,7 +56,13 @@ const app = express();
 
 // Configuração CORS mais detalhada
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://webapp-dancing.web.app', 'https://webapp-dancing.firebaseapp.com'],
+  origin: [
+    'http://localhost:3000', 
+    'https://webapp-dancing.web.app', 
+    'https://webapp-dancing.firebaseapp.com',
+    'https://dancing-webapp.com.br',
+    'https://www.dancing-webapp.com.br'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -287,7 +293,8 @@ app.post("/query", async (req, res) => {
         "ai_conversations",
         "ai_queries",
         "alunos",
-        "aulas",
+        "leads",
+        "logs",
         "matriculas",
         "movimentacoes",
         "pagamentos",
@@ -299,18 +306,15 @@ app.post("/query", async (req, res) => {
         "tarefas_mensais",
         "tarefas_por_horario",
         "tarefas_semanais",
-        "terminados",
+        "tarefas_tecnicas",
+        "task_logs",
+        "teacherSchedules",
+        "turmasData",
         "uniform_sales",
         "uniforms",
         "users",
         "vendas",
         "valores_aulas",
-        "task_logs",
-        "eventos",
-        "notificacoes",
-        "mensagens",
-        "configuracoes",
-        "avaliacao_alunos"
       ];
       
       const result = {};
@@ -366,7 +370,8 @@ app.post("/query", async (req, res) => {
         "ai_conversations",
         "ai_queries",
         "alunos",
-        "aulas",
+        "leads",
+        "logs",
         "matriculas",
         "movimentacoes",
         "pagamentos",
@@ -378,16 +383,15 @@ app.post("/query", async (req, res) => {
         "tarefas_mensais",
         "tarefas_por_horario",
         "tarefas_semanais",
-        "terminados",
+        "tarefas_tecnicas",
+        "task_logs",
+        "teacherSchedules",
+        "turmasData",
         "uniform_sales",
         "uniforms",
         "users",
         "vendas",
         "valores_aulas",
-        "task_logs",
-        "eventos",
-        "notificacoes",
-        "mensagens"
       ];
       
       const stats = {};
@@ -422,50 +426,12 @@ app.post("/query", async (req, res) => {
       return stats;
     }
 
-    // Determinar qual função de busca usar baseado na pergunta
-    let data = {};
+    // Buscar todos os dados disponíveis - sempre busca todas as coleções independentemente da pergunta
+    console.log("Buscando todos os dados do Firebase para análise completa");
+    const allData = await fetchAllFirebaseData();
     
-    // Verifica se a pergunta pede explicitamente por todos os dados
-    if (
-      question.toLowerCase().includes("todos os dados") || 
-      question.toLowerCase().includes("todas as coleções") ||
-      question.toLowerCase().includes("banco completo") ||
-      question.toLowerCase().includes("dados completos")
-    ) {
-      console.log("Solicitados todos os dados do Firebase");
-      data = await fetchAllFirebaseData();
-    }
-    // Verifica se a pergunta pede por estatísticas
-    else if (
-      question.toLowerCase().includes("estatística") || 
-      question.toLowerCase().includes("resumo das coleções") ||
-      question.toLowerCase().includes("quantidade de registros") ||
-      question.toLowerCase().includes("total de dados")
-    ) {
-      console.log("Solicitadas estatísticas das coleções");
-      data = await fetchCollectionStats();
-    }
-    // Verifica outros tipos específicos de perguntas
-    else if (question.toLowerCase().includes("tarefa") && question.toLowerCase().includes("funcionário")) {
-      data = await fetchTasksByEmployee();
-    } else if (question.toLowerCase().includes("atrasada")) {
-      data = await fetchOverdueTasks();
-    } else if (question.toLowerCase().includes("renovação") || question.toLowerCase().includes("cliente")) {
-      data = await fetchClientRenewalRate();
-    } else {
-      // Se não identificar o tipo específico, incluir os dados principais e estatísticas
-      const tasksData = await fetchTasksByEmployee();
-      const overdueData = await fetchOverdueTasks();
-      const renewalData = await fetchClientRenewalRate();
-      const statsData = await fetchCollectionStats();
-      
-      data = {
-        ...tasksData,
-        overdueTasks: overdueData.tasks,
-        ...renewalData,
-        collection_stats: statsData
-      };
-    }
+    // Usar todos os dados para responder à pergunta
+    const data = allData;
 
     // Enviar pergunta e dados para a OpenAI
     try {
@@ -485,34 +451,43 @@ app.post("/query", async (req, res) => {
           {
             role: "system",
             content: `Você é um assistente especializado em analisar dados de uma escola de patinação. 
-            Você tem acesso a todas as coleções do banco de dados Firebase, incluindo:
+            Você tem acesso direto a todas as coleções do banco de dados Firebase, incluindo:
             - agendamentos: agendamentos de aulas e eventos
             - ai_conversations: histórico de conversas com a IA
             - ai_queries: consultas feitas à IA
             - alunos: dados dos alunos matriculados
+            - leads: leads que entraram no funil de vendas, incluindo leads que se matricularam e que não se matricularam
+            - logs: logs de atividades envolvendo os leads;
             - professores: informações sobre os professores
             - aulas: detalhes sobre aulas agendadas e realizadas
             - matriculas: registros de matrículas de alunos
-            - movimentacoes: registro de movimentações financeiras
-            - pagamentos: histórico de pagamentos realizados
+            - movimentacoes: Mensalidades pagas via cartão de crédito com API do Asaas;
+            - pagamentos: histórico de pagamentos realizados por um aluno
             - planos: planos oferecidos pela escola
             - produtos: produtos vendidos pela escola
-            - professores: informações sobre os professores
-            - tarefas: tarefas a serem realizadas
+            - professores: informações sobre os professores que dão aulas individuais
+            - tarefas: tarefas não recorrentes a serem realizadas
             - tarefas_diarias: tarefas que se repetem diariamente
             - tarefas_mensais: tarefas que se repetem mensalmente
             - tarefas_por_horario: tarefas organizadas por horário
             - tarefas_semanais: tarefas que se repetem semanalmente
-            - turmas: informações sobre as turmas
+            - tarefas_tecnicas: Tarefas não recorrentes da equipe técnica (professores)
+            - teacherSchedules: Disponibilidade de horários para aulas individuais dos professores
+            - turmasData: informações sobre as turmas
             - uniform_sales: vendas de uniformes
-            - uniforms: cadastro de uniformes disponíveis
+            - uniforms: cadastro de uniformes e outros produtos do Ateliê disponíveis
             - users: usuários do sistema
             - vendas: registro de vendas realizadas
-            - valores_aulas: preços e valores das aulas
+            - valores_aulas: preços e valores das aulas individuais
             - task_logs: registros de execução de tarefas
-            - eventos: calendário de eventos
-            - notificacoes: sistema de notificações
-            - mensagens: mensagens entre usuários
+            - vendas: Vendas de produtos da cantina
+            
+            IMPORTANTE: Você agora tem acesso direto a TODAS as coleções simultaneamente. É sua responsabilidade analisar quais coleções contêm as informações relevantes para responder cada pergunta específica.
+            
+            Por exemplo:
+            - Para perguntas sobre mensalidades atrasadas, você deve verificar as coleções "pagamentos" e "movimentacoes"
+            - Para perguntas sobre tarefas, verifique as coleções "tarefas", "tarefas_diarias", etc.
+            - Para perguntas sobre vendas, consulte as coleções "vendas" e "uniform_sales"
             
             Responda com base nos dados fornecidos, de forma clara e objetiva. Se necessitar de dados que não foram disponibilizados, mencione isso na sua resposta.
             
@@ -532,7 +507,7 @@ app.post("/query", async (req, res) => {
             content: `Baseado nos seguintes dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 4000,
         temperature: 0.5,
         ...modelConfig
       });
@@ -616,53 +591,63 @@ app.post("/query", async (req, res) => {
             {
               role: "system",
               content: `Você é um assistente especializado em analisar dados de uma escola de patinação. 
-              Você tem acesso a todas as coleções do banco de dados Firebase, incluindo:
-              - agendamentos: agendamentos de aulas e eventos
-              - ai_conversations: histórico de conversas com a IA
-              - ai_queries: consultas feitas à IA
-              - alunos: dados dos alunos matriculados
-              - aulas: detalhes sobre aulas agendadas e realizadas
-              - matriculas: registros de matrículas de alunos
-              - movimentacoes: registro de movimentações financeiras
-              - pagamentos: histórico de pagamentos realizados
-              - planos: planos oferecidos pela escola
-              - produtos: produtos vendidos pela escola
-              - professores: informações sobre os professores
-              - tarefas: tarefas a serem realizadas
-              - tarefas_diarias: tarefas que se repetem diariamente
-              - tarefas_mensais: tarefas que se repetem mensalmente
-              - tarefas_por_horario: tarefas organizadas por horário
-              - tarefas_semanais: tarefas que se repetem semanalmente
-              - terminados: registros de itens concluídos
-              - uniform_sales: vendas de uniformes
-              - uniforms: cadastro de uniformes disponíveis
-              - users: usuários do sistema
-              - vendas: registro de vendas realizadas
-              - valores_aulas: preços e valores das aulas
-              - task_logs: registros de execução de tarefas
-              - eventos: calendário de eventos
-              - notificacoes: sistema de notificações
-              - mensagens: mensagens entre usuários
-              
-              Responda com base nos dados fornecidos, de forma clara e objetiva. Se necessitar de dados que não foram disponibilizados, mencione isso na sua resposta.
-              
-              Quando for solicitado a mostrar estatísticas ou resumos de coleções, formate os dados em tabelas para melhor visualização. 
-              
-              Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.
-              
-              IMPORTANTE: Sempre explique seu raciocínio de forma detalhada. Divida sua resposta em duas seções:
-              
-              1. RACIOCÍNIO: Explique como chegou à resposta, quais dados analisou, como interpretou os resultados, etc.
-              2. RESPOSTA FINAL: A resposta direta à pergunta do usuário.
-              
-              Use formatação markdown para separar as seções com títulos claros.`
-            },
+            Você tem acesso direto a todas as coleções do banco de dados Firebase, incluindo:
+            - agendamentos: agendamentos de aulas e eventos
+            - ai_conversations: histórico de conversas com a IA
+            - ai_queries: consultas feitas à IA
+            - alunos: dados dos alunos matriculados
+            - leads: leads que entraram no funil de vendas, incluindo leads que se matricularam e que não se matricularam
+            - logs: logs de atividades envolvendo os leads;
+            - professores: informações sobre os professores
+            - aulas: detalhes sobre aulas agendadas e realizadas
+            - matriculas: registros de matrículas de alunos
+            - movimentacoes: Mensalidades pagas via cartão de crédito com API do Asaas;
+            - pagamentos: histórico de pagamentos realizados por um aluno
+            - planos: planos oferecidos pela escola
+            - produtos: produtos vendidos pela escola
+            - professores: informações sobre os professores que dão aulas individuais
+            - tarefas: tarefas não recorrentes a serem realizadas
+            - tarefas_diarias: tarefas que se repetem diariamente
+            - tarefas_mensais: tarefas que se repetem mensalmente
+            - tarefas_por_horario: tarefas organizadas por horário
+            - tarefas_semanais: tarefas que se repetem semanalmente
+            - tarefas_tecnicas: Tarefas não recorrentes da equipe técnica (professores)
+            - teacherSchedules: Disponibilidade de horários para aulas individuais dos professores
+            - turmasData: informações sobre as turmas
+            - uniform_sales: vendas de uniformes
+            - uniforms: cadastro de uniformes e outros produtos do Ateliê disponíveis
+            - users: usuários do sistema
+            - vendas: registro de vendas realizadas
+            - valores_aulas: preços e valores das aulas individuais
+            - task_logs: registros de execução de tarefas
+            - vendas: Vendas de produtos da cantina
+            
+            IMPORTANTE: Você agora tem acesso direto a TODAS as coleções simultaneamente. É sua responsabilidade analisar quais coleções contêm as informações relevantes para responder cada pergunta específica.
+            
+            Por exemplo:
+            - Para perguntas sobre mensalidades atrasadas, você deve verificar as coleções "pagamentos" e "movimentacoes"
+            - Para perguntas sobre tarefas, verifique as coleções "tarefas", "tarefas_diarias", etc.
+            - Para perguntas sobre vendas, consulte as coleções "vendas" e "uniform_sales"
+            
+            Responda com base nos dados fornecidos, de forma clara e objetiva. Se necessitar de dados que não foram disponibilizados, mencione isso na sua resposta.
+            
+            Quando for solicitado a mostrar estatísticas ou resumos de coleções, formate os dados em tabelas para melhor visualização. 
+            
+            Na sua resposta, não liste todos os documentos de uma coleção, a menos que seja explicitamente solicitado ou que a quantidade seja pequena. Prefira apresentar contagens, estatísticas e exemplos representativos.
+            
+            IMPORTANTE: Sempre explique seu raciocínio de forma detalhada. Divida sua resposta em duas seções:
+            
+            1. RACIOCÍNIO: Explique como chegou à resposta, quais dados analisou, como interpretou os resultados, etc.
+            2. RESPOSTA FINAL: A resposta direta à pergunta do usuário.
+            
+            Use formatação markdown para separar as seções com títulos claros.`
+          },
             {
               role: "user",
               content: `Baseado nos seguintes dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
             }
           ],
-          max_tokens: 1000,
+          max_tokens: 4000,
           temperature: 0.5,
         });
         
