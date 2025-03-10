@@ -278,6 +278,26 @@ export default function Tasks() {
     setFilteredTasks(filtered);
   }, [tasks, responsibleFilter, statusFilter, deadlineSort, showCompletedTasks]);
 
+  // Verificar periodicamente se a data mudou
+  useEffect(() => {
+    // Função para verificar se a data mudou
+    const checkForDateChange = () => {
+      const lastResetCheck = localStorage.getItem('lastWeeklyResetCheckDate');
+      const currentDate = dayjs().format('YYYY-MM-DD');
+      
+      // Se a data mudou (é um novo dia), reset a data de verificação
+      if (lastResetCheck && lastResetCheck !== currentDate) {
+        console.log('Nova data detectada, permitindo reset das tarefas semanais');
+        localStorage.removeItem('lastWeeklyResetCheckDate');
+      }
+    };
+    
+    // Verificar a cada minuto
+    const intervalId = setInterval(checkForDateChange, 60 * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Carregar logs
   useEffect(() => {
     setLogsLoading(true);
@@ -1384,6 +1404,20 @@ export default function Tasks() {
       const hoje = new Date();
       const diaDaSemana = hoje.getDay() === 0 ? 7 : hoje.getDay(); // Converter 0 (Domingo) para 7
       
+      // Verificar se é após meia-noite
+      // Obter a última data de verificação de reset do localStorage
+      const lastWeeklyResetCheck = localStorage.getItem('lastWeeklyResetCheckDate');
+      const today = dayjs().format('YYYY-MM-DD');
+      
+      // Se a última verificação for do mesmo dia, não fazer nada
+      // Isso impede que tarefas sejam resetadas no mesmo dia em que foram marcadas como concluídas
+      if (lastWeeklyResetCheck === today) {
+        return;
+      }
+      
+      // Armazenar a data atual da verificação no localStorage
+      localStorage.setItem('lastWeeklyResetCheckDate', today);
+      
       // Filtrar tarefas que correspondem ao dia da semana atual e estão com status "Finalizada"
       const tasksThatNeedReset = tasks.filter(task => 
         task.diaDaSemana === diaDaSemana && 
@@ -2451,6 +2485,15 @@ export default function Tasks() {
     
     setFilteredTechnicalTasks(filtered);
   }, [technicalTasks, showCompletedTechnicalTasks, technicalResponsibleFilter, technicalStatusFilter, technicalDeadlineSort]);
+
+  // Inicializar a data de verificação de reset ao carregar a aplicação
+  useEffect(() => {
+    // Inicializar data de verificação de reset semanal
+    const today = dayjs().format('YYYY-MM-DD');
+    localStorage.setItem('lastWeeklyResetCheckDate', today);
+    
+    console.log('Data de verificação de reset semanal inicializada:', today);
+  }, []); // O array de dependências vazio faz com que o efeito execute apenas uma vez na montagem
 
   if (loading) {
     return (
