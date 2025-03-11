@@ -36,7 +36,8 @@ import {
   Close as CloseIcon,
   FilterList as FilterListIcon,
   Print as PrintIcon,
-  Groups as GroupsIcon
+  Groups as GroupsIcon,
+  ContactPhone as ContactPhoneIcon
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -59,7 +60,8 @@ export default function Reports() {
     financeiro: false,
     frequencia: false,
     tarefas: false,
-    turmas: false
+    turmas: false,
+    leads: false
   });
   const [enrollmentData, setEnrollmentData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,6 +75,20 @@ export default function Reports() {
   });
   const [planos, setPlanos] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
+  const [leadsData, setLeadsData] = useState([]);
+  const [filteredLeadsData, setFilteredLeadsData] = useState([]);
+  const [leadsFilters, setLeadsFilters] = useState({
+    periodo: 'personalizado',
+    dataInicio: dayjs().subtract(30, 'days').format('YYYY-MM-DD'),
+    dataFim: dayjs().format('YYYY-MM-DD'),
+  });
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsStats, setLeadsStats] = useState({
+    total: 0,
+    experimental: 0,
+    inativo: 0,
+    matriculas: 0
+  });
 
   const handleOpenDialog = async (category) => {
     setOpenDialog(prev => ({ ...prev, [category]: true }));
@@ -212,6 +228,12 @@ export default function Reports() {
       title: 'Turmas',
       icon: <GroupsIcon sx={{ fontSize: 40 }} />,
       color: '#d32f2f' // vermelho
+    },
+    {
+      id: 'leads',
+      title: 'Leads',
+      icon: <ContactPhoneIcon sx={{ fontSize: 40 }} />,
+      color: '#0288d1' // azul claro
     }
   ];
 
@@ -580,6 +602,644 @@ export default function Reports() {
     );
   };
 
+  // Nova função para carregar relatórios de leads
+  const loadLeadsReport = async () => {
+    try {
+      setLeadsLoading(true);
+      
+      // Buscar logs de leads no Firebase
+      const logsRef = collection(db, 'logs');
+      const logsQuery = query(
+        logsRef,
+        orderBy('timestamp', 'desc')
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      // Organizar dados para o relatório
+      const reportData = logsSnapshot.docs.map(doc => {
+        const log = doc.data();
+        return {
+          id: doc.id,
+          leadId: log.leadId || '',
+          nome: log.leadName || 'Sem nome',
+          action: log.action || '',
+          timestamp: log.timestamp?.toDate() || new Date(),
+          details: log.details || {},
+          userId: log.userId || '',
+          userName: log.userName || ''
+        };
+      });
+
+      console.log('Total de logs encontrados:', reportData.length);
+      
+      // Filtrar apenas logs relacionados a leads (aqueles que têm leadId)
+      const leadsLogs = reportData.filter(log => log.leadId && log.leadId.trim() !== '');
+      
+      console.log('Logs relacionados a leads:', leadsLogs.length);
+      
+      // Processar dados para relatório
+      const uniqueLeads = new Map();
+      
+      // Primeiro, extrair todos os leads únicos - APENAS aqueles com action: "create"
+      leadsLogs.filter(log => log.action === "create").forEach(log => {
+        if (!uniqueLeads.has(log.leadId)) {
+          uniqueLeads.set(log.leadId, {
+            id: log.leadId,
+            nome: log.nome,
+            createdAt: log.timestamp,
+            hasExperimental: false,
+            isInactive: false,
+            currentStatus: log.details?.leadData?.status || 'Lead', // Status inicial do lead
+            action: log.action,
+            details: log.details
+          });
+        }
+      });
+      
+      console.log('Leads únicos (apenas action:create):', uniqueLeads.size);
+      
+      // Ordenar logs por timestamp para cada lead para encontrar o status mais recente
+      const logsByLead = {};
+      leadsLogs.forEach(log => {
+        if (!logsByLead[log.leadId]) {
+          logsByLead[log.leadId] = [];
+        }
+        logsByLead[log.leadId].push(log);
+      });
+      
+      // Ordenar os logs por timestamp (do mais recente para o mais antigo)
+      Object.keys(logsByLead).forEach(leadId => {
+        logsByLead[leadId].sort((a, b) => b.timestamp - a.timestamp);
+      });
+      
+      // Atualizar os leads com o status mais recente - APENAS para leads que foram criados com action: "create"
+      Object.keys(logsByLead).forEach(leadId => {
+        const lead = uniqueLeads.get(leadId);
+        if (lead) {  // Só processar se for um lead criado com action: "create"
+          // Verificar os logs de status para este lead
+          const statusLogs = logsByLead[leadId].filter(log => 
+            log.action === 'status_update' && log.details && log.details.newValue
+          );
+          
+          if (statusLogs.length > 0) {
+            // Usar o status mais recente
+            lead.currentStatus = statusLogs[0].details.newValue;
+          }
+          
+          // Também verificar atualizações de aula experimental e status inativo
+          logsByLead[leadId].forEach(log => {
+            // Verificar se é uma atualização de status
+            if (log.action === 'status_update' && log.details) {
+              // Verificar aula experimental (status para "AE Agend")
+              if (log.details.newValue === 'AE Agend') {
+                lead.hasExperimental = true;
+              }
+              
+              // Verificar status inativo
+              if (log.details.newValue === 'Inativo') {
+                lead.isInactive = true;
+              }
+            }
+            
+            // Também verificar o formato lead_status_update caso exista
+            if (log.action === 'lead_status_update' && log.details) {
+              // Verificar aula experimental (status para "AE Agend")
+              if (log.details.status === 'AE Agend') {
+                lead.hasExperimental = true;
+              }
+              
+              // Verificar status inativo
+              if (log.details.status === 'Inativo') {
+                lead.isInactive = true;
+              }
+              
+              // Atualizar o status atual se for este formato
+              if (log.details.status) {
+                lead.currentStatus = log.details.status;
+              }
+            }
+            
+            // Verificar se há atualizações específicas de aula experimental
+            if (log.action === 'lead_ae_update' && log.details) {
+              lead.hasExperimental = true;
+              if (log.details.dataAE) {
+                lead.dataAE = log.details.dataAE;
+              }
+              if (log.details.turmaAE) {
+                lead.turmaAE = log.details.turmaAE;
+              }
+            }
+          });
+        }
+      });
+      
+      console.log('Leads únicos processados:', uniqueLeads.size);
+      
+      // Converter mapa para array
+      const processedLeads = Array.from(uniqueLeads.values());
+      console.log('Dados processados:', processedLeads);
+      
+      // Verificar o status inicial dos leads quando criados
+      console.log('Status iniciais dos leads:', processedLeads.map(lead => ({
+        id: lead.id,
+        nome: lead.nome,
+        status: lead.currentStatus
+      })));
+      
+      // Aplicar filtros por período
+      const startDate = dayjs(leadsFilters.dataInicio);
+      const endDate = dayjs(leadsFilters.dataFim);
+      
+      let filteredReport = processedLeads;
+      
+      // Filtrar por período personalizado
+      if (leadsFilters.periodo === 'personalizado') {
+        filteredReport = processedLeads.filter(lead => {
+          const leadDate = dayjs(lead.createdAt);
+          return leadDate.isAfter(startDate) && leadDate.isBefore(endDate.add(1, 'day'));
+        });
+      }
+      
+      // Calcular estatísticas
+      const totalLeads = filteredReport.length;
+      const leadsComAulaExperimental = filteredReport.filter(lead => lead.hasExperimental).length;
+      const leadsInativos = filteredReport.filter(lead => lead.isInactive).length;
+      const leadsMatriculados = filteredReport.filter(lead => {
+        const status = (lead.currentStatus || '').toLowerCase();
+        return status.includes('matricula') || status.includes('matrícula') || status === 'barra';
+      }).length;
+      
+      console.log('Estatísticas calculadas:', {
+        total: totalLeads,
+        experimental: leadsComAulaExperimental,
+        inativo: leadsInativos,
+        matriculas: leadsMatriculados
+      });
+      
+      setLeadsStats({
+        total: totalLeads,
+        experimental: leadsComAulaExperimental,
+        inativo: leadsInativos,
+        matriculas: leadsMatriculados
+      });
+      
+      setLeadsData(processedLeads);
+      setFilteredLeadsData(filteredReport);
+    } catch (error) {
+      console.error('Erro ao carregar relatório de leads:', error);
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  // Aplicar filtros ao relatório de leads
+  useEffect(() => {
+    if (!leadsData.length) return;
+
+    let filtered = [...leadsData];
+
+    // Filtro de período
+    if (leadsFilters.periodo === 'personalizado') {
+      const filterInicio = dayjs(leadsFilters.dataInicio);
+      const filterFim = dayjs(leadsFilters.dataFim).add(1, 'day');
+      
+      filtered = filtered.filter(lead => {
+        const leadDate = dayjs(lead.createdAt);
+        return leadDate.isAfter(filterInicio) && leadDate.isBefore(filterFim);
+      });
+    }
+
+    // Calcular estatísticas com os dados filtrados
+    const totalLeads = filtered.length;
+    const leadsComAulaExperimental = filtered.filter(lead => lead.hasExperimental).length;
+    const leadsInativos = filtered.filter(lead => lead.isInactive).length;
+    const leadsMatriculados = filtered.filter(lead => {
+      const status = (lead.currentStatus || '').toLowerCase();
+      return status.includes('matricula') || status.includes('matrícula') || status === 'barra';
+    }).length;
+    
+    setLeadsStats({
+      total: totalLeads,
+      experimental: leadsComAulaExperimental,
+      inativo: leadsInativos,
+      matriculas: leadsMatriculados
+    });
+
+    setFilteredLeadsData(filtered);
+  }, [leadsData, leadsFilters]);
+
+  const handleLeadsFilterChange = (field, value) => {
+    setLeadsFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Função para obter a cor do chip de status baseado no status do lead
+  const getLeadStatusColor = (status) => {
+    if (!status) return 'warning'; // Cor padrão laranja para status vazio
+    
+    const normalizedStatus = status.toLowerCase();
+    
+    // Ajustando as cores para corresponder ao CRM
+    if (normalizedStatus === 'lead') return 'warning'; // Laranja para leads
+    if (normalizedStatus === 'inativo') return 'error'; // Vermelho para inativos
+    if (normalizedStatus.includes('matricula') || normalizedStatus.includes('matrícula') || normalizedStatus === 'barra') return 'success'; // Verde para matrículas
+    if (normalizedStatus.includes('ae') || normalizedStatus.includes('agend')) return 'primary'; // Azul para aulas experimentais
+    if (normalizedStatus.includes('contato')) return 'info'; // Ciano para contatos
+    
+    return 'warning'; // Laranja para outros status não especificados
+  };
+
+  const renderLeadsFilters = () => (
+    <Paper sx={{ p: 2, mb: 2 }}>
+      <Stack spacing={2}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FilterListIcon />
+            Filtros
+          </Typography>
+          {openDialog.leads && (
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintLeads}
+              disabled={leadsLoading || filteredLeadsData.length === 0}
+            >
+              Imprimir Relatório
+            </Button>
+          )}
+        </Box>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Período</InputLabel>
+              <Select
+                value={leadsFilters.periodo}
+                label="Período"
+                onChange={(e) => handleLeadsFilterChange('periodo', e.target.value)}
+              >
+                <MenuItem value="todos">Todos</MenuItem>
+                <MenuItem value="personalizado">Personalizado</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {leadsFilters.periodo === 'personalizado' && (
+            <>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Data Inicial"
+                  type="date"
+                  value={leadsFilters.dataInicio}
+                  onChange={(e) => handleLeadsFilterChange('dataInicio', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Data Final"
+                  type="date"
+                  value={leadsFilters.dataFim}
+                  onChange={(e) => handleLeadsFilterChange('dataFim', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            </>
+          )}
+          
+          <Grid item xs={12} sm={6} md={2}>
+            <Button 
+              variant="contained" 
+              onClick={loadLeadsReport}
+              disabled={leadsLoading}
+              fullWidth
+            >
+              {leadsLoading ? <CircularProgress size={24} color="inherit" /> : 'Pesquisar'}
+            </Button>
+          </Grid>
+        </Grid>
+      </Stack>
+    </Paper>
+  );
+
+  const renderLeadsStats = () => (
+    <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              Novos Leads
+            </Typography>
+            <Typography variant="h3" color="primary">
+              {leadsStats.total}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              Aulas Experimentais
+            </Typography>
+            <Typography variant="h3" color="primary">
+              {leadsStats.experimental}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              Matrículas Realizadas
+            </Typography>
+            <Typography variant="h3" color="success.main">
+              {leadsStats.matriculas}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Card>
+          <CardContent sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary" gutterBottom>
+              Leads Inativos
+            </Typography>
+            <Typography variant="h3" color="text.secondary">
+              {leadsStats.inativo}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  );
+
+  const renderLeadsReport = () => {
+    if (leadsLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    // Se não tiver dados e não estiver carregando, mostrar mensagem para pesquisar
+    if (filteredLeadsData.length === 0 && !leadsLoading) {
+      return (
+        <>
+          {renderLeadsFilters()}
+          <Paper sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="h6" color="textSecondary">
+              Selecione um período e clique em Pesquisar
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Utilize os filtros acima para visualizar os dados de leads
+            </Typography>
+          </Paper>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {renderLeadsFilters()}
+        {renderLeadsStats()}
+        
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome do Lead</TableCell>
+                <TableCell>Data de Criação</TableCell>
+                <TableCell>Aula Experimental</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredLeadsData.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.nome}</TableCell>
+                  <TableCell>{dayjs(row.createdAt).format('DD/MM/YYYY')}</TableCell>
+                  <TableCell>
+                    {row.hasExperimental ? (
+                      <Chip 
+                        label="Agendada" 
+                        color="primary" 
+                        size="small" 
+                      />
+                    ) : (
+                      <Chip 
+                        label="Não agendada" 
+                        color="default" 
+                        size="small" 
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={row.currentStatus || 'Lead'} 
+                      color={getLeadStatusColor(row.currentStatus || 'Lead')}
+                      size="small"
+                      sx={{
+                        '& .MuiChip-label': {
+                          color: normalizedStatus => 
+                            normalizedStatus === 'default' ? 'inherit' : '#fff'
+                        }
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </>
+    );
+  };
+
+  const handlePrintLeads = () => {
+    // Criar uma nova janela para impressão
+    const printWindow = window.open('', '_blank');
+    
+    // Função para determinar a classe CSS para o status
+    const getStatusClass = (status) => {
+      if (!status) return 'status-lead';
+      
+      const normalizedStatus = status.toLowerCase();
+      
+      if (normalizedStatus === 'inativo') return 'status-inativo';
+      if (normalizedStatus.includes('matricula') || normalizedStatus.includes('matrícula') || normalizedStatus === 'barra') return 'status-matricula';
+      if (normalizedStatus.includes('ae') || normalizedStatus.includes('agend')) return 'status-aula-exp';
+      if (normalizedStatus.includes('contato')) return 'status-contato';
+      if (normalizedStatus === 'lead') return 'status-lead';
+      
+      return 'status-lead'; // Default para outros status
+    };
+
+    // Estilos para impressão
+    const styles = `
+      <style>
+        body { font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .header { margin-bottom: 20px; }
+        .filters { margin-bottom: 20px; }
+        .stats { margin-bottom: 20px; display: flex; flex-wrap: wrap; }
+        .stats-box { 
+          border: 1px solid #ddd; 
+          padding: 10px; 
+          margin-bottom: 10px;
+          display: inline-block;
+          width: 30%;
+          text-align: center;
+          margin-right: 1%;
+        }
+        .stats-title { font-weight: bold; margin-bottom: 5px; }
+        .stats-value { font-size: 24px; color: #1976d2; }
+        .status-agendada { 
+          display: inline-block;
+          background-color: #e3f2fd; 
+          color: #1976d2;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-nao-agendada { 
+          display: inline-block;
+          background-color: #f5f5f5; 
+          color: #757575;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-lead {
+          display: inline-block;
+          background-color: #ff9800;
+          color: white;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-aula-exp {
+          display: inline-block;
+          background-color: #1976d2;
+          color: white;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-matricula {
+          display: inline-block;
+          background-color: #2e7d32;
+          color: white;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-inativo {
+          display: inline-block;
+          background-color: #d32f2f;
+          color: white;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .status-contato {
+          display: inline-block;
+          background-color: #0097a7;
+          color: white;
+          border-radius: 16px;
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        @media print {
+          button { display: none; }
+        }
+      </style>
+    `;
+
+    // Criar o conteúdo do relatório
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório de Leads</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="header">
+            <h2>Relatório de Leads</h2>
+            <p>Data de geração: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+          </div>
+          <div class="filters">
+            <p><strong>Filtros aplicados:</strong></p>
+            <p>Período: ${leadsFilters.periodo === 'todos' ? 'Todos' : 'Personalizado'}</p>
+            ${leadsFilters.periodo === 'personalizado' ? 
+              `<p>Data Inicial: ${dayjs(leadsFilters.dataInicio).format('DD/MM/YYYY')}</p>
+               <p>Data Final: ${dayjs(leadsFilters.dataFim).format('DD/MM/YYYY')}</p>` : ''}
+          </div>
+          <div class="stats">
+            <div class="stats-box">
+              <div class="stats-title">Novos Leads</div>
+              <div class="stats-value">${leadsStats.total}</div>
+            </div>
+            <div class="stats-box">
+              <div class="stats-title">Aulas Experimentais</div>
+              <div class="stats-value">${leadsStats.experimental}</div>
+            </div>
+            <div class="stats-box">
+              <div class="stats-title">Matrículas Realizadas</div>
+              <div class="stats-value" style="color: #2e7d32">${leadsStats.matriculas}</div>
+            </div>
+            <div class="stats-box">
+              <div class="stats-title">Leads Inativos</div>
+              <div class="stats-value" style="color: #757575">${leadsStats.inativo}</div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Nome do Lead</th>
+                <th>Data de Criação</th>
+                <th>Aula Experimental</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredLeadsData.map(row => `
+                <tr>
+                  <td>${row.nome}</td>
+                  <td>${dayjs(row.createdAt).format('DD/MM/YYYY')}</td>
+                  <td>
+                    <span class="${row.hasExperimental ? 'status-agendada' : 'status-nao-agendada'}">
+                      ${row.hasExperimental ? 'Agendada' : 'Não agendada'}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="${getStatusClass(row.currentStatus)}">
+                      ${row.currentStatus || 'Lead'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    // Escrever o conteúdo na nova janela e imprimir
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+    };
+  };
+
   return (
     <MainLayout title="Relatórios">
       <Box sx={{ p: 3 }}>
@@ -659,6 +1319,8 @@ export default function Reports() {
                 <TaskReport />
               ) : category.id === 'turmas' ? (
                 <ClassReport />
+              ) : category.id === 'leads' ? (
+                renderLeadsReport()
               ) : (
                 <Typography>
                   Os relatórios de {category.title.toLowerCase()} serão implementados em breve.
