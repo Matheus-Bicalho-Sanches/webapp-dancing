@@ -607,144 +607,66 @@ export default function Reports() {
     try {
       setLeadsLoading(true);
       
-      // Buscar logs de leads no Firebase
-      const logsRef = collection(db, 'logs');
-      const logsQuery = query(
-        logsRef,
-        orderBy('timestamp', 'desc')
+      // Buscar leads diretamente da coleção "leads" ao invés de logs
+      const leadsRef = collection(db, 'leads');
+      const leadsQuery = query(
+        leadsRef,
+        orderBy('createdAt', 'desc')
       );
-      const logsSnapshot = await getDocs(logsQuery);
+      const leadsSnapshot = await getDocs(leadsQuery);
+      
+      // Função auxiliar para processar datas, verificando o tipo antes de chamar toDate()
+      const processDate = (date) => {
+        if (!date) return null;
+        
+        // Se já for um objeto Date, retorná-lo diretamente
+        if (date instanceof Date) return date;
+        
+        // Se for um Timestamp do Firebase, chamar toDate()
+        if (date && typeof date.toDate === 'function') {
+          return date.toDate();
+        }
+        
+        // Se for uma string em formato de data
+        if (typeof date === 'string') {
+          try {
+            return new Date(date);
+          } catch (e) {
+            console.log('Erro ao converter string para data:', date, e);
+            return null;
+          }
+        }
+        
+        // Em caso de formato desconhecido
+        console.log('Formato de data não reconhecido:', date);
+        return null;
+      };
       
       // Organizar dados para o relatório
-      const reportData = logsSnapshot.docs.map(doc => {
-        const log = doc.data();
+      const processedLeads = leadsSnapshot.docs.map(doc => {
+        const lead = doc.data();
+        
+        // Processar as datas com a função auxiliar
+        const createdAt = processDate(lead.createdAt);
+        const dataAE = processDate(lead.dataAE);
+        
         return {
           id: doc.id,
-          leadId: log.leadId || '',
-          nome: log.leadName || 'Sem nome',
-          action: log.action || '',
-          timestamp: log.timestamp?.toDate() || new Date(),
-          details: log.details || {},
-          userId: log.userId || '',
-          userName: log.userName || ''
+          nome: lead.nome || 'Sem nome',
+          createdAt: createdAt || new Date(),
+          dataAE: dataAE,
+          turmaAE: lead.turmaAE || '',
+          status: lead.status || 'Lead',
+          whatsapp: lead.whatsapp || '',
+          observacoes: lead.observacoes || '',
+          origemLead: lead.origemLead || '',
+          // Verificações para relatório
+          hasExperimental: lead.status === 'AE Agend' || dataAE !== null,
+          isInactive: lead.status === 'Inativo'
         };
       });
 
-      console.log('Total de logs encontrados:', reportData.length);
-      
-      // Filtrar apenas logs relacionados a leads (aqueles que têm leadId)
-      const leadsLogs = reportData.filter(log => log.leadId && log.leadId.trim() !== '');
-      
-      console.log('Logs relacionados a leads:', leadsLogs.length);
-      
-      // Processar dados para relatório
-      const uniqueLeads = new Map();
-      
-      // Primeiro, extrair todos os leads únicos - APENAS aqueles com action: "create"
-      leadsLogs.filter(log => log.action === "create").forEach(log => {
-        if (!uniqueLeads.has(log.leadId)) {
-          uniqueLeads.set(log.leadId, {
-            id: log.leadId,
-            nome: log.nome,
-            createdAt: log.timestamp,
-            hasExperimental: false,
-            isInactive: false,
-            currentStatus: log.details?.leadData?.status || 'Lead', // Status inicial do lead
-            action: log.action,
-            details: log.details
-          });
-        }
-      });
-      
-      console.log('Leads únicos (apenas action:create):', uniqueLeads.size);
-      
-      // Ordenar logs por timestamp para cada lead para encontrar o status mais recente
-      const logsByLead = {};
-      leadsLogs.forEach(log => {
-        if (!logsByLead[log.leadId]) {
-          logsByLead[log.leadId] = [];
-        }
-        logsByLead[log.leadId].push(log);
-      });
-      
-      // Ordenar os logs por timestamp (do mais recente para o mais antigo)
-      Object.keys(logsByLead).forEach(leadId => {
-        logsByLead[leadId].sort((a, b) => b.timestamp - a.timestamp);
-      });
-      
-      // Atualizar os leads com o status mais recente - APENAS para leads que foram criados com action: "create"
-      Object.keys(logsByLead).forEach(leadId => {
-        const lead = uniqueLeads.get(leadId);
-        if (lead) {  // Só processar se for um lead criado com action: "create"
-          // Verificar os logs de status para este lead
-          const statusLogs = logsByLead[leadId].filter(log => 
-            log.action === 'status_update' && log.details && log.details.newValue
-          );
-          
-          if (statusLogs.length > 0) {
-            // Usar o status mais recente
-            lead.currentStatus = statusLogs[0].details.newValue;
-          }
-          
-          // Também verificar atualizações de aula experimental e status inativo
-          logsByLead[leadId].forEach(log => {
-            // Verificar se é uma atualização de status
-            if (log.action === 'status_update' && log.details) {
-              // Verificar aula experimental (status para "AE Agend")
-              if (log.details.newValue === 'AE Agend') {
-                lead.hasExperimental = true;
-              }
-              
-              // Verificar status inativo
-              if (log.details.newValue === 'Inativo') {
-                lead.isInactive = true;
-              }
-            }
-            
-            // Também verificar o formato lead_status_update caso exista
-            if (log.action === 'lead_status_update' && log.details) {
-              // Verificar aula experimental (status para "AE Agend")
-              if (log.details.status === 'AE Agend') {
-                lead.hasExperimental = true;
-              }
-              
-              // Verificar status inativo
-              if (log.details.status === 'Inativo') {
-                lead.isInactive = true;
-              }
-              
-              // Atualizar o status atual se for este formato
-              if (log.details.status) {
-                lead.currentStatus = log.details.status;
-              }
-            }
-            
-            // Verificar se há atualizações específicas de aula experimental
-            if (log.action === 'lead_ae_update' && log.details) {
-              lead.hasExperimental = true;
-              if (log.details.dataAE) {
-                lead.dataAE = log.details.dataAE;
-              }
-              if (log.details.turmaAE) {
-                lead.turmaAE = log.details.turmaAE;
-              }
-            }
-          });
-        }
-      });
-      
-      console.log('Leads únicos processados:', uniqueLeads.size);
-      
-      // Converter mapa para array
-      const processedLeads = Array.from(uniqueLeads.values());
-      console.log('Dados processados:', processedLeads);
-      
-      // Verificar o status inicial dos leads quando criados
-      console.log('Status iniciais dos leads:', processedLeads.map(lead => ({
-        id: lead.id,
-        nome: lead.nome,
-        status: lead.currentStatus
-      })));
+      console.log('Total de leads encontrados:', processedLeads.length);
       
       // Aplicar filtros por período
       const startDate = dayjs(leadsFilters.dataInicio);
@@ -760,12 +682,18 @@ export default function Reports() {
         });
       }
       
+      console.log('Leads filtrados por período:', filteredReport.length);
+      
       // Calcular estatísticas
       const totalLeads = filteredReport.length;
-      const leadsComAulaExperimental = filteredReport.filter(lead => lead.hasExperimental).length;
-      const leadsInativos = filteredReport.filter(lead => lead.isInactive).length;
+      const leadsComAulaExperimental = filteredReport.filter(lead => 
+        lead.hasExperimental || lead.status === 'AE Agend' || lead.dataAE !== null
+      ).length;
+      const leadsInativos = filteredReport.filter(lead => 
+        lead.isInactive || lead.status === 'Inativo'
+      ).length;
       const leadsMatriculados = filteredReport.filter(lead => {
-        const status = (lead.currentStatus || '').toLowerCase();
+        const status = (lead.status || '').toLowerCase();
         return status.includes('matricula') || status.includes('matrícula') || status === 'barra';
       }).length;
       
@@ -787,6 +715,16 @@ export default function Reports() {
       setFilteredLeadsData(filteredReport);
     } catch (error) {
       console.error('Erro ao carregar relatório de leads:', error);
+      
+      // Log adicional para depuração
+      console.error('Detalhes do erro:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // Exibir alerta para o usuário
+      alert(`Erro ao carregar leads: ${error.message}`);
     } finally {
       setLeadsLoading(false);
     }
@@ -811,10 +749,14 @@ export default function Reports() {
 
     // Calcular estatísticas com os dados filtrados
     const totalLeads = filtered.length;
-    const leadsComAulaExperimental = filtered.filter(lead => lead.hasExperimental).length;
-    const leadsInativos = filtered.filter(lead => lead.isInactive).length;
+    const leadsComAulaExperimental = filtered.filter(lead => 
+      lead.hasExperimental || lead.status === 'AE Agend' || lead.dataAE !== null
+    ).length;
+    const leadsInativos = filtered.filter(lead => 
+      lead.isInactive || lead.status === 'Inativo'
+    ).length;
     const leadsMatriculados = filtered.filter(lead => {
-      const status = (lead.currentStatus || '').toLowerCase();
+      const status = (lead.status || '').toLowerCase();
       return status.includes('matricula') || status.includes('matrícula') || status === 'barra';
     }).length;
     
@@ -1024,9 +966,9 @@ export default function Reports() {
                   <TableCell>{row.nome}</TableCell>
                   <TableCell>{dayjs(row.createdAt).format('DD/MM/YYYY')}</TableCell>
                   <TableCell>
-                    {row.hasExperimental ? (
+                    {row.hasExperimental || row.dataAE ? (
                       <Chip 
-                        label="Agendada" 
+                        label={row.turmaAE ? `Agendada - ${row.turmaAE}` : "Agendada"} 
                         color="primary" 
                         size="small" 
                       />
@@ -1040,8 +982,8 @@ export default function Reports() {
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={row.currentStatus || 'Lead'} 
-                      color={getLeadStatusColor(row.currentStatus || 'Lead')}
+                      label={row.status || 'Lead'} 
+                      color={getLeadStatusColor(row.status || 'Lead')}
                       size="small"
                       sx={{
                         '& .MuiChip-label': {
@@ -1094,7 +1036,7 @@ export default function Reports() {
           padding: 10px; 
           margin-bottom: 10px;
           display: inline-block;
-          width: 30%;
+          width: 23%;
           text-align: center;
           margin-right: 1%;
         }
@@ -1215,13 +1157,13 @@ export default function Reports() {
                   <td>${row.nome}</td>
                   <td>${dayjs(row.createdAt).format('DD/MM/YYYY')}</td>
                   <td>
-                    <span class="${row.hasExperimental ? 'status-agendada' : 'status-nao-agendada'}">
-                      ${row.hasExperimental ? 'Agendada' : 'Não agendada'}
+                    <span class="${(row.hasExperimental || row.dataAE) ? 'status-agendada' : 'status-nao-agendada'}">
+                      ${(row.hasExperimental || row.dataAE) ? (row.turmaAE ? `Agendada - ${row.turmaAE}` : 'Agendada') : 'Não agendada'}
                     </span>
                   </td>
                   <td>
-                    <span class="${getStatusClass(row.currentStatus)}">
-                      ${row.currentStatus || 'Lead'}
+                    <span class="${getStatusClass(row.status)}">
+                      ${row.status || 'Lead'}
                     </span>
                   </td>
                 </tr>
