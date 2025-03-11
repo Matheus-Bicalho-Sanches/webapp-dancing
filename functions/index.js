@@ -644,7 +644,7 @@ app.post("/query", async (req, res) => {
           },
             {
               role: "user",
-              content: `Baseado nos seguintes dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
+              content: `Baseado nos seguintes  dados: ${JSON.stringify(data)}, responda à pergunta: ${question}`
             }
           ],
           max_tokens: 1000,

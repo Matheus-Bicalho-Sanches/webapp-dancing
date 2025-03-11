@@ -93,25 +93,51 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     return quantity * valuePerClass;
   };
 
-  // Inicializar as três datas (hoje, amanhã, depois)
+  // Inicializar as datas da semana (segunda a sábado)
   useEffect(() => {
     const today = dayjs();
-    const dates = [
-      today,
-      today.add(1, 'day'),
-      today.add(2, 'day')
-    ];
-    setSelectedDates(dates);
+    // Descobrir o dia da semana atual (0=domingo, 1=segunda, ..., 6=sábado)
+    const currentDayOfWeek = today.day();
+    
+    // Calcular o início da semana (segunda-feira)
+    let startOfWeek;
+    if (currentDayOfWeek === 0) { // Se for domingo
+      startOfWeek = today.subtract(6, 'day'); // Vai para a segunda-feira anterior
+    } else {
+      startOfWeek = today.subtract(currentDayOfWeek - 1, 'day'); // Vai para a segunda-feira da semana atual
+    }
+    
+    // Criar array com os dias da semana (segunda a sábado)
+    const weekDays = [];
+    for (let i = 0; i < 6; i++) {
+      // Criar uma nova instância para cada dia
+      weekDays.push(dayjs(startOfWeek.format('YYYY-MM-DD')).add(i, 'day'));
+    }
+    
+    setSelectedDates(weekDays);
   }, []);
 
   // Atualizar selectedDates quando baseDate mudar
   useEffect(() => {
-    const dates = [
-      baseDate,
-      baseDate.add(1, 'day'),
-      baseDate.add(2, 'day')
-    ];
-    setSelectedDates(dates);
+    // Descobrir o dia da semana da baseDate (0=domingo, 1=segunda, ..., 6=sábado)
+    const baseDayOfWeek = baseDate.day();
+    
+    // Calcular o início da semana (segunda-feira)
+    let startOfWeek;
+    if (baseDayOfWeek === 0) { // Se for domingo
+      startOfWeek = baseDate.subtract(6, 'day'); // Vai para a segunda-feira anterior
+    } else {
+      startOfWeek = baseDate.subtract(baseDayOfWeek - 1, 'day'); // Vai para a segunda-feira da semana atual
+    }
+    
+    // Criar array com os dias da semana (segunda a sábado)
+    const weekDays = [];
+    for (let i = 0; i < 6; i++) {
+      // Criar uma nova instância para cada dia
+      weekDays.push(dayjs(startOfWeek.format('YYYY-MM-DD')).add(i, 'day'));
+    }
+    
+    setSelectedDates(weekDays);
   }, [baseDate]);
 
   // Função para carregar horários
@@ -273,11 +299,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   };
 
   const handlePreviousDays = () => {
-    setBaseDate(prev => prev.subtract(3, 'day'));
+    setBaseDate(prev => prev.subtract(7, 'day'));
   };
 
   const handleNextDays = () => {
-    setBaseDate(prev => prev.add(3, 'day'));
+    setBaseDate(prev => prev.add(7, 'day'));
   };
 
   const handleToday = () => {
@@ -558,7 +584,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         justifyContent="center"
         sx={{ mb: 2 }}
       >
-        <Tooltip title="Dias anteriores">
+        <Tooltip title="Semana anterior">
           <IconButton 
             onClick={handlePreviousDays}
             sx={{ 
@@ -572,7 +598,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Voltar para hoje">
+        <Tooltip title="Voltar para a semana atual">
           <IconButton 
             onClick={handleToday}
             sx={{ 
@@ -586,7 +612,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Próximos dias">
+        <Tooltip title="Próxima semana">
           <IconButton 
             onClick={handleNextDays}
             sx={{ 
@@ -603,7 +629,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
       <Grid container spacing={2}>
         {selectedDates.map((date) => (
-          <Grid item xs={12} md={4} key={date.format('YYYY-MM-DD')}>
+          <Grid item xs={12} sm={6} md={4} lg={2} key={date.format('YYYY-MM-DD')}>
             <Paper 
               elevation={3}
               sx={{ 
@@ -624,9 +650,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 sx={{
                   color: 'primary.main',
                   fontWeight: 600,
-                  fontSize: '1.1rem',
+                  fontSize: '1rem',
                   textTransform: 'capitalize',
-                  mb: 2
+                  mb: 2,
+                  backgroundColor: '#ffffff',
+                  pb: 1,
+                  zIndex: 10
                 }}
               >
                 {formatDate(date)}
