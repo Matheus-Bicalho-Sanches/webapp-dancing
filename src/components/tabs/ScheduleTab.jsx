@@ -388,13 +388,14 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         size="small"
         sx={{
           position: 'fixed',
-          bottom: 16,
-          right: 16,
+          bottom: 12,
+          right: 12,
           zIndex: 1000,
-          borderRadius: 4,
-          boxShadow: 3,
-          py: 0.8,
-          px: 2
+          borderRadius: 3,
+          boxShadow: 2,
+          py: 0.5,
+          px: 1.5,
+          fontSize: '0.75rem'
         }}
         onClick={isPublic ? handlePublicAgendamento : handleOpenAgendamento}
       >
@@ -586,10 +587,10 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     <>
       <Stack 
         direction="row" 
-        spacing={1} 
+        spacing={0.5} 
         alignItems="center" 
         justifyContent="center"
-        sx={{ mb: 1 }}
+        sx={{ mb: 0.5 }}
       >
         <Tooltip title="Semana anterior">
           <IconButton 
@@ -597,12 +598,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             size="small"
             sx={{ 
               backgroundColor: alpha('#1976d2', 0.04),
+              p: 1,
               '&:hover': {
                 backgroundColor: alpha('#1976d2', 0.08),
               }
             }}
           >
-            <ChevronLeftIcon fontSize="small" />
+            <ChevronLeftIcon sx={{ fontSize: '1.8rem' }} />
           </IconButton>
         </Tooltip>
 
@@ -612,12 +614,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             size="small"
             sx={{ 
               backgroundColor: alpha('#1976d2', 0.04),
+              p: 1,
               '&:hover': {
                 backgroundColor: alpha('#1976d2', 0.08),
               }
             }}
           >
-            <TodayIcon fontSize="small" />
+            <TodayIcon sx={{ fontSize: '1.8rem' }} />
           </IconButton>
         </Tooltip>
 
@@ -627,30 +630,31 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             size="small"
             sx={{ 
               backgroundColor: alpha('#1976d2', 0.04),
+              p: 1,
               '&:hover': {
                 backgroundColor: alpha('#1976d2', 0.08),
               }
             }}
           >
-            <ChevronRightIcon fontSize="small" />
+            <ChevronRightIcon sx={{ fontSize: '1.8rem' }} />
           </IconButton>
         </Tooltip>
       </Stack>
 
-      <Grid container spacing={1}>
+      <Grid container spacing={0.3}>
         {selectedDates.map((date) => (
           <Grid item xs={12} sm={6} md={4} lg={2} key={date.format('YYYY-MM-DD')}>
             <Paper 
-              elevation={2}
+              elevation={1}
               sx={{ 
-                p: { xs: 1, sm: 1.5 }, 
+                p: { xs: 0.5, sm: 0.75 }, 
                 height: '100%',
-                borderRadius: 2,
+                borderRadius: 1,
                 background: 'linear-gradient(to bottom, #ffffff, #f8f9fa)',
-                transition: 'all 0.3s ease',
+                transition: 'all 0.15s ease',
                 '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: 3
+                  transform: 'translateY(-1px)',
+                  boxShadow: 1
                 }
               }}
             >
@@ -659,35 +663,37 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 sx={{
                   color: 'primary.main',
                   fontWeight: 600,
-                  fontSize: '0.9rem',
+                  fontSize: '0.8rem',
                   textTransform: 'capitalize',
-                  mb: 1,
+                  mb: 0.5,
                   backgroundColor: '#ffffff',
-                  pb: 0.5,
+                  pb: 0.2,
                   textAlign: 'center'
                 }}
               >
                 {formatDate(date)}
               </Typography>
-              <Divider sx={{ mb: 1 }} />
+              <Divider sx={{ mb: 0.5 }} />
               
               {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-                  <Typography variant="body2">Carregando...</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.7rem' }}>Carregando...</Typography>
                 </Box>
               ) : (
                 <Box>
                   {schedules[date.format('YYYY-MM-DD')]?.map((schedule) => (
-                    <Box key={schedule.id} sx={{ mb: 1 }}>
+                    <Box key={schedule.id} sx={{ mb: 0.5 }}>
                       <Typography 
                         variant="subtitle2" 
                         sx={{ 
                           fontSize: '0.85rem', 
                           fontWeight: 600,
-                          backgroundColor: alpha('#f5f5f5', 0.7),
-                          px: 1,
-                          py: 0.5,
-                          borderRadius: 1
+                          backgroundColor: '#444444',
+                          color: '#ffffff',
+                          px: 0.75,
+                          py: 0.4,
+                          borderRadius: 0.8,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                         }}
                       >
                         {schedule.horario}
@@ -707,10 +713,10 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                p: 0.5,
-                                my: 0.5,
+                                p: 0.3,
+                                my: 0.3,
                                 cursor: isBooked ? 'default' : 'pointer',
-                                borderRadius: 1,
+                                borderRadius: 0.8,
                                 backgroundColor: isBooked 
                                   ? alpha('#f44336', 0.1) 
                                   : isSelected 
@@ -733,19 +739,19 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                                     : isSelected 
                                       ? 'primary.main' 
                                       : 'text.secondary',
-                                  fontWeight: isSelected ? 500 : 400,
+                                  fontWeight: 600,
                                   fontSize: '0.8rem',
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
-                                  maxWidth: '65%'
+                                  maxWidth: '80%'
                                 }}
                               >
                                 {teachers[profId]?.nome || 'Carregando...'}
                                 {isBooked && ` - ${existingBookings[bookingKey].nomeAluno.split(' ')[0]}`}
                               </Typography>
                               {isBooked && !isPublic && (
-                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Box sx={{ display: 'flex', gap: 0.2 }}>
                                   <IconButton
                                     size="small"
                                     color="primary"
@@ -755,13 +761,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                                     }}
                                     sx={{
                                       opacity: 0.7,
-                                      padding: 0.3,
+                                      padding: 0.2,
                                       '&:hover': {
                                         opacity: 1
                                       }
                                     }}
                                   >
-                                    <VisibilityIcon sx={{ fontSize: '0.9rem' }} />
+                                    <VisibilityIcon sx={{ fontSize: '0.7rem' }} />
                                   </IconButton>
                                   <IconButton
                                     size="small"
@@ -772,13 +778,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                                     }}
                                     sx={{
                                       opacity: 0.7,
-                                      padding: 0.3,
+                                      padding: 0.2,
                                       '&:hover': {
                                         opacity: 1
                                       }
                                     }}
                                   >
-                                    <DeleteOutlineIcon sx={{ fontSize: '0.9rem' }} />
+                                    <DeleteOutlineIcon sx={{ fontSize: '0.7rem' }} />
                                   </IconButton>
                                 </Box>
                               )}
@@ -796,11 +802,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                         textAlign: 'center',
                         color: 'text.disabled',
                         fontStyle: 'italic',
-                        mt: 1,
-                        p: 1,
+                        mt: 0.5,
+                        p: 0.5,
                         backgroundColor: alpha('#000', 0.02),
-                        borderRadius: 1,
-                        fontSize: '0.8rem'
+                        borderRadius: 0.8,
+                        fontSize: '0.65rem'
                       }}
                     >
                       Nenhum horário disponível
