@@ -259,11 +259,31 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
       
-      // Regras para a subcoleção slots
+      // Regras atualizadas para a subcoleção slots para suportar feriados
       match /slots/{slotId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isCurrentUserMasterOrAdmin();
+        
+        // Permitir escrita se for master/admin ou se for uma operação de feriado
+        allow create, update: if isAuthenticated() && (
+          isCurrentUserMasterOrAdmin() || 
+          (request.resource.data.isFeriado == true && isCurrentUserMasterOrAdmin())
+        );
+        
+        // Permitir exclusão se for master/admin ou se for um slot de feriado
+        allow delete: if isAuthenticated() && (
+          isCurrentUserMasterOrAdmin() || 
+          (resource.data.isFeriado == true && isCurrentUserMasterOrAdmin())
+        );
       }
+    }
+    
+    // NOVA REGRA: Coleção feriados
+    match /feriados/{feriadoId} {
+      // Permitir leitura para qualquer usuário autenticado
+      allow read: if isAuthenticated();
+      
+      // Permitir criação/atualização/exclusão apenas para master e administrativo
+      allow create, update, delete: if isAuthenticated() && isCurrentUserMasterOrAdmin();
     }
     
     // Regras para a coleção ai_conversations - Nova coleção para IA

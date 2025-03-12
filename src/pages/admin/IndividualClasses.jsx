@@ -31,6 +31,7 @@ import TeachersTab from '../../components/tabs/TeachersTab';
 import TimeTab from '../../components/tabs/TimeTab';
 import ScheduleTab from '../../components/tabs/ScheduleTab';
 import ValuesTab from '../../components/tabs/ValuesTab';
+import HolidaysTab from '../../components/tabs/HolidaysTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   getFirestore, 
@@ -293,6 +294,7 @@ export default function IndividualClasses() {
               <Tab label="Professores" />
               <Tab label="Valores" />
               <Tab label="Pesquisa" />
+              <Tab label="Feriados" />
             </Tabs>
           </Paper>
 
@@ -411,6 +413,10 @@ export default function IndividualClasses() {
                 </TableContainer>
               )}
             </Paper>
+          </TabPanel>
+
+          <TabPanel value={currentTab} index={5}>
+            <HolidaysTab />
           </TabPanel>
 
           <Snackbar 

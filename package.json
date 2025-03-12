@@ -18,7 +18,7 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.16.14",
     "@mui/material": "^5.16.14",
-    "@mui/x-date-pickers": "^7.23.0",
+    "@mui/x-date-pickers": "^7.27.3",
     "@vercel/node": "2.10.3",
     "axios": "^1.8.2",
     "cors": "^2.8.5",
