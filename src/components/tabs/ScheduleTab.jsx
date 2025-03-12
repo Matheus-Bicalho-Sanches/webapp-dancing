@@ -19,7 +19,8 @@ import {
   ListItemText,
   Chip,
   Snackbar,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
@@ -43,6 +44,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 dayjs.locale('pt-br');
 
@@ -77,6 +79,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [weekCount, setWeekCount] = useState(1);
   const [expandedSlots, setExpandedSlots] = useState([]);
   const [unavailableDates, setUnavailableDates] = useState([]);
+  const [lastUpdateTime, setLastUpdateTime] = useState(null);
+  const REFRESH_INTERVAL = 300000; // 5 minutos em milissegundos
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
@@ -241,10 +245,20 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   }, []);
 
   // Função super otimizada para carregar agendamentos existentes
-  const loadExistingBookings = async () => {
+  const loadExistingBookings = async (forceRefresh = false) => {
+    // Se já houve uma atualização recente (menos de 10 segundos) e não é uma chamada forçada, 
+    // não atualiza para evitar carregamentos desnecessários durante navegação rápida
+    const currentTime = Date.now();
+    if (lastUpdateTime && currentTime - lastUpdateTime < 10000 && !forceRefresh) {
+      console.log('Ignorando atualização: última atualização muito recente');
+      return existingBookings; // Retorna os dados já carregados
+    }
+
     console.log('Carregando agendamentos existentes...');
     try {
       const bookingsData = {};
+      
+      // Usar apenas as datas que estão sendo exibidas na semana atual
       const datesArray = selectedDates.map(date => date.format('YYYY-MM-DD'));
       
       if (datesArray.length === 0) return bookingsData; // Se não houver datas selecionadas, retorna objeto vazio
@@ -273,7 +287,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         console.log('Datas necessárias para verificação:', datasNecessarias);
       }
 
-      // Buscar apenas os agendamentos com status confirmado
+      // Buscar apenas os agendamentos com status confirmado e nas datas necessárias
       const agendamentosRef = collection(db, 'agendamentos');
       const agendamentosQuery = query(
         agendamentosRef,
@@ -291,7 +305,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         ])
       );
       
-      // Buscar horários para todas as datas de uma vez
+      // Buscar horários apenas para as datas necessárias
       const horariosPromises = agendamentosSnapshot.docs.map(async (agendamentoDoc) => {
         const horariosRef = collection(agendamentoDoc.ref, 'horarios');
         let horariosQuery;
@@ -325,7 +339,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               };
             });
           }
-        } else {
+        } else if (datasNecessarias.length === 1) {
           // Se houver apenas uma data, usa where equal
           horariosQuery = query(
             horariosRef,
@@ -351,6 +365,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       await Promise.all(horariosPromises);
       console.log('Agendamentos carregados:', Object.keys(bookingsData).length, bookingsData);
       setExistingBookings(bookingsData);
+      setLastUpdateTime(Date.now());
       return bookingsData;
     } catch (error) {
       console.error('Erro ao carregar agendamentos:', error);
@@ -363,11 +378,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   useEffect(() => {
     // Carregar agendamentos inicialmente
     console.log('Configurando polling para verificar agendamentos...');
-    loadExistingBookings();
+    loadExistingBookings(true);
 
-    // Configurar o intervalo para verificar a cada segundo
+    // Configurar o intervalo para verificar a cada 5 minutos
     const interval = setInterval(() => {
-      loadExistingBookings().then(bookings => {
+      console.log('Verificação programada de agendamentos (a cada 5 minutos)');
+      loadExistingBookings(true).then(bookings => {
         // Verificar se houve mudanças nos slots expandidos
         if (expandedSlots.length > 0 && weekCount > 1) {
           // Verificar se algum slot que estava disponível agora está ocupado
@@ -389,11 +405,16 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           }
         }
       });
-    }, 3000); // Aumentado para 3 segundos para reduzir carga no servidor
+    }, REFRESH_INTERVAL); // 5 minutos
 
     // Limpar o intervalo quando o componente for desmontado
     return () => clearInterval(interval);
   }, [selectedDates, weekCount]); // Recriar o intervalo quando as datas ou semanas mudarem
+
+  // Atualizar os dados quando o usuário navega entre as semanas
+  useEffect(() => {
+    loadExistingBookings();
+  }, [baseDate]);
 
   const formatDate = (date) => {
     // Formato mais compacto: "Segunda 23/10" em vez de "segunda-feira 23/10/23"
@@ -826,6 +847,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     loadValues();
   }, []);
 
+  // Adicionar o botão de atualização manual
+  const handleManualRefresh = () => {
+    loadExistingBookings(true);
+    showNotification('Dados atualizados com sucesso', 'success');
+  };
+
   return (
     <>
       <Stack 
@@ -880,6 +907,24 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             }}
           >
             <ChevronRightIcon sx={{ fontSize: '1.8rem' }} />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="Atualizar dados">
+          <IconButton 
+            onClick={handleManualRefresh}
+            size="small"
+            disabled={loading}
+            sx={{ 
+              backgroundColor: alpha('#4caf50', 0.04),
+              p: 1,
+              ml: 1,
+              '&:hover': {
+                backgroundColor: alpha('#4caf50', 0.08),
+              }
+            }}
+          >
+            {loading ? <CircularProgress size={20} /> : <RefreshIcon sx={{ fontSize: '1.8rem' }} />}
           </IconButton>
         </Tooltip>
       </Stack>
