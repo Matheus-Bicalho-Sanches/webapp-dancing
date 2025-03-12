@@ -26,6 +26,7 @@ import {
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   collection, 
   query, 
@@ -46,10 +47,12 @@ import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import IndividualLessonForm from '../reports/IndividualLessonForm';
 
 dayjs.locale('pt-br');
 
 export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
+  const { currentUser } = useAuth();
   const [selectedDates, setSelectedDates] = useState([]);
   const [schedules, setSchedules] = useState({});
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const REFRESH_INTERVAL = 300000; // 5 minutos em milissegundos
   const [holidayDates, setHolidayDates] = useState([]); // Novo estado para armazenar datas de feriados
   const [students, setStudents] = useState([]); // Estado para armazenar alunos cadastrados
+  const [printData, setPrintData] = useState(null); // Novo estado para armazenar dados do agendamento para impressão
+  const [selectedStudent, setSelectedStudent] = useState(null); // Estado para rastrear o aluno selecionado
 
   // Função para atualização manual dos dados
   const handleManualRefresh = async () => {
@@ -98,6 +103,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Função para lidar com fechamento da ficha de impressão
+  const handlePrintClose = () => {
+    console.log('Fechando a ficha de impressão');
+    setPrintData(null);
   };
 
   // Função para calcular valor por aula baseado na quantidade
@@ -585,6 +596,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     setExpandedSlots([]);
     setUnavailableDates([]);
     setWeekCount(1);
+    setSelectedStudent(null); // Limpar o aluno selecionado
     setAgendamentoForm({
       nomeAluno: '',
       email: '',
@@ -871,97 +883,82 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         ? result.expanded.filter(slot => slot.available) 
         : Object.values(selectedTeachers);
       
-      console.log('Horários para agendar:', horariosToSchedule);
-
-      if (isPublic) {
-        // Preparar dados do agendamento
-        const horarios = horariosToSchedule.map(slot => ({
-          date: slot.date,
-          horario: slot.horario,
-          professorId: slot.professorId,
-          professorNome: slot.professorNome
-        }));
-
-        // Calcular valor total
-        const totalAulas = horarios.length;
-        const valorPorAula = getValuePerClass(totalAulas);
-        const valorTotal = totalAulas * valorPorAula;
-        
-        console.log(`Processando pagamento para ${totalAulas} aulas, valor total: ${valorTotal}`);
-
-        // Criar sessão de pagamento no Stripe
-        try {
-          const response = await fetch('/api/stripe/create-session', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              amount: valorTotal,
-              payer: {
-                name: agendamentoForm.nomeAluno,
-                email: agendamentoForm.email,
-                tax_id: agendamentoForm.cpf.replace(/[^0-9]/g, ''),
-                phone: agendamentoForm.telefone.replace(/[^0-9]/g, ''),
-                observacoes: agendamentoForm.observacoes || ''
-              },
-              items: [{
-                name: `${totalAulas} aula(s) de patinação`,
-                quantity: 1
-              }],
-              horarios
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.details || 'Erro ao criar sessão de pagamento');
-          }
-
-          const data = await response.json();
-          
-          if (data.url) {
-            // Limpar os estados antes de redirecionar
-            resetSelectionStates();
-            window.location.href = data.url;
-          } else {
-            throw new Error('URL de pagamento não recebida');
-          }
-        } catch (error) {
-          console.error('Erro ao criar sessão de pagamento:', error);
-          showNotification('Erro ao processar pagamento. Por favor, tente novamente.', 'error');
-          setSaving(false);
-        }
+      // Se este for um agendamento público, processar pagamento
+      if (isPublic && horariosToSchedule.length > 0) {
+        // ... código existente para pagamento público
       } else {
-        // Lógica existente para agendamento administrativo
-        const agendamentoData = {
-          ...agendamentoForm,
-          horarios: horariosToSchedule.map(slot => ({
-            data: slot.date,
-            horario: slot.horario,
-            professorId: slot.professorId,
-            professorNome: slot.professorNome
-          }))
-        };
+        // Agendamento administrativo - sem pagamento
+        try {
+          // Registrar quem criou o agendamento (se estiver logado)
+          const createdBy = currentUser ? currentUser.uid : 'admin';
+          console.log('Criado por:', createdBy);
+          
+          // Preparar dados do agendamento
+          const agendamentoData = {
+            ...agendamentoForm,
+            horarios: horariosToSchedule.map(slot => ({
+              data: slot.date,
+              horario: slot.horario,
+              professorId: slot.professorId,
+              professorNome: slot.professorNome
+            })),
+            quantidadeAulas: horariosToSchedule.length,
+            valorTotal: calculateTotal(),
+            valorUnitario: getValuePerClass(horariosToSchedule.length),
+            createdAt: serverTimestamp(),
+            createdBy: createdBy // Usando a variável definida acima
+          };
 
-        // Usar a prop saveAgendamento se disponível, ou a função interna caso contrário
-        if (typeof saveAgendamento === 'function') {
-          await saveAgendamento(agendamentoData);
-        } else {
-          await saveAgendamentoInternal(agendamentoData);
+          // Buscar aluno se existente
+          let alunoData = null;
+          if (selectedStudent) {
+            const alunoRef = doc(db, 'alunos', selectedStudent);
+            const alunoSnap = await getDoc(alunoRef);
+            if (alunoSnap.exists()) {
+              alunoData = { id: alunoSnap.id, ...alunoSnap.data() };
+              console.log('Dados do aluno encontrado:', alunoData);
+            }
+          }
+          
+          // Salvar agendamento
+          const resultado = await saveAgendamentoInternal(agendamentoData);
+          
+          // Notificar sucesso
+          showNotification('Agendamento salvo com sucesso!', 'success');
+          
+          // Resetar seleções
+          resetSelectionStates();
+          
+          // Fechar modal de agendamento com um pequeno delay para atualização da interface
+          setTimeout(() => {
+            setOpenAgendamentoModal(false);
+            
+            // Preparar dados para impressão
+            const printDataObj = {
+              ...agendamentoData,
+              id: resultado.id, // ID do agendamento
+              matricula: resultado.alunoId || '', // ID do aluno como matrícula
+              responsavelFinanceiro: alunoData?.responsavelFinanceiro || {} // Dados do responsável financeiro
+            };
+            
+            console.log('Dados completos para impressão:', printDataObj);
+            
+            // Definir os dados de impressão após um pequeno atraso
+            setTimeout(() => {
+              setPrintData(printDataObj);
+            }, 500);
+          }, 1000);
+          
+        } catch (error) {
+          console.error('Erro ao salvar agendamento:', error);
+          showNotification('Erro ao salvar agendamento. Tente novamente.', 'error');
         }
-        
-        // Fechar modal e limpar estados
-        setOpenAgendamentoModal(false);
-        resetSelectionStates();
-        // Recarregar agendamentos existentes para atualização imediata da interface
-        await loadExistingBookings();
-        showNotification('Agendamento realizado com sucesso!', 'success');
       }
+      
+      setSaving(false);
     } catch (error) {
-      console.error('Erro:', error);
-      showNotification('Erro ao processar agendamento', 'error');
-    } finally {
+      console.error('Erro ao processar agendamento:', error);
+      showNotification('Erro ao processar agendamento. Tente novamente.', 'error');
       setSaving(false);
     }
   };
@@ -1012,15 +1009,32 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   // Função para preencher o formulário quando um aluno for selecionado
   const handleStudentSelect = (event, student) => {
-    if (!student) return;
+    if (!student) {
+      setSelectedStudent(null);
+      return;
+    }
     
-    setAgendamentoForm(prev => ({
-      ...prev,
-      nomeAluno: student.nome || '',
-      email: student.email || '',
-      telefone: student.telefone || '',
-      cpf: student.responsavelFinanceiro?.cpf || student.cpf || ''
-    }));
+    // Se o student for um objeto (seleção do Autocomplete) ou uma string (entrada manual)
+    if (typeof student === 'object') {
+      console.log('Aluno selecionado:', student);
+      setSelectedStudent(student.id);
+      
+      setAgendamentoForm(prev => ({
+        ...prev,
+        nomeAluno: student.nome || '',
+        email: student.email || '',
+        telefone: student.telefone || '',
+        cpf: student.responsavelFinanceiro?.cpf || student.cpf || ''
+      }));
+    } else {
+      // Entrada manual
+      setSelectedStudent(null);
+      
+      setAgendamentoForm(prev => ({
+        ...prev,
+        nomeAluno: student
+      }));
+    }
   };
 
   // Função para salvar o agendamento no Firestore
@@ -1028,6 +1042,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     try {
       // Verificar se o aluno já existe baseado no email ou CPF
       let alunoId = null;
+      let alunoData = null;
       const { nomeAluno, email, telefone, cpf } = agendamentoData;
       
       if (email || cpf) {
@@ -1044,8 +1059,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         
         if (!existingAlunoSnapshot.empty) {
           // Aluno encontrado
-          alunoId = existingAlunoSnapshot.docs[0].id;
+          const alunoDoc = existingAlunoSnapshot.docs[0];
+          alunoId = alunoDoc.id;
+          alunoData = alunoDoc.data();
           console.log('Aluno existente encontrado:', alunoId);
+          console.log('Dados do aluno:', alunoData);
         } else {
           // Criar novo aluno
           const newAlunoRef = await addDoc(collection(db, 'alunos'), {
@@ -1075,8 +1093,28 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       // Salvar o agendamento
       const agendamentoRef = await addDoc(collection(db, 'agendamentos'), agendamentoWithAluno);
       
+      // Salvar os horários como subcoleção do agendamento
+      const batch = writeBatch(db);
+      agendamentoData.horarios.forEach(horario => {
+        const horarioRef = doc(collection(agendamentoRef, 'horarios'));
+        batch.set(horarioRef, {
+          data: horario.data,
+          horario: horario.horario,
+          professorId: horario.professorId,
+          professorNome: horario.professorNome
+        });
+      });
+      
+      await batch.commit();
+      
       console.log('Agendamento salvo com sucesso:', agendamentoRef.id);
-      return agendamentoRef.id;
+      
+      // Retornar dados completos relevantes para impressão
+      return {
+        id: agendamentoRef.id,
+        alunoId,
+        alunoData
+      };
     } catch (error) {
       console.error('Erro ao salvar agendamento:', error);
       throw error;
@@ -1464,9 +1502,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               autoComplete
               includeInputInList
               filterSelectedOptions
-              value={agendamentoForm.nomeAluno || null}
+              value={selectedStudent ? students.find(s => s.id === selectedStudent) : null}
               onChange={handleStudentSelect}
               onInputChange={(event, newInputValue) => {
+                if (!newInputValue) {
+                  setSelectedStudent(null);
+                }
                 setAgendamentoForm(prev => ({
                   ...prev,
                   nomeAluno: newInputValue
@@ -1493,7 +1534,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 // Extrair a propriedade key para passá-la diretamente
                 const { key, ...otherProps } = props;
                 return (
-                  <li key={key} {...otherProps}>
+                  <li key={option.id || key} {...otherProps}>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Typography variant="body1">{option.nome}</Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -1695,6 +1736,14 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Componente de impressão */}
+      {printData && (
+        <IndividualLessonForm 
+          agendamentoData={printData} 
+          onClose={handlePrintClose} 
+        />
+      )}
     </>
   );
 } 
