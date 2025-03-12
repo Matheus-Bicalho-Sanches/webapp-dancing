@@ -461,8 +461,14 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     });
   };
 
-  const handleCloseAgendamento = () => {
-    setOpenAgendamentoModal(false);
+  // Função para limpar todos os estados de seleção
+  const resetSelectionStates = () => {
+    console.log('Limpando todos os estados de seleção');
+    setSelectedSlots([]);
+    setSelectedTeachers({});
+    setExpandedSlots([]);
+    setUnavailableDates([]);
+    setWeekCount(1);
     setAgendamentoForm({
       nomeAluno: '',
       email: '',
@@ -470,9 +476,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       cpf: '',
       observacoes: ''
     });
-    setWeekCount(1);
-    setExpandedSlots([]);
-    setUnavailableDates([]);
+  };
+
+  const handleCloseAgendamento = () => {
+    setOpenAgendamentoModal(false);
+    resetSelectionStates();
   };
 
   const handleAgendamentoChange = (event) => {
@@ -759,6 +767,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           const data = await response.json();
           
           if (data.url) {
+            // Limpar os estados antes de redirecionar
+            resetSelectionStates();
             window.location.href = data.url;
           } else {
             throw new Error('URL de pagamento não recebida');
@@ -781,7 +791,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         };
 
         await saveAgendamento(agendamentoData);
-        handleCloseAgendamento();
+        // Fechar modal e limpar estados
+        setOpenAgendamentoModal(false);
+        resetSelectionStates();
+        // Recarregar agendamentos existentes para atualização imediata da interface
+        await loadExistingBookings();
+        showNotification('Agendamento realizado com sucesso!', 'success');
       }
     } catch (error) {
       console.error('Erro:', error);
