@@ -74,6 +74,9 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [viewBooking, setViewBooking] = useState(null);
   const [viewBookingOpen, setViewBookingOpen] = useState(false);
   const [values, setValues] = useState([]);
+  const [weekCount, setWeekCount] = useState(1);
+  const [expandedSlots, setExpandedSlots] = useState([]);
+  const [unavailableDates, setUnavailableDates] = useState([]);
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
@@ -116,6 +119,29 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     
     setSelectedDates(weekDays);
   }, []);
+
+  // Efeito para recalcular slots expandidos quando os slots selecionados mudarem
+  useEffect(() => {
+    // Se não houver slots selecionados, limpar os slots expandidos
+    if (selectedSlots.length === 0) {
+      setExpandedSlots([]);
+      return;
+    }
+    
+    // Se houver slots selecionados e weekCount > 1, recalcular os slots expandidos
+    if (selectedSlots.length > 0 && weekCount > 1) {
+      generateExpandedSlots(weekCount);
+    }
+  }, [selectedSlots]);
+  
+  // Efeito para recalcular quando existingBookings mudar (para refletir novas reservas)
+  useEffect(() => {
+    // Se temos slots expandidos, precisamos recalcular para refletir novas reservas
+    if (expandedSlots.length > 0 && weekCount > 1) {
+      console.log('Recalculando slots expandidos devido a mudanças em existingBookings');
+      generateExpandedSlots(weekCount);
+    }
+  }, [existingBookings]);
 
   // Atualizar selectedDates quando baseDate mudar
   useEffect(() => {
@@ -216,11 +242,36 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   // Função super otimizada para carregar agendamentos existentes
   const loadExistingBookings = async () => {
+    console.log('Carregando agendamentos existentes...');
     try {
       const bookingsData = {};
       const datesArray = selectedDates.map(date => date.format('YYYY-MM-DD'));
       
-      if (datesArray.length === 0) return; // Se não houver datas selecionadas, retorna
+      if (datesArray.length === 0) return bookingsData; // Se não houver datas selecionadas, retorna objeto vazio
+
+      // Buscar todas as datas futuras necessárias para expandir semanas
+      // Determinar a data mais distante que precisamos verificar
+      let datasNecessarias = [...datesArray];
+      
+      // Se tivermos weekCount > 1, calcular as datas adicionais que precisamos verificar
+      if (weekCount > 1 && selectedSlots.length > 0) {
+        // Para cada slot selecionado, gerar datas futuras para todas as semanas
+        for (const slotKey of Object.keys(selectedTeachers)) {
+          const slot = selectedTeachers[slotKey];
+          const baseDate = dayjs(slot.date);
+          
+          // Gerar datas para cada semana adicional
+          for (let week = 1; week < weekCount; week++) {
+            const newDate = baseDate.add(week * 7, 'day');
+            const dateStr = newDate.format('YYYY-MM-DD');
+            if (!datasNecessarias.includes(dateStr)) {
+              datasNecessarias.push(dateStr);
+            }
+          }
+        }
+        
+        console.log('Datas necessárias para verificação:', datasNecessarias);
+      }
 
       // Buscar apenas os agendamentos com status confirmado
       const agendamentosRef = collection(db, 'agendamentos');
@@ -229,6 +280,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         where('status', '==', 'confirmado')
       );
       const agendamentosSnapshot = await getDocs(agendamentosQuery);
+      
+      console.log(`Encontrados ${agendamentosSnapshot.size} agendamentos confirmados`);
       
       // Criar um mapa de agendamentos para referência rápida
       const agendamentosMap = new Map(
@@ -243,56 +296,104 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         const horariosRef = collection(agendamentoDoc.ref, 'horarios');
         let horariosQuery;
         
-        // Se houver mais de uma data, usa where in
-        if (datesArray.length > 1) {
-          horariosQuery = query(
-            horariosRef,
-            where('data', 'in', datesArray)
-          );
+        // Se houver mais de uma data, usa where in com todas as datas necessárias
+        if (datasNecessarias.length > 1) {
+          // Dividir em grupos de 10 datas para evitar limite da query
+          const chunks = [];
+          for (let i = 0; i < datasNecessarias.length; i += 10) {
+            chunks.push(datasNecessarias.slice(i, i + 10));
+          }
+          
+          // Fazer uma query para cada grupo de datas
+          for (const chunk of chunks) {
+            horariosQuery = query(
+              horariosRef,
+              where('data', 'in', chunk)
+            );
+            
+            const horariosSnapshot = await getDocs(horariosQuery);
+            
+            horariosSnapshot.docs.forEach(horarioDoc => {
+              const horarioData = horarioDoc.data();
+              const agendamento = agendamentosMap.get(agendamentoDoc.id);
+              
+              const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
+              bookingsData[key] = {
+                ...horarioData,
+                agendamentoId: agendamentoDoc.id,
+                nomeAluno: agendamento.nomeAluno
+              };
+            });
+          }
         } else {
           // Se houver apenas uma data, usa where equal
           horariosQuery = query(
             horariosRef,
-            where('data', '==', datesArray[0])
+            where('data', '==', datasNecessarias[0])
           );
-        }
-        
-        const horariosSnapshot = await getDocs(horariosQuery);
-        
-        horariosSnapshot.docs.forEach(horarioDoc => {
-          const horarioData = horarioDoc.data();
-          const agendamento = agendamentosMap.get(agendamentoDoc.id);
           
-          const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
-          bookingsData[key] = {
-            ...horarioData,
-            agendamentoId: agendamentoDoc.id,
-            nomeAluno: agendamento.nomeAluno
-          };
-        });
+          const horariosSnapshot = await getDocs(horariosQuery);
+          
+          horariosSnapshot.docs.forEach(horarioDoc => {
+            const horarioData = horarioDoc.data();
+            const agendamento = agendamentosMap.get(agendamentoDoc.id);
+            
+            const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
+            bookingsData[key] = {
+              ...horarioData,
+              agendamentoId: agendamentoDoc.id,
+              nomeAluno: agendamento.nomeAluno
+            };
+          });
+        }
       });
       
       await Promise.all(horariosPromises);
+      console.log('Agendamentos carregados:', Object.keys(bookingsData).length, bookingsData);
       setExistingBookings(bookingsData);
+      return bookingsData;
     } catch (error) {
       console.error('Erro ao carregar agendamentos:', error);
       showNotification('Erro ao carregar agendamentos', 'error');
+      return {};
     }
   };
 
   // Polling para verificar novos agendamentos
   useEffect(() => {
     // Carregar agendamentos inicialmente
+    console.log('Configurando polling para verificar agendamentos...');
     loadExistingBookings();
 
     // Configurar o intervalo para verificar a cada segundo
     const interval = setInterval(() => {
-      loadExistingBookings();
-    }, 1000);
+      loadExistingBookings().then(bookings => {
+        // Verificar se houve mudanças nos slots expandidos
+        if (expandedSlots.length > 0 && weekCount > 1) {
+          // Verificar se algum slot que estava disponível agora está ocupado
+          const algumSlotIndisponivel = expandedSlots.some(slot => {
+            if (slot.available) { // Se estava disponível antes
+              const key = `${slot.date}-${slot.horario}-${slot.professorId}`;
+              // Verificar se agora está indisponível
+              return bookings[key] !== undefined;
+            }
+            return false;
+          });
+          
+          // Se algum slot ficou indisponível, notificar o usuário
+          if (algumSlotIndisponivel && openAgendamentoModal) {
+            console.log('ALERTA: Um slot que estava disponível agora está ocupado!');
+            showNotification('Atenção: Um ou mais horários que você selecionou acabaram de ser reservados por outra pessoa. Por favor, verifique sua seleção.', 'error');
+            // Forçar a regeneração dos slots
+            generateExpandedSlots(weekCount);
+          }
+        }
+      });
+    }, 3000); // Aumentado para 3 segundos para reduzir carga no servidor
 
     // Limpar o intervalo quando o componente for desmontado
     return () => clearInterval(interval);
-  }, [selectedDates]); // Recriar o intervalo quando as datas mudarem
+  }, [selectedDates, weekCount]); // Recriar o intervalo quando as datas ou semanas mudarem
 
   const formatDate = (date) => {
     // Formato mais compacto: "Segunda 23/10" em vez de "segunda-feira 23/10/23"
@@ -349,7 +450,15 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   };
 
   const handleOpenAgendamento = () => {
-    setOpenAgendamentoModal(true);
+    // Garantir que verificamos a disponibilidade novamente antes de abrir o modal
+    console.log('Abrindo modal de agendamento - verificando disponibilidade');
+    
+    // Atualizar os agendamentos existentes antes de gerar slots
+    loadExistingBookings().then(() => {
+      // Gerar slots expandidos com os dados mais recentes
+      generateExpandedSlots(weekCount);
+      setOpenAgendamentoModal(true);
+    });
   };
 
   const handleCloseAgendamento = () => {
@@ -361,6 +470,9 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       cpf: '',
       observacoes: ''
     });
+    setWeekCount(1);
+    setExpandedSlots([]);
+    setUnavailableDates([]);
   };
 
   const handleAgendamentoChange = (event) => {
@@ -369,6 +481,90 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleWeekCountChange = (event) => {
+    const value = parseInt(event.target.value);
+    if (value >= 1) {
+      setWeekCount(value);
+      generateExpandedSlots(value);
+    }
+  };
+
+  // Gera os slots expandidos para várias semanas
+  const generateExpandedSlots = async (weeks) => {
+    if (weeks <= 0 || Object.keys(selectedTeachers).length === 0) {
+      setExpandedSlots([]);
+      return;
+    }
+
+    console.log('Gerando slots expandidos para', weeks, 'semanas');
+    console.log('Slots selecionados:', selectedTeachers);
+    console.log('Agendamentos existentes:', existingBookings);
+    
+    const expanded = [];
+    const unavailable = [];
+
+    // Para cada slot selecionado
+    for (const slotKey of Object.keys(selectedTeachers)) {
+      const slot = selectedTeachers[slotKey];
+      const baseDate = dayjs(slot.date);
+      const dayOfWeek = baseDate.day(); // 0-6 (domingo-sábado)
+      
+      console.log(`Processando slot: ${slotKey} - Data base: ${baseDate.format('DD/MM/YYYY')} (${dayOfWeek})`);
+
+      // Para cada semana
+      for (let week = 0; week < weeks; week++) {
+        // Adicionar 7 dias para cada semana
+        const newDate = baseDate.add(week * 7, 'day');
+        const dateStr = newDate.format('YYYY-MM-DD');
+        const bookingKey = `${dateStr}-${slot.horario}-${slot.professorId}`;
+        
+        console.log(`Semana ${week}: Data: ${dateStr}, Key: ${bookingKey}`);
+        console.log(`Verificando disponibilidade: ${bookingKey in existingBookings ? 'OCUPADO' : 'LIVRE'}`);
+        
+        // Criar o slot expandido
+        const expandedSlot = {
+          ...slot,
+          date: dateStr,
+          originalDate: slot.date,
+          week,
+          available: true
+        };
+
+        // Verificar disponibilidade do slot, inclusive para a primeira semana
+        if (existingBookings[bookingKey]) {
+          expandedSlot.available = false;
+          unavailable.push(`O horário do dia ${dayjs(dateStr).format('DD/MM/YYYY')} às ${slot.horario} com ${slot.professorNome} não está disponível.`);
+          console.log(`SLOT INDISPONÍVEL: ${bookingKey}`);
+        }
+
+        expanded.push(expandedSlot);
+      }
+    }
+
+    console.log('Slots expandidos completos:', expanded);
+    console.log('Slots indisponíveis:', unavailable);
+    
+    setExpandedSlots(expanded);
+    setUnavailableDates(unavailable);
+
+    // Mostrar notificação se houver horários indisponíveis
+    if (unavailable.length > 0) {
+      showNotification(
+        `Alguns horários não estão disponíveis: ${unavailable[0]}${unavailable.length > 1 ? ` e mais ${unavailable.length - 1} horário(s)` : ''}`,
+        'warning'
+      );
+    }
+    
+    return { expanded, hasUnavailable: unavailable.length > 0 };
+  };
+  
+  // Verificar se todos os slots estão disponíveis
+  const allSlotsAvailable = () => {
+    const result = expandedSlots.length > 0 && expandedSlots.every(slot => slot.available);
+    console.log('Verificação allSlotsAvailable:', result, expandedSlots);
+    return result;
   };
 
   const showNotification = (message, severity) => {
@@ -409,7 +605,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       ...prev,
       isPublic: true
     }));
-    setOpenAgendamentoModal(true);
+    
+    // Garantir verificação de disponibilidade
+    loadExistingBookings().then(() => {
+      generateExpandedSlots(weekCount);
+      setOpenAgendamentoModal(true);
+    });
   };
 
   const handleDeleteClick = (booking) => {
@@ -472,6 +673,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   // Atualizar handleSaveAgendamento para criar a preferência
   const handleSaveAgendamento = async () => {
     try {
+      console.log('=== INICIANDO SALVAMENTO DE AGENDAMENTO ===');
+      
       // Validar dados básicos
       if (!agendamentoForm.nomeAluno || !agendamentoForm.email || !agendamentoForm.telefone || !agendamentoForm.cpf) {
         showNotification('Por favor, preencha todos os campos obrigatórios.', 'error');
@@ -484,11 +687,33 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         return;
       }
 
+      // Forçar regeneração dos slots expandidos para ter certeza que estamos com os dados atualizados
+      const { expanded, hasUnavailable } = await generateExpandedSlots(weekCount);
+      console.log('Verificação final de slots indisponíveis:', hasUnavailable);
+      
+      // Verificar slots disponíveis após reavaliação (dupla verificação para garantir)
+      const todosDisponiveis = expanded.every(slot => slot.available);
+      console.log('Verificação de disponibilidade de todos os slots:', todosDisponiveis);
+      
+      // Validar se todos os slots expandidos estão disponíveis
+      if (hasUnavailable || !todosDisponiveis) {
+        showNotification('Existem horários indisponíveis. Por favor, selecione menos semanas ou escolha outros horários.', 'error');
+        return;
+      }
+
       setSaving(true);
+      console.log('Iniciando salvamento - Todos os slots estão disponíveis');
+
+      // Definir os horários que serão agendados (slots expandidos ou slots normais)
+      const horariosToSchedule = expanded.length > 0 
+        ? expanded.filter(slot => slot.available) 
+        : Object.values(selectedTeachers);
+      
+      console.log('Horários para agendar:', horariosToSchedule);
 
       if (isPublic) {
         // Preparar dados do agendamento
-        const horarios = Object.values(selectedTeachers).map(slot => ({
+        const horarios = horariosToSchedule.map(slot => ({
           date: slot.date,
           horario: slot.horario,
           professorId: slot.professorId,
@@ -496,8 +721,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         }));
 
         // Calcular valor total
-        const valorPorAula = getValuePerClass(selectedSlots.length);
-        const valorTotal = selectedSlots.length * valorPorAula;
+        const totalAulas = horarios.length;
+        const valorPorAula = getValuePerClass(totalAulas);
+        const valorTotal = totalAulas * valorPorAula;
+        
+        console.log(`Processando pagamento para ${totalAulas} aulas, valor total: ${valorTotal}`);
 
         // Criar sessão de pagamento no Stripe
         try {
@@ -516,7 +744,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 observacoes: agendamentoForm.observacoes || ''
               },
               items: [{
-                name: `${selectedSlots.length} aula(s) de patinação`,
+                name: `${totalAulas} aula(s) de patinação`,
                 quantity: 1
               }],
               horarios
@@ -544,7 +772,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
         // Lógica existente para agendamento administrativo
         const agendamentoData = {
           ...agendamentoForm,
-          horarios: Object.values(selectedTeachers).map(slot => ({
+          horarios: horariosToSchedule.map(slot => ({
             data: slot.date,
             horario: slot.horario,
             professorId: slot.professorId,
@@ -835,15 +1063,72 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               Horários selecionados:
             </Typography>
             <Box sx={{ mb: 3 }}>
-              {Object.values(selectedTeachers).map((slot, index) => (
-                <Typography key={index} color="text.secondary">
-                  • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
-                </Typography>
-              ))}
+              {expandedSlots.length > 0 ? (
+                <>
+                  {expandedSlots.some(slot => !slot.available) && (
+                    <Alert 
+                      severity="error" 
+                      sx={{ mb: 2 }}
+                      action={
+                        <Button 
+                          color="error" 
+                          size="small"
+                          onClick={() => {
+                            // Encontrar o maior número de semanas sem conflitos
+                            let maxSemanasSemConflito = 1;
+                            for (let w = weekCount - 1; w >= 1; w--) {
+                              const { expanded } = generateExpandedSlots(w);
+                              if (expanded.every(s => s.available)) {
+                                maxSemanasSemConflito = w;
+                                break;
+                              }
+                            }
+                            setWeekCount(maxSemanasSemConflito);
+                            generateExpandedSlots(maxSemanasSemConflito);
+                            showNotification(`Ajustado para ${maxSemanasSemConflito} semana(s) sem conflitos.`, 'success');
+                          }}
+                        >
+                          Ajustar automaticamente
+                        </Button>
+                      }
+                    >
+                      Existem horários indisponíveis. Você precisa reduzir o número de semanas ou escolher outros horários.
+                    </Alert>
+                  )}
+                  {expandedSlots.map((slot, index) => (
+                    <Typography key={index} color={slot.available ? "text.secondary" : "error"}>
+                      • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                      {!slot.available && " (Indisponível)"}
+                    </Typography>
+                  ))}
+                </>
+              ) : (
+                Object.values(selectedTeachers).map((slot, index) => (
+                  <Typography key={index} color="text.secondary">
+                    • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                  </Typography>
+                ))
+              )}
+            </Box>
+
+            <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TextField
+                label="Agendar por X semanas"
+                type="number"
+                value={weekCount}
+                onChange={handleWeekCountChange}
+                InputProps={{ inputProps: { min: 1 } }}
+                sx={{ width: 200 }}
+                helperText="Valor padrão: 1 semana"
+                error={expandedSlots.some(slot => !slot.available)}
+              />
+              <Typography variant="subtitle1">
+                Total de aulas: {expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length}
+              </Typography>
             </Box>
 
             <Typography variant="subtitle1" gutterBottom>
-              Valor total: R$ {selectedSlots.length * getValuePerClass(selectedSlots.length)}
+              Valor total: R$ {(expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length) * getValuePerClass(expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length)}
             </Typography>
 
             <TextField

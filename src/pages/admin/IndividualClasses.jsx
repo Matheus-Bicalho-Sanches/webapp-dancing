@@ -46,6 +46,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
+import 'dayjs/locale/pt-br';
+
+// Configurar dayjs para usar o locale pt-br
+dayjs.locale('pt-br');
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -263,6 +267,11 @@ export default function IndividualClasses() {
     return dayjs(dateString).format('DD/MM/YYYY');
   };
 
+  const formatDayOfWeek = (dateString) => {
+    // Formata o dia da semana com primeira letra maiúscula
+    return dayjs(dateString).format('dddd').replace(/^\w/, c => c.toUpperCase());
+  };
+
   const formatTime = (time) => {
     return time.replace(':00', 'h');
   };
@@ -344,6 +353,7 @@ export default function IndividualClasses() {
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ fontWeight: 600, color: '#666' }}>Data</TableCell>
+                        <TableCell sx={{ fontWeight: 600, color: '#666' }}>Dia da Semana</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: '#666' }}>Horário</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: '#666' }}>Aluno</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: '#666' }}>Contato</TableCell>
@@ -359,6 +369,7 @@ export default function IndividualClasses() {
                               {formatDate(classItem.data)}
                             </Box>
                           </TableCell>
+                          <TableCell>{formatDayOfWeek(classItem.data)}</TableCell>
                           <TableCell>{formatTime(classItem.horario)}</TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -388,7 +399,7 @@ export default function IndividualClasses() {
                       ))}
                       {classes.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                          <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                             <Typography variant="body2" color="textSecondary">
                               Nenhuma aula encontrada para este professor
                             </Typography>
