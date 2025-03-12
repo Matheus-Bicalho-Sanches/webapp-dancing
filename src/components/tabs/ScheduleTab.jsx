@@ -606,6 +606,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     
     const expanded = [];
     const unavailable = [];
+    const skippedDates = []; // Array para armazenar datas que foram puladas
 
     // Para cada slot selecionado
     for (const slotKey of Object.keys(selectedTeachers)) {
@@ -615,58 +616,92 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       
       console.log(`Processando slot: ${slotKey} - Data base: ${baseDate.format('DD/MM/YYYY')} (${dayOfWeek})`);
 
-      // Para cada semana
-      for (let week = 0; week < weeks; week++) {
+      let remainingWeeks = weeks; // Contador para semanas restantes a agendar
+      let currentWeek = 0; // Semana atual sendo processada
+      let maxTries = weeks * 4; // Limite máximo de tentativas (evita loops infinitos)
+      let tries = 0;
+
+      // Continuar gerando slots até termos o número desejado de semanas ou atingir o limite de tentativas
+      while (remainingWeeks > 0 && tries < maxTries) {
         // Adicionar 7 dias para cada semana
-        const newDate = baseDate.add(week * 7, 'day');
+        const newDate = baseDate.add(currentWeek * 7, 'day');
         const dateStr = newDate.format('YYYY-MM-DD');
         const bookingKey = `${dateStr}-${slot.horario}-${slot.professorId}`;
         
-        console.log(`Semana ${week}: Data: ${dateStr}, Key: ${bookingKey}`);
-        console.log(`Verificando disponibilidade: ${bookingKey in existingBookings ? 'OCUPADO' : 'LIVRE'}`);
+        console.log(`Tentativa ${tries+1}: Semana ${currentWeek}: Data: ${dateStr}, Key: ${bookingKey}`);
         
         // Criar o slot expandido
         const expandedSlot = {
           ...slot,
           date: dateStr,
           originalDate: slot.date,
-          week,
-          available: true
+          week: currentWeek,
+          available: true,
+          isSkipped: false
         };
 
-        // Verificar disponibilidade do slot, inclusive para a primeira semana
+        // Verificar disponibilidade do slot
+        let isAvailable = true;
+
+        // Verificar se já existe um agendamento
         if (existingBookings[bookingKey]) {
+          isAvailable = false;
           expandedSlot.available = false;
-          unavailable.push(`O horário do dia ${dayjs(dateStr).format('DD/MM/YYYY')} às ${slot.horario} com ${slot.professorNome} não está disponível.`);
-          console.log(`SLOT INDISPONÍVEL: ${bookingKey}`);
+          expandedSlot.isSkipped = true;
+          skippedDates.push(`O horário do dia ${dayjs(dateStr).format('DD/MM/YYYY')} às ${slot.horario} com ${slot.professorNome} não está disponível.`);
+          console.log(`SLOT INDISPONÍVEL: ${bookingKey} - Pulando para a próxima semana`);
         }
 
         // Verificar se é feriado
         if (holidayDates.includes(dateStr)) {
+          isAvailable = false;
           expandedSlot.available = false;
-          unavailable.push(`O dia ${dayjs(dateStr).format('DD/MM/YYYY')} está marcado como feriado e não está disponível para agendamento.`);
-          console.log(`SLOT INDISPONÍVEL (FERIADO): ${dateStr}`);
+          expandedSlot.isSkipped = true;
+          skippedDates.push(`O dia ${dayjs(dateStr).format('DD/MM/YYYY')} está marcado como feriado. Buscando próxima data disponível.`);
+          console.log(`SLOT INDISPONÍVEL (FERIADO): ${dateStr} - Pulando para a próxima semana`);
         }
 
+        // Se o slot não estiver disponível, vamos pular para a próxima semana,
+        // mas ainda adicionamos o slot à lista para exibição (marcado como isSkipped)
+        if (!isAvailable) {
+          expanded.push(expandedSlot);
+          currentWeek++; // Avançar para a próxima semana
+          tries++;
+          continue; // Continuar para a próxima iteração sem decrementar remainingWeeks
+        }
+
+        // Se chegou aqui, o slot está disponível
         expanded.push(expandedSlot);
+        remainingWeeks--; // Decrementar contador de semanas restantes
+        currentWeek++; // Avançar para a próxima semana
+        tries++;
       }
     }
 
     console.log('Slots expandidos completos:', expanded);
-    console.log('Slots indisponíveis:', unavailable);
+    console.log('Slots pulados:', skippedDates);
     
     setExpandedSlots(expanded);
-    setUnavailableDates(unavailable);
+    setUnavailableDates(skippedDates);
 
-    // Mostrar notificação se houver horários indisponíveis
-    if (unavailable.length > 0) {
+    // Mostrar notificação se houver datas puladas
+    if (skippedDates.length > 0) {
       showNotification(
-        `Alguns horários não estão disponíveis: ${unavailable[0]}${unavailable.length > 1 ? ` e mais ${unavailable.length - 1} horário(s)` : ''}`,
+        `Algumas datas foram puladas por indisponibilidade: ${skippedDates[0]}${skippedDates.length > 1 ? ` e mais ${skippedDates.length - 1} data(s)` : ''}`,
         'warning'
       );
     }
     
-    return { expanded, hasUnavailable: unavailable.length > 0 };
+    // Verificar se conseguimos gerar slots suficientes
+    const availableSlots = expanded.filter(slot => slot.available);
+    const hasUnavailable = expanded.some(slot => !slot.available);
+    
+    return { 
+      expanded, 
+      hasUnavailable,
+      availableCount: availableSlots.length,
+      skippedDates
+    };
   };
   
   // Verificar se todos os slots estão disponíveis
@@ -797,25 +832,21 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       }
 
       // Forçar regeneração dos slots expandidos para ter certeza que estamos com os dados atualizados
-      const { expanded, hasUnavailable } = await generateExpandedSlots(weekCount);
-      console.log('Verificação final de slots indisponíveis:', hasUnavailable);
+      const result = await generateExpandedSlots(weekCount);
+      console.log('Verificação final de slots disponíveis:', result.availableCount);
       
-      // Verificar slots disponíveis após reavaliação (dupla verificação para garantir)
-      const todosDisponiveis = expanded.every(slot => slot.available);
-      console.log('Verificação de disponibilidade de todos os slots:', todosDisponiveis);
-      
-      // Validar se todos os slots expandidos estão disponíveis
-      if (hasUnavailable || !todosDisponiveis) {
-        showNotification('Existem horários indisponíveis. Por favor, selecione menos semanas ou escolha outros horários.', 'error');
+      // Verificar se temos pelo menos um slot disponível
+      if (result.availableCount === 0) {
+        showNotification('Não há horários disponíveis nas datas selecionadas. Por favor, escolha outras datas ou reduza o número de semanas.', 'error');
         return;
       }
 
       setSaving(true);
-      console.log('Iniciando salvamento - Todos os slots estão disponíveis');
+      console.log('Iniciando salvamento - Processando slots disponíveis');
 
-      // Definir os horários que serão agendados (slots expandidos ou slots normais)
-      const horariosToSchedule = expanded.length > 0 
-        ? expanded.filter(slot => slot.available) 
+      // Definir os horários que serão agendados (apenas os slots disponíveis)
+      const horariosToSchedule = result.expanded.length > 0 
+        ? result.expanded.filter(slot => slot.available) 
         : Object.values(selectedTeachers);
       
       console.log('Horários para agendar:', horariosToSchedule);
@@ -1222,40 +1253,57 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 <>
                   {expandedSlots.some(slot => !slot.available) && (
                     <Alert 
-                      severity="error" 
+                      severity="warning" 
                       sx={{ mb: 2 }}
-                      action={
-                        <Button 
-                          color="error" 
-                          size="small"
-                          onClick={() => {
-                            // Encontrar o maior número de semanas sem conflitos
-                            let maxSemanasSemConflito = 1;
-                            for (let w = weekCount - 1; w >= 1; w--) {
-                              const { expanded } = generateExpandedSlots(w);
-                              if (expanded.every(s => s.available)) {
-                                maxSemanasSemConflito = w;
-                                break;
-                              }
-                            }
-                            setWeekCount(maxSemanasSemConflito);
-                            generateExpandedSlots(maxSemanasSemConflito);
-                            showNotification(`Ajustado para ${maxSemanasSemConflito} semana(s) sem conflitos.`, 'success');
-                          }}
-                        >
-                          Ajustar automaticamente
-                        </Button>
-                      }
                     >
-                      Existem horários indisponíveis. Você precisa reduzir o número de semanas ou escolher outros horários.
+                      Algumas datas estão indisponíveis e foram puladas. O sistema buscou automaticamente as próximas datas disponíveis.
                     </Alert>
                   )}
-                  {expandedSlots.map((slot, index) => (
-                    <Typography key={index} color={slot.available ? "text.secondary" : "error"}>
-                      • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
-                      {!slot.available && " (Indisponível)"}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500 }}>
+                      Datas selecionadas para agendamento:
                     </Typography>
-                  ))}
+                    {expandedSlots
+                      .filter(slot => slot.available)
+                      .map((slot, index) => (
+                        <Typography key={index} color="text.secondary" sx={{ 
+                          py: 0.5, 
+                          pl: 1,
+                          borderLeft: '3px solid #4caf50',
+                          mb: 0.5,
+                          bgcolor: alpha('#4caf50', 0.05),
+                          borderRadius: '0 4px 4px 0'
+                        }}>
+                          • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                        </Typography>
+                    ))}
+                  </Box>
+                  
+                  {expandedSlots.some(slot => !slot.available) && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500, color: 'text.secondary' }}>
+                        Datas indisponíveis (puladas):
+                      </Typography>
+                      {expandedSlots
+                        .filter(slot => !slot.available)
+                        .map((slot, index) => (
+                          <Typography key={index} color="text.secondary" sx={{ 
+                            py: 0.5, 
+                            pl: 1,
+                            borderLeft: '3px solid #f44336',
+                            mb: 0.5,
+                            bgcolor: alpha('#f44336', 0.05),
+                            borderRadius: '0 4px 4px 0',
+                            fontSize: '0.9rem'
+                          }}>
+                            • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                            {holidayDates.includes(dayjs(slot.date).format('YYYY-MM-DD')) ? 
+                              " (Feriado/Férias)" : 
+                              " (Horário ocupado)"}
+                          </Typography>
+                      ))}
+                    </Box>
+                  )}
                 </>
               ) : (
                 Object.values(selectedTeachers).map((slot, index) => (
@@ -1275,7 +1323,6 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 InputProps={{ inputProps: { min: 1 } }}
                 sx={{ width: 200 }}
                 helperText="Valor padrão: 1 semana"
-                error={expandedSlots.some(slot => !slot.available)}
               />
               <Typography variant="subtitle1">
                 Total de aulas: {expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length}
