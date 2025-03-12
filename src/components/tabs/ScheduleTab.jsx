@@ -20,7 +20,8 @@ import {
   Chip,
   Snackbar,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
@@ -82,6 +83,22 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const REFRESH_INTERVAL = 300000; // 5 minutos em milissegundos
   const [holidayDates, setHolidayDates] = useState([]); // Novo estado para armazenar datas de feriados
+  const [students, setStudents] = useState([]); // Estado para armazenar alunos cadastrados
+
+  // Função para atualização manual dos dados
+  const handleManualRefresh = async () => {
+    setLoading(true);
+    try {
+      await loadHolidays();
+      await loadExistingBookings(true); // Força a atualização
+      showNotification('Dados atualizados com sucesso!', 'success');
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+      showNotification('Erro ao atualizar dados', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
@@ -202,6 +219,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   // useEffect para carregar feriados ao iniciar o componente
   useEffect(() => {
     loadHolidays();
+  }, []);
+
+  // useEffect para carregar alunos ao iniciar o componente
+  useEffect(() => {
+    loadStudents();
   }, []);
 
   // Função para carregar horários
@@ -922,7 +944,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           }))
         };
 
-        await saveAgendamento(agendamentoData);
+        // Usar a prop saveAgendamento se disponível, ou a função interna caso contrário
+        if (typeof saveAgendamento === 'function') {
+          await saveAgendamento(agendamentoData);
+        } else {
+          await saveAgendamentoInternal(agendamentoData);
+        }
+        
         // Fechar modal e limpar estados
         setOpenAgendamentoModal(false);
         resetSelectionStates();
@@ -958,13 +986,101 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     loadValues();
   }, []);
 
-  // Adicionar o botão de atualização manual
-  const handleManualRefresh = () => {
-    // Forçar a atualização de todos os dados
-    loadHolidays().then(() => {
-      loadExistingBookings(true);
-      showNotification('Dados atualizados com sucesso', 'success');
-    });
+  // useEffect para carregar alunos ao iniciar o componente
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  // Função para carregar alunos cadastrados
+  const loadStudents = async () => {
+    try {
+      console.log('Carregando alunos cadastrados...');
+      const studentsRef = collection(db, 'alunos');
+      const studentsSnapshot = await getDocs(studentsRef);
+      
+      const studentsData = studentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`${studentsData.length} alunos carregados`);
+      setStudents(studentsData);
+    } catch (error) {
+      console.error('Erro ao carregar alunos:', error);
+    }
+  };
+
+  // Função para preencher o formulário quando um aluno for selecionado
+  const handleStudentSelect = (event, student) => {
+    if (!student) return;
+    
+    setAgendamentoForm(prev => ({
+      ...prev,
+      nomeAluno: student.nome || '',
+      email: student.email || '',
+      telefone: student.telefone || '',
+      cpf: student.responsavelFinanceiro?.cpf || student.cpf || ''
+    }));
+  };
+
+  // Função para salvar o agendamento no Firestore
+  const saveAgendamentoInternal = async (agendamentoData) => {
+    try {
+      // Verificar se o aluno já existe baseado no email ou CPF
+      let alunoId = null;
+      const { nomeAluno, email, telefone, cpf } = agendamentoData;
+      
+      if (email || cpf) {
+        const alunosRef = collection(db, 'alunos');
+        let alunoQuery;
+        
+        if (email) {
+          alunoQuery = query(alunosRef, where('email', '==', email));
+        } else if (cpf) {
+          alunoQuery = query(alunosRef, where('cpf', '==', cpf));
+        }
+        
+        const existingAlunoSnapshot = await getDocs(alunoQuery || alunosRef);
+        
+        if (!existingAlunoSnapshot.empty) {
+          // Aluno encontrado
+          alunoId = existingAlunoSnapshot.docs[0].id;
+          console.log('Aluno existente encontrado:', alunoId);
+        } else {
+          // Criar novo aluno
+          const newAlunoRef = await addDoc(collection(db, 'alunos'), {
+            nome: nomeAluno,
+            email: email || '',
+            telefone: telefone || '',
+            cpf: cpf || '',
+            dataCadastro: serverTimestamp()
+          });
+          
+          alunoId = newAlunoRef.id;
+          console.log('Novo aluno cadastrado:', alunoId);
+          
+          // Atualizar a lista de alunos
+          loadStudents();
+        }
+      }
+      
+      // Adicionar o ID do aluno aos dados do agendamento
+      const agendamentoWithAluno = {
+        ...agendamentoData,
+        alunoId,
+        status: 'confirmado',
+        dataAgendamento: serverTimestamp()
+      };
+      
+      // Salvar o agendamento
+      const agendamentoRef = await addDoc(collection(db, 'agendamentos'), agendamentoWithAluno);
+      
+      console.log('Agendamento salvo com sucesso:', agendamentoRef.id);
+      return agendamentoRef.id;
+    } catch (error) {
+      console.error('Erro ao salvar agendamento:', error);
+      throw error;
+    }
   };
 
   return (
@@ -1333,14 +1449,60 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               Valor total: R$ {(expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length) * getValuePerClass(expandedSlots.length > 0 ? expandedSlots.filter(slot => slot.available).length : selectedSlots.length)}
             </Typography>
 
-            <TextField
+            <Autocomplete
               fullWidth
-              label="Nome Completo"
-              name="nomeAluno"
-              value={agendamentoForm.nomeAluno}
-              onChange={handleAgendamentoChange}
-              required
-              margin="normal"
+              id="nomeAluno"
+              options={students}
+              getOptionLabel={(option) => typeof option === 'string' ? option : option.nome || ''}
+              isOptionEqualToValue={(option, value) => {
+                if (typeof value === 'string') {
+                  return option.nome === value;
+                }
+                return option.id === value.id;
+              }}
+              freeSolo
+              autoComplete
+              includeInputInList
+              filterSelectedOptions
+              value={agendamentoForm.nomeAluno || null}
+              onChange={handleStudentSelect}
+              onInputChange={(event, newInputValue) => {
+                setAgendamentoForm(prev => ({
+                  ...prev,
+                  nomeAluno: newInputValue
+                }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Nome Completo"
+                  required
+                  margin="normal"
+                  helperText="Digite um novo nome ou selecione um aluno existente"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => {
+                // Extrair a propriedade key para passá-la diretamente
+                const { key, ...otherProps } = props;
+                return (
+                  <li key={key} {...otherProps}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="body1">{option.nome}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {option.email || 'Sem email'} • {option.telefone || 'Sem telefone'}
+                      </Typography>
+                    </Box>
+                  </li>
+                );
+              }}
             />
 
             <TextField
