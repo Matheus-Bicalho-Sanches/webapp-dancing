@@ -917,6 +917,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             if (alunoSnap.exists()) {
               alunoData = { id: alunoSnap.id, ...alunoSnap.data() };
               console.log('Dados do aluno encontrado:', alunoData);
+              console.log('Campos do aluno:', Object.keys(alunoData));
+              console.log('Valor da matrícula:', alunoData.matricula);
+              console.log('Dados do responsável financeiro:', alunoData.responsavelFinanceiro);
+              
+              if (alunoData.responsavelFinanceiro) {
+                console.log('Telefone do responsável:', alunoData.responsavelFinanceiro.telefone);
+              }
             }
           }
           
@@ -937,11 +944,15 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             const printDataObj = {
               ...agendamentoData,
               id: resultado.id, // ID do agendamento
-              matricula: resultado.alunoId || '', // ID do aluno como matrícula
-              responsavelFinanceiro: alunoData?.responsavelFinanceiro || {} // Dados do responsável financeiro
+              matricula: alunoData?.matricula !== undefined ? String(alunoData.matricula) : (resultado.alunoId || ''), // Converter matricula para string explicitamente
+              responsavelFinanceiro: alunoData?.responsavelFinanceiro || {}, // Dados do responsável financeiro
+              telefoneResponsavel: alunoData?.responsavelFinanceiro?.telefone || agendamentoData.telefone || '', // Telefone do responsável ou do aluno como fallback
+              alunoData: alunoData // Todos os dados do aluno
             };
             
             console.log('Dados completos para impressão:', printDataObj);
+            console.log('Matrícula encontrada:', printDataObj.matricula);
+            console.log('Telefone do responsável:', printDataObj.telefoneResponsavel);
             
             // Definir os dados de impressão após um pequeno atraso
             setTimeout(() => {
@@ -1017,6 +1028,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     // Se o student for um objeto (seleção do Autocomplete) ou uma string (entrada manual)
     if (typeof student === 'object') {
       console.log('Aluno selecionado:', student);
+      console.log('Campos do aluno:', Object.keys(student));
+      console.log('Matrícula do aluno:', student.Matricula);
       setSelectedStudent(student.id);
       
       setAgendamentoForm(prev => ({

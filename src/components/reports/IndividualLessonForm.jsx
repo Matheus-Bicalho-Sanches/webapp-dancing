@@ -18,6 +18,9 @@ const IndividualLessonForm = ({ agendamentoData, onClose }) => {
       console.log('Dados do agendamento para impressão:', agendamentoData);
       console.log('Matrícula:', agendamentoData.matricula);
       console.log('Responsável Financeiro:', agendamentoData.responsavelFinanceiro);
+      console.log('Telefone do Responsável:', agendamentoData.telefoneResponsavel);
+      console.log('Todos os campos do agendamento:', Object.keys(agendamentoData));
+      console.log('Dados completos do aluno:', agendamentoData.alunoData);
 
       const printWindow = window.open('', '_blank');
       
@@ -180,7 +183,7 @@ const IndividualLessonForm = ({ agendamentoData, onClose }) => {
                   <span class="info-label">Resp:</span> ${agendamentoData.responsavelFinanceiro?.nome || agendamentoData.nomeAluno}
                 </div>
                 <div class="info-item">
-                  <span class="info-label">WPP:</span> ${agendamentoData.telefone}
+                  <span class="info-label">WPP:</span> ${agendamentoData.telefoneResponsavel || agendamentoData.telefone || '-'}
                 </div>
                 <div class="info-item">
                   <span class="info-label">Data da compra:</span> ${dataCompra}
