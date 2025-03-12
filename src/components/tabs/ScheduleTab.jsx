@@ -81,6 +81,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [unavailableDates, setUnavailableDates] = useState([]);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const REFRESH_INTERVAL = 300000; // 5 minutos em milissegundos
+  const [holidayDates, setHolidayDates] = useState([]); // Novo estado para armazenar datas de feriados
 
   // Função para calcular valor por aula baseado na quantidade
   const getValuePerClass = (quantity) => {
@@ -170,6 +171,39 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     setSelectedDates(weekDays);
   }, [baseDate]);
 
+  // Nova função para carregar os feriados
+  const loadHolidays = async () => {
+    try {
+      console.log('Carregando feriados...');
+      const holidaysRef = collection(db, 'feriados');
+      const holidaysSnapshot = await getDocs(holidaysRef);
+      
+      const holidayDatesArray = holidaysSnapshot.docs.map(doc => {
+        const data = doc.data();
+        if (data.date) {
+          return dayjs(data.date.toDate()).format('YYYY-MM-DD');
+        }
+        return null;
+      }).filter(date => date !== null);
+      
+      console.log('Feriados carregados:', holidayDatesArray);
+      setHolidayDates(holidayDatesArray);
+    } catch (error) {
+      console.error('Erro ao carregar feriados:', error);
+    }
+  };
+
+  // Função auxiliar para verificar se uma data é feriado
+  const isHoliday = (date) => {
+    const dateStr = dayjs(date).format('YYYY-MM-DD');
+    return holidayDates.includes(dateStr);
+  };
+
+  // useEffect para carregar feriados ao iniciar o componente
+  useEffect(() => {
+    loadHolidays();
+  }, []);
+
   // Função para carregar horários
   const loadSchedules = async () => {
     if (selectedDates.length === 0) return;
@@ -255,6 +289,12 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     }
 
     console.log('Carregando agendamentos existentes...');
+    
+    // Recarregar os feriados para garantir que temos a lista mais atualizada
+    if (forceRefresh) {
+      await loadHolidays();
+    }
+    
     try {
       const bookingsData = {};
       
@@ -364,6 +404,31 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       
       await Promise.all(horariosPromises);
       console.log('Agendamentos carregados:', Object.keys(bookingsData).length, bookingsData);
+      
+      // Adicionar marcações para datas de feriados
+      // Isso fará com que os feriados apareçam como slots indisponíveis
+      for (const dateStr of holidayDates) {
+        if (datasNecessarias.includes(dateStr)) {
+          // Para cada horário nesta data
+          if (schedules[dateStr]) {
+            schedules[dateStr].forEach(schedule => {
+              schedule.professores?.forEach(professorId => {
+                const key = `${dateStr}-${schedule.horario}-${professorId}`;
+                if (!bookingsData[key]) {
+                  bookingsData[key] = {
+                    data: dateStr,
+                    horario: schedule.horario,
+                    professorId: professorId,
+                    agendamentoId: 'feriado',
+                    nomeAluno: 'Feriado/Férias'
+                  };
+                }
+              });
+            });
+          }
+        }
+      }
+      
       setExistingBookings(bookingsData);
       setLastUpdateTime(Date.now());
       return bookingsData;
@@ -413,6 +478,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   // Atualizar os dados quando o usuário navega entre as semanas
   useEffect(() => {
+    loadHolidays(); // Carregar feriados quando mudar de semana
     loadExistingBookings();
   }, [baseDate]);
 
@@ -437,6 +503,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const handleSlotSelection = (date, schedule, teacher) => {
     const slotId = `${date.format('YYYY-MM-DD')}-${schedule.id}-${teacher}`;
     const bookingKey = `${date.format('YYYY-MM-DD')}-${schedule.horario}-${teacher}`;
+    const dateStr = date.format('YYYY-MM-DD');
+    
+    // Verificar se a data é um feriado
+    if (holidayDates.includes(dateStr)) {
+      showNotification('Este dia está marcado como feriado/férias e não está disponível para agendamento.', 'error');
+      return;
+    }
     
     // Verificar se já existe agendamento
     if (existingBookings[bookingKey]) {
@@ -566,6 +639,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           expandedSlot.available = false;
           unavailable.push(`O horário do dia ${dayjs(dateStr).format('DD/MM/YYYY')} às ${slot.horario} com ${slot.professorNome} não está disponível.`);
           console.log(`SLOT INDISPONÍVEL: ${bookingKey}`);
+        }
+
+        // Verificar se é feriado
+        if (holidayDates.includes(dateStr)) {
+          expandedSlot.available = false;
+          unavailable.push(`O dia ${dayjs(dateStr).format('DD/MM/YYYY')} está marcado como feriado e não está disponível para agendamento.`);
+          console.log(`SLOT INDISPONÍVEL (FERIADO): ${dateStr}`);
         }
 
         expanded.push(expandedSlot);
@@ -849,8 +929,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   // Adicionar o botão de atualização manual
   const handleManualRefresh = () => {
-    loadExistingBookings(true);
-    showNotification('Dados atualizados com sucesso', 'success');
+    // Forçar a atualização de todos os dados
+    loadHolidays().then(() => {
+      loadExistingBookings(true);
+      showNotification('Dados atualizados com sucesso', 'success');
+    });
   };
 
   return (
@@ -938,7 +1021,9 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                 p: { xs: 0.5, sm: 0.75 }, 
                 height: '100%',
                 borderRadius: 1,
-                background: 'linear-gradient(to bottom, #ffffff, #f8f9fa)',
+                background: isHoliday(date) 
+                  ? 'linear-gradient(to bottom, #ffebee, #ffcdd2)' 
+                  : 'linear-gradient(to bottom, #ffffff, #f8f9fa)',
                 transition: 'all 0.15s ease',
                 '&:hover': {
                   transform: 'translateY(-1px)',
@@ -949,17 +1034,27 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               <Typography 
                 variant="subtitle1" 
                 sx={{
-                  color: 'primary.main',
+                  color: isHoliday(date) ? 'error.main' : 'primary.main',
                   fontWeight: 600,
                   fontSize: '0.8rem',
                   textTransform: 'capitalize',
                   mb: 0.5,
-                  backgroundColor: '#ffffff',
+                  backgroundColor: isHoliday(date) ? '#ffebee' : '#ffffff',
                   pb: 0.2,
                   textAlign: 'center'
                 }}
               >
                 {formatDate(date)}
+                {isHoliday(date) && (
+                  <Box component="span" sx={{ 
+                    display: 'block', 
+                    fontSize: '0.7rem', 
+                    fontWeight: 400, 
+                    color: 'error.main' 
+                  }}>
+                    Feriado/Férias
+                  </Box>
+                )}
               </Typography>
               <Divider sx={{ mb: 0.5 }} />
               
