@@ -393,8 +393,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           
           // Fazer uma query para cada grupo de datas
           for (const chunk of chunks) {
-            horariosQuery = query(
-              horariosRef,
+          horariosQuery = query(
+            horariosRef,
               where('data', 'in', chunk)
             );
             
@@ -418,20 +418,20 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             horariosRef,
             where('data', '==', datasNecessarias[0])
           );
+        
+        const horariosSnapshot = await getDocs(horariosQuery);
+        
+        horariosSnapshot.docs.forEach(horarioDoc => {
+          const horarioData = horarioDoc.data();
+          const agendamento = agendamentosMap.get(agendamentoDoc.id);
           
-          const horariosSnapshot = await getDocs(horariosQuery);
-          
-          horariosSnapshot.docs.forEach(horarioDoc => {
-            const horarioData = horarioDoc.data();
-            const agendamento = agendamentosMap.get(agendamentoDoc.id);
-            
-            const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
-            bookingsData[key] = {
-              ...horarioData,
-              agendamentoId: agendamentoDoc.id,
-              nomeAluno: agendamento.nomeAluno
-            };
-          });
+          const key = `${horarioData.data}-${horarioData.horario}-${horarioData.professorId}`;
+          bookingsData[key] = {
+            ...horarioData,
+            agendamentoId: agendamentoDoc.id,
+            nomeAluno: agendamento.nomeAluno
+          };
+        });
         }
       });
       
@@ -584,7 +584,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     loadExistingBookings().then(() => {
       // Gerar slots expandidos com os dados mais recentes
       generateExpandedSlots(weekCount);
-      setOpenAgendamentoModal(true);
+    setOpenAgendamentoModal(true);
     });
   };
 
@@ -787,7 +787,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     // Garantir verificação de disponibilidade
     loadExistingBookings().then(() => {
       generateExpandedSlots(weekCount);
-      setOpenAgendamentoModal(true);
+    setOpenAgendamentoModal(true);
     });
   };
 
@@ -886,7 +886,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       // Se este for um agendamento público, processar pagamento
       if (isPublic && horariosToSchedule.length > 0) {
         // ... código existente para pagamento público
-      } else {
+          } else {
         // Agendamento administrativo - sem pagamento
         try {
           // Registrar quem criou o agendamento (se estiver logado)
@@ -894,13 +894,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           console.log('Criado por:', createdBy);
           
           // Preparar dados do agendamento
-          const agendamentoData = {
-            ...agendamentoForm,
+        const agendamentoData = {
+          ...agendamentoForm,
             horarios: horariosToSchedule.map(slot => ({
-              data: slot.date,
-              horario: slot.horario,
-              professorId: slot.professorId,
-              professorNome: slot.professorNome
+            data: slot.date,
+            horario: slot.horario,
+            professorId: slot.professorId,
+            professorNome: slot.professorNome
             })),
             quantidadeAulas: horariosToSchedule.length,
             valorTotal: calculateTotal(),
@@ -960,7 +960,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             }, 500);
           }, 1000);
           
-        } catch (error) {
+    } catch (error) {
           console.error('Erro ao salvar agendamento:', error);
           showNotification('Erro ao salvar agendamento. Tente novamente.', 'error');
         }
@@ -1441,16 +1441,16 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                           bgcolor: alpha('#4caf50', 0.05),
                           borderRadius: '0 4px 4px 0'
                         }}>
-                          • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
-                        </Typography>
-                    ))}
-                  </Box>
-                  
+                  • {dayjs(slot.date).format('DD/MM/YYYY')} às {slot.horario} com {slot.professorNome}
+                </Typography>
+              ))}
+            </Box>
+
                   {expandedSlots.some(slot => !slot.available) && (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500, color: 'text.secondary' }}>
                         Datas indisponíveis (puladas):
-                      </Typography>
+            </Typography>
                       {expandedSlots
                         .filter(slot => !slot.available)
                         .map((slot, index) => (
@@ -1482,7 +1482,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             </Box>
 
             <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-              <TextField
+            <TextField
                 label="Agendar por X semanas"
                 type="number"
                 value={weekCount}
@@ -1529,9 +1529,9 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Nome Completo"
-                  required
-                  margin="normal"
+              label="Nome Completo"
+              required
+              margin="normal"
                   helperText="Digite um novo nome ou selecione um aluno existente"
                   InputProps={{
                     ...params.InputProps,

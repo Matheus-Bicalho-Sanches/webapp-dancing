@@ -1,6 +1,6 @@
 # WebApp Dancing
 
-Aplicação web para agendamento de aulas de dança.
+Aplicação web para gerenciamento de uma escola de esportes.
 
 ## Funcionalidades
 
