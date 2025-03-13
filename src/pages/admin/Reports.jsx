@@ -37,7 +37,8 @@ import {
   FilterList as FilterListIcon,
   Print as PrintIcon,
   Groups as GroupsIcon,
-  ContactPhone as ContactPhoneIcon
+  ContactPhone as ContactPhoneIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -53,6 +54,7 @@ import dayjs from 'dayjs';
 import FinancialReport from '../../components/reports/FinancialReport';
 import TaskReport from '../../components/reports/TaskReport';
 import ClassReport from '../../components/reports/ClassReport';
+import IndividualClassesReport from '../../components/reports/IndividualClassesReport';
 
 export default function Reports() {
   const [openDialog, setOpenDialog] = useState({
@@ -61,7 +63,8 @@ export default function Reports() {
     frequencia: false,
     tarefas: false,
     turmas: false,
-    leads: false
+    leads: false,
+    aulas_individuais: false
   });
   const [enrollmentData, setEnrollmentData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -234,6 +237,12 @@ export default function Reports() {
       title: 'Leads',
       icon: <ContactPhoneIcon sx={{ fontSize: 40 }} />,
       color: '#0288d1' // azul claro
+    },
+    {
+      id: 'aulas_individuais',
+      title: 'Aulas Individuais',
+      icon: <PersonIcon sx={{ fontSize: 40 }} />,
+      color: '#ff9800' // laranja
     }
   ];
 
@@ -1263,6 +1272,8 @@ export default function Reports() {
                 <ClassReport />
               ) : category.id === 'leads' ? (
                 renderLeadsReport()
+              ) : category.id === 'aulas_individuais' ? (
+                <IndividualClassesReport />
               ) : (
                 <Typography>
                   Os relatórios de {category.title.toLowerCase()} serão implementados em breve.
