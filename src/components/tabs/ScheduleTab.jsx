@@ -50,6 +50,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import PrintIcon from '@mui/icons-material/Print';
 import IndividualLessonForm from '../reports/IndividualLessonForm';
 
 dayjs.locale('pt-br');
@@ -97,6 +98,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     open: false,
     message: ''
   }); // Estado para notificação de cópia
+  const [weekCountInput, setWeekCountInput] = useState('1'); // Estado para controlar a entrada de texto do campo de semanas
 
   // Função para atualização manual dos dados
   const handleManualRefresh = async () => {
@@ -116,7 +118,14 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   // Função para lidar com fechamento da ficha de impressão
   const handlePrintClose = () => {
     console.log('Fechando a ficha de impressão');
-    setPrintData(null);
+    // Garante que o estado seja limpo após um pequeno atraso
+    // para permitir que o componente seja completamente desmontado
+    setTimeout(() => {
+      setPrintData(null);
+      
+      // Se a visualização estiver aberta e o usuário clicou no botão imprimir,
+      // não fechar o modal de visualização
+    }, 100);
   };
 
   // Função para calcular valor por aula baseado na quantidade
@@ -174,6 +183,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       generateExpandedSlots(weekCount);
     }
   }, [selectedSlots]);
+  
+  // Atualizar weekCountInput quando weekCount mudar
+  useEffect(() => {
+    setWeekCountInput(String(weekCount));
+  }, [weekCount]);
   
   // Efeito para recalcular quando existingBookings mudar (para refletir novas reservas)
   useEffect(() => {
@@ -628,10 +642,16 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   };
 
   const handleWeekCountChange = (event) => {
-    const value = parseInt(event.target.value);
-    if (value >= 1) {
-      setWeekCount(value);
-      generateExpandedSlots(value);
+    const inputValue = event.target.value;
+    setWeekCountInput(inputValue);
+    
+    // Converter para número apenas se não estiver vazio
+    if (inputValue !== '') {
+      const value = parseInt(inputValue);
+      if (value >= 1) {
+        setWeekCount(value);
+        generateExpandedSlots(value);
+      }
     }
   };
 
@@ -839,8 +859,32 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   const handleViewClick = async (booking) => {
     try {
-      setViewBooking(booking);
-      setViewBookingOpen(true);
+      // Buscar dados completos do agendamento
+      const agendamentoRef = doc(db, 'agendamentos', booking.agendamentoId);
+      const agendamentoDoc = await getDoc(agendamentoRef);
+
+      if (agendamentoDoc.exists()) {
+        // Buscar horários associados ao agendamento
+        const horariosRef = collection(agendamentoRef, 'horarios');
+        const horariosSnapshot = await getDocs(horariosRef);
+        
+        const horarios = horariosSnapshot.docs.map(doc => ({
+          ...doc.data()
+        }));
+        
+        // Combinar dados do agendamento com os horários
+        const agendamentoCompleto = {
+          ...booking,
+          ...agendamentoDoc.data(),
+          horarios: horarios
+        };
+        
+        setViewBooking(agendamentoCompleto);
+        setViewBookingOpen(true);
+      } else {
+        setViewBooking(booking);
+        setViewBookingOpen(true);
+      }
     } catch (error) {
       console.error('Erro ao carregar detalhes da reserva:', error);
       showNotification('Erro ao carregar detalhes da reserva', 'error');
@@ -850,6 +894,46 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   // Função para controlar o checkbox de mostrar apenas horários disponíveis
   const handleShowOnlyAvailableChange = (event) => {
     setShowOnlyAvailable(event.target.checked);
+  };
+
+  // Função para imprimir ficha de agendamento
+  const handlePrintBooking = (booking) => {
+    try {
+      console.log('Preparando dados para impressão:', booking);
+      
+      // Verificar se o booking possui todos os dados necessários
+      if (!booking || !booking.horarios || booking.horarios.length === 0) {
+        showNotification('Não foi possível imprimir a ficha. Dados incompletos.', 'error');
+        return;
+      }
+      
+      // Preparar dados para impressão
+      const printDataObj = {
+        ...booking,
+        id: booking.agendamentoId,
+        nomeAluno: booking.nomeAluno,
+        email: booking.email || '',
+        telefone: booking.telefone || '',
+        observacoes: booking.observacoes || '',
+        matricula: booking.matricula || '',
+        responsavelFinanceiro: booking.responsavelFinanceiro || {},
+        telefoneResponsavel: booking.telefoneResponsavel || booking.telefone || '',
+        horarios: booking.horarios || [{ 
+          data: booking.data, 
+          horario: booking.horario, 
+          professorId: booking.professorId,
+          professorNome: booking.professorNome
+        }]
+      };
+      
+      console.log('Dados preparados para impressão:', printDataObj);
+      
+      // Definir dados para impressão
+      setPrintData(printDataObj);
+    } catch (error) {
+      console.error('Erro ao preparar dados para impressão:', error);
+      showNotification('Erro ao preparar impressão.', 'error');
+    }
   };
 
   // Função para formatar e copiar horários disponíveis de um dia específico
@@ -996,7 +1080,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       // Se este for um agendamento público, processar pagamento
       if (isPublic && horariosToSchedule.length > 0) {
         // ... código existente para pagamento público
-          } else {
+      } else {
         // Agendamento administrativo - sem pagamento
         try {
           // Registrar quem criou o agendamento (se estiver logado)
@@ -1004,13 +1088,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           console.log('Criado por:', createdBy);
           
           // Preparar dados do agendamento
-        const agendamentoData = {
-          ...agendamentoForm,
+          const agendamentoData = {
+            ...agendamentoForm,
             horarios: horariosToSchedule.map(slot => ({
-            data: slot.date,
-            horario: slot.horario,
-            professorId: slot.professorId,
-            professorNome: slot.professorNome
+              data: slot.date,
+              horario: slot.horario,
+              professorId: slot.professorId,
+              professorNome: slot.professorNome
             })),
             quantidadeAulas: horariosToSchedule.length,
             valorTotal: calculateTotal(),
@@ -1050,6 +1134,9 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           setTimeout(() => {
             setOpenAgendamentoModal(false);
             
+            // Garantir que o estado anterior de impressão seja limpo
+            setPrintData(null);
+            
             // Preparar dados para impressão
             const printDataObj = {
               ...agendamentoData,
@@ -1070,7 +1157,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             }, 500);
           }, 1000);
           
-    } catch (error) {
+        } catch (error) {
           console.error('Erro ao salvar agendamento:', error);
           showNotification('Erro ao salvar agendamento. Tente novamente.', 'error');
         }
@@ -1651,10 +1738,21 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
             <TextField
                 label="Agendar por X semanas"
-                type="number"
-                value={weekCount}
+                type="text"
+                value={weekCountInput}
                 onChange={handleWeekCountChange}
-                InputProps={{ inputProps: { min: 1 } }}
+                onBlur={() => {
+                  // Quando o campo perde o foco, garantir que tenha um valor válido
+                  if (weekCountInput === '' || parseInt(weekCountInput) < 1) {
+                    setWeekCountInput('1');
+                    setWeekCount(1);
+                    generateExpandedSlots(1);
+                  }
+                }}
+                inputProps={{ 
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*'
+                }}
                 sx={{ width: 200 }}
                 helperText="Valor padrão: 1 semana"
               />
@@ -1926,6 +2024,17 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           )}
         </DialogContent>
         <DialogActions>
+          {viewBooking && (
+            <Button 
+              color="primary" 
+              variant="contained"
+              onClick={() => handlePrintBooking(viewBooking)}
+              sx={{ mr: 'auto' }}
+              startIcon={<PrintIcon />}
+            >
+              Imprimir Ficha
+            </Button>
+          )}
           <Button onClick={() => setViewBookingOpen(false)}>
             Fechar
           </Button>
@@ -1935,6 +2044,7 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
       {/* Componente de impressão */}
       {printData && (
         <IndividualLessonForm 
+          key={`print-form-${Date.now()}`}
           agendamentoData={printData} 
           onClose={handlePrintClose} 
         />

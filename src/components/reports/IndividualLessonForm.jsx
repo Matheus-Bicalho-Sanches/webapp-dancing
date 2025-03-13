@@ -1,10 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 
 dayjs.locale('pt-br');
 
 const IndividualLessonForm = ({ agendamentoData, onClose }) => {
+  // Gera um ID único para cada instância do componente
+  const instanceId = useId();
+  
   const printForm = () => {
     try {
       // Verificar se estamos no navegador e se os dados necessários existem
@@ -238,6 +241,24 @@ const IndividualLessonForm = ({ agendamentoData, onClose }) => {
           printWindow.focus();
           setTimeout(() => {
             printWindow.print();
+            
+            // Adicionar evento para quando a janela for fechada
+            printWindow.onafterprint = function() {
+              // Chamar onClose quando o usuário terminar a impressão
+              if (onClose) {
+                console.log('Impressão concluída, fechando o componente');
+                onClose();
+              }
+            };
+            
+            // Se a impressão for cancelada ou ocorrer algum problema, 
+            // garantir que o componente ainda seja fechado
+            setTimeout(() => {
+              if (onClose) {
+                console.log('Verificação de segurança: fechando o componente após timeout');
+                onClose();
+              }
+            }, 15000); // 15 segundos de timeout
           }, 1000);
         };
       } catch (error) {
@@ -258,8 +279,15 @@ const IndividualLessonForm = ({ agendamentoData, onClose }) => {
     }, 100);
     
     // Limpar o temporizador quando o componente for desmontado
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      // Garantir que a função onClose seja chamada quando o componente for desmontado
+      if (onClose) {
+        console.log('Chamando onClose no cleanup do useEffect');
+        onClose();
+      }
+    };
+  }, [instanceId]); // Adiciona instanceId como dependência para garantir que o efeito execute novamente para cada nova instância
 
   return null; // Este componente não renderiza nada na interface atual
 };
