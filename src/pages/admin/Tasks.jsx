@@ -753,20 +753,36 @@ export default function Tasks() {
         }
       }
       
-      // Garantir que temos informações do usuário
-      const userName = currentUser.displayName || currentUser.email || 'Usuário';
+      // Verificar se é uma operação automática do sistema
+      let userId, userName, userObject;
+      
+      if (task.automatic === true || oldStatus === 'AUTO-RESET') {
+        // É um reset automático do sistema
+        userId = 'sistema';
+        userName = 'Sistema';
+        userObject = {
+          uid: 'sistema',
+          email: 'sistema@automatico',
+          displayName: 'Sistema'
+        };
+      } else {
+        // Operação normal de usuário
+        userId = currentUser.uid;
+        userName = currentUser.displayName || currentUser.email || 'Usuário';
+        userObject = {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: userName
+        };
+      }
       
       const logEntry = {
         action,
         taskId: task.id,
         taskDescription: task.descricao,
-        userId: currentUser.uid,
+        userId: userId,
         userName: userName,
-        user: {
-          uid: currentUser.uid,
-          email: currentUser.email,
-          displayName: userName
-        },
+        user: userObject,
         timestamp: serverTimestamp(),
         details
       };
@@ -1186,6 +1202,11 @@ export default function Tasks() {
 
   // Função para encontrar informações do usuário pelo ID
   const getUserInfo = (userId) => {
+    // Caso especial para o sistema
+    if (userId === 'sistema') {
+      return { id: 'sistema', name: 'Sistema', profilePicture: null };
+    }
+    
     const user = users.find(u => u.id === userId);
     return user || { name: 'Usuário desconhecido', profilePicture: null };
   };
@@ -3149,6 +3170,7 @@ export default function Tasks() {
                         label="Colaborador"
                       >
                         <MenuItem value="all">Todos os colaboradores</MenuItem>
+                        <MenuItem value="sistema">Sistema</MenuItem>
                         {users.map((user) => (
                           <MenuItem key={user.id} value={user.id}>
                             {user.name || user.email}
@@ -3280,18 +3302,27 @@ export default function Tasks() {
                       <TableRow key={log.id}>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar 
-                              src={getUserInfo(log.userId)?.profilePicture} 
-                              sx={{ width: 30, height: 30 }}
-                            >
-                              {(getUserInfo(log.userId)?.name || log.userName || 'U')[0]}
-                            </Avatar>
-                            <Typography>
-                              {getUserInfo(log.userId)?.name || 
-                                (log.userName && log.userName.includes('@') 
-                                  ? log.userName.split('@')[0] 
-                                  : log.userName)}
-                            </Typography>
+                            {log.userId === 'sistema' ? (
+                              <>
+                                <Avatar sx={{ width: 30, height: 30, bgcolor: 'primary.main' }}>S</Avatar>
+                                <Typography>Sistema</Typography>
+                              </>
+                            ) : (
+                              <>
+                                <Avatar 
+                                  src={getUserInfo(log.userId)?.profilePicture} 
+                                  sx={{ width: 30, height: 30 }}
+                                >
+                                  {(getUserInfo(log.userId)?.name || log.userName || 'U')[0]}
+                                </Avatar>
+                                <Typography>
+                                  {getUserInfo(log.userId)?.name || 
+                                    (log.userName && log.userName.includes('@') 
+                                      ? log.userName.split('@')[0] 
+                                      : log.userName)}
+                                </Typography>
+                              </>
+                            )}
                           </Box>
                         </TableCell>
                         <TableCell>{getActionName(log)}</TableCell>
