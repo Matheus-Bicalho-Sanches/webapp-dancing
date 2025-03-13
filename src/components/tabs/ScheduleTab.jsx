@@ -40,7 +40,8 @@ import {
   doc, 
   deleteDoc, 
   getDoc,
-  serverTimestamp 
+  serverTimestamp,
+  updateDoc
 } from 'firebase/firestore';
 import { alpha } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -99,6 +100,8 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     message: ''
   }); // Estado para notificação de cópia
   const [weekCountInput, setWeekCountInput] = useState('1'); // Estado para controlar a entrada de texto do campo de semanas
+  const [editableObservacoes, setEditableObservacoes] = useState(''); // Novo estado para as observações editáveis
+  const [savingObservacoes, setSavingObservacoes] = useState(false); // Estado para controlar o salvamento
 
   // Função para atualização manual dos dados
   const handleManualRefresh = async () => {
@@ -879,9 +882,15 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           horarios: horarios
         };
         
+        // Inicializar o estado das observações editáveis
+        setEditableObservacoes(agendamentoDoc.data().observacoes || '');
+        
         setViewBooking(agendamentoCompleto);
         setViewBookingOpen(true);
       } else {
+        // Inicializar o estado das observações editáveis
+        setEditableObservacoes(booking.observacoes || '');
+        
         setViewBooking(booking);
         setViewBookingOpen(true);
       }
@@ -1328,6 +1337,38 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
     } catch (error) {
       console.error('Erro ao salvar agendamento:', error);
       throw error;
+    }
+  };
+
+  // Nova função para salvar as observações editadas
+  const handleSaveObservacoes = async () => {
+    if (!viewBooking || !viewBooking.agendamentoId) {
+      showNotification('Não foi possível salvar. Dados do agendamento inválidos.', 'error');
+      return;
+    }
+
+    try {
+      setSavingObservacoes(true);
+      // Referência para o documento do agendamento
+      const agendamentoRef = doc(db, 'agendamentos', viewBooking.agendamentoId);
+      
+      // Atualizar apenas o campo de observações
+      await updateDoc(agendamentoRef, {
+        observacoes: editableObservacoes
+      });
+      
+      // Atualizar o estado local
+      setViewBooking(prev => ({
+        ...prev,
+        observacoes: editableObservacoes
+      }));
+      
+      showNotification('Observações atualizadas com sucesso!', 'success');
+    } catch (error) {
+      console.error('Erro ao atualizar observações:', error);
+      showNotification('Erro ao salvar as observações.', 'error');
+    } finally {
+      setSavingObservacoes(false);
     }
   };
 
@@ -2011,11 +2052,26 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
               <Typography variant="subtitle1" gutterBottom>
                 <strong>Observações:</strong>
               </Typography>
-              <Paper variant="outlined" sx={{ p: 2, mt: 1, backgroundColor: '#f5f5f5' }}>
-                <Typography>
-                  {viewBooking.observacoes || 'Nenhuma observação'}
-                </Typography>
-              </Paper>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                variant="outlined"
+                value={editableObservacoes}
+                onChange={(e) => setEditableObservacoes(e.target.value)}
+                placeholder="Adicione observações aqui..."
+                sx={{ mt: 1, mb: 2 }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={handleSaveObservacoes}
+                disabled={savingObservacoes}
+                sx={{ mb: 2 }}
+              >
+                {savingObservacoes ? 'Salvando...' : 'Salvar Observações'}
+              </Button>
 
               <Typography variant="caption" display="block" sx={{ mt: 2, color: 'text.secondary' }}>
                 Agendamento realizado em: {dayjs(viewBooking.createdAt?.toDate()).format('DD/MM/YYYY HH:mm')}
