@@ -21,7 +21,9 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
-  Autocomplete
+  Autocomplete,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
@@ -47,6 +49,7 @@ import TodayIcon from '@mui/icons-material/Today';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import IndividualLessonForm from '../reports/IndividualLessonForm';
 
 dayjs.locale('pt-br');
@@ -89,6 +92,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
   const [students, setStudents] = useState([]); // Estado para armazenar alunos cadastrados
   const [printData, setPrintData] = useState(null); // Novo estado para armazenar dados do agendamento para impressão
   const [selectedStudent, setSelectedStudent] = useState(null); // Estado para rastrear o aluno selecionado
+  const [showOnlyAvailable, setShowOnlyAvailable] = useState(false); // Estado para controlar o filtro de horários disponíveis
+  const [copyNotification, setCopyNotification] = useState({
+    open: false,
+    message: ''
+  }); // Estado para notificação de cópia
 
   // Função para atualização manual dos dados
   const handleManualRefresh = async () => {
@@ -831,21 +839,123 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
 
   const handleViewClick = async (booking) => {
     try {
-      // Buscar dados completos do agendamento
-      const agendamentoRef = doc(db, 'agendamentos', booking.agendamentoId);
-      const agendamentoDoc = await getDoc(agendamentoRef);
-      
-      if (agendamentoDoc.exists()) {
-        setViewBooking({
-          ...booking,
-          ...agendamentoDoc.data()
-        });
-        setViewBookingOpen(true);
-      }
+      setViewBooking(booking);
+      setViewBookingOpen(true);
     } catch (error) {
-      console.error('Erro ao carregar detalhes do agendamento:', error);
-      showNotification('Erro ao carregar detalhes do agendamento.', 'error');
+      console.error('Erro ao carregar detalhes da reserva:', error);
+      showNotification('Erro ao carregar detalhes da reserva', 'error');
     }
+  };
+
+  // Função para controlar o checkbox de mostrar apenas horários disponíveis
+  const handleShowOnlyAvailableChange = (event) => {
+    setShowOnlyAvailable(event.target.checked);
+  };
+
+  // Função para formatar e copiar horários disponíveis de um dia específico
+  const formatDaySchedule = (dateStr) => {
+    if (!schedules[dateStr]) return '';
+
+    const daySchedules = schedules[dateStr];
+    const date = dayjs(dateStr);
+    const formattedDate = `${date.format('dddd').charAt(0).toUpperCase() + date.format('dddd').slice(1)} ${date.format('DD/MM')}`;
+    
+    let message = `📅 HORÁRIOS DISPONÍVEIS - ${formattedDate}:\n\n`;
+    
+    let hasAvailableSlots = false;
+    daySchedules.forEach(schedule => {
+      // Filtrar professores disponíveis para este horário
+      const availableProfessors = schedule.professores?.filter(profId => {
+        const bookingKey = `${dateStr}-${schedule.horario}-${profId}`;
+        return !existingBookings[bookingKey]; // Mostrar apenas se não estiver reservado
+      });
+      
+      if (availableProfessors && availableProfessors.length > 0) {
+        hasAvailableSlots = true;
+        message += `🕒 ${schedule.horario}:\n`;
+        
+        availableProfessors.forEach(profId => {
+          message += `   - ${teachers[profId]?.nome || 'Professor'}\n`;
+        });
+        message += '\n';
+      }
+    });
+    
+    if (!hasAvailableSlots) {
+      message += "Não há horários disponíveis neste dia.\n";
+    }
+    
+    message += "\nPara agendar, entre em contato conosco pelo WhatsApp.";
+    
+    return message;
+  };
+  
+  // Função para copiar horários de um dia específico
+  const handleCopyDaySchedule = (dateStr) => {
+    const message = formatDaySchedule(dateStr);
+    navigator.clipboard.writeText(message);
+    setCopyNotification({
+      open: true,
+      message: `Horários de ${dayjs(dateStr).format('DD/MM')} copiados!`
+    });
+  };
+  
+  // Função para formatar e copiar horários disponíveis da semana inteira
+  const formatWeekSchedule = () => {
+    let message = `📅 HORÁRIOS DISPONÍVEIS DA SEMANA:\n\n`;
+    
+    let hasAnyAvailableSlots = false;
+    
+    for (const date of selectedDates) {
+      const dateStr = date.format('YYYY-MM-DD');
+      if (!schedules[dateStr]) continue;
+      
+      const daySchedules = schedules[dateStr];
+      const formattedDate = `${date.format('dddd').charAt(0).toUpperCase() + date.format('dddd').slice(1)} ${date.format('DD/MM')}`;
+      
+      let hasDayAvailableSlots = false;
+      let dayMessage = `📌 ${formattedDate}:\n`;
+      
+      daySchedules.forEach(schedule => {
+        // Filtrar professores disponíveis para este horário
+        const availableProfessors = schedule.professores?.filter(profId => {
+          const bookingKey = `${dateStr}-${schedule.horario}-${profId}`;
+          return !existingBookings[bookingKey]; // Mostrar apenas se não estiver reservado
+        });
+        
+        if (availableProfessors && availableProfessors.length > 0) {
+          dayMessage += `🕒 ${schedule.horario}:\n`;
+          
+          availableProfessors.forEach(profId => {
+            hasDayAvailableSlots = true;
+            hasAnyAvailableSlots = true;
+            dayMessage += `   - ${teachers[profId]?.nome || 'Professor'}\n`;
+          });
+        }
+      });
+      
+      if (hasDayAvailableSlots) {
+        message += dayMessage + '\n';
+      }
+    }
+    
+    if (!hasAnyAvailableSlots) {
+      message += "Não há horários disponíveis nesta semana.\n";
+    }
+    
+    message += "\nPara agendar, entre em contato conosco pelo WhatsApp.";
+    
+    return message;
+  };
+  
+  // Função para copiar horários da semana inteira
+  const handleCopyWeekSchedule = () => {
+    const message = formatWeekSchedule();
+    navigator.clipboard.writeText(message);
+    setCopyNotification({
+      open: true,
+      message: 'Horários da semana copiados!'
+    });
   };
 
   // Atualizar handleSaveAgendamento para criar a preferência
@@ -1208,6 +1318,35 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
             {loading ? <CircularProgress size={20} /> : <RefreshIcon sx={{ fontSize: '1.8rem' }} />}
           </IconButton>
         </Tooltip>
+
+        <Tooltip title="Copiar horários da semana">
+          <IconButton 
+            onClick={handleCopyWeekSchedule}
+            size="small"
+            sx={{ 
+              backgroundColor: alpha('#9c27b0', 0.04),
+              p: 1,
+              ml: 1,
+              '&:hover': {
+                backgroundColor: alpha('#9c27b0', 0.08),
+              }
+            }}
+          >
+            <ContentCopyIcon sx={{ fontSize: '1.8rem' }} />
+          </IconButton>
+        </Tooltip>
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={showOnlyAvailable}
+              onChange={handleShowOnlyAvailableChange}
+              color="primary"
+            />
+          }
+          label="Mostrar apenas horários disponíveis"
+          sx={{ color: "#333333", fontWeight: 500 }}
+        />
       </Stack>
 
       <Grid container spacing={0.3}>
@@ -1239,20 +1378,38 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                   mb: 0.5,
                   backgroundColor: isHoliday(date) ? '#ffebee' : '#ffffff',
                   pb: 0.2,
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                {formatDate(date)}
-                {isHoliday(date) && (
-                  <Box component="span" sx={{ 
-                    display: 'block', 
-                    fontSize: '0.7rem', 
-                    fontWeight: 400, 
-                    color: 'error.main' 
-                  }}>
-                    Feriado/Férias
-                  </Box>
-                )}
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  {formatDate(date)}
+                  {isHoliday(date) && (
+                    <Box component="span" sx={{ 
+                      display: 'block', 
+                      fontSize: '0.7rem', 
+                      fontWeight: 400, 
+                      color: 'error.main' 
+                    }}>
+                      Feriado/Férias
+                    </Box>
+                  )}
+                </Box>
+                <Tooltip title="Copiar horários do dia">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => handleCopyDaySchedule(date.format('YYYY-MM-DD'))}
+                    sx={{ 
+                      padding: 0.5, 
+                      fontSize: '0.7rem',
+                      color: isHoliday(date) ? 'error.main' : 'primary.main'
+                    }}
+                  >
+                    <ContentCopyIcon fontSize="inherit" />
+                  </IconButton>
+                </Tooltip>
               </Typography>
               <Divider sx={{ mb: 0.5 }} />
               
@@ -1280,7 +1437,11 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                         {schedule.horario}
                       </Typography>
                       <Box>
-                        {schedule.professores?.map(profId => {
+                        {schedule.professores?.filter(profId => {
+                          if (!showOnlyAvailable) return true;
+                          const bookingKey = `${date.format('YYYY-MM-DD')}-${schedule.horario}-${profId}`;
+                          return !existingBookings[bookingKey]; // Mostra apenas se não estiver reservado
+                        }).map(profId => {
                           const slotId = `${date.format('YYYY-MM-DD')}-${schedule.id}-${profId}`;
                           const bookingKey = `${date.format('YYYY-MM-DD')}-${schedule.horario}-${profId}`;
                           const isSelected = selectedSlots.includes(slotId);
@@ -1376,7 +1537,13 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                     </Box>
                   ))}
                   {(!schedules[date.format('YYYY-MM-DD')] || 
-                    schedules[date.format('YYYY-MM-DD')].length === 0) && (
+                    schedules[date.format('YYYY-MM-DD')].length === 0 ||
+                    (showOnlyAvailable && schedules[date.format('YYYY-MM-DD')]?.every(schedule => 
+                      schedule.professores?.every(profId => {
+                        const bookingKey = `${date.format('YYYY-MM-DD')}-${schedule.horario}-${profId}`;
+                        return existingBookings[bookingKey];
+                      })
+                    ))) && (
                     <Typography 
                       variant="body2"
                       sx={{ 
@@ -1658,6 +1825,21 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
           sx={{ width: '100%' }}
         >
           {notification.message}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={copyNotification.open}
+        autoHideDuration={3000}
+        onClose={() => setCopyNotification(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setCopyNotification(prev => ({ ...prev, open: false }))} 
+          severity="success"
+          sx={{ width: '100%' }}
+        >
+          {copyNotification.message}
         </Alert>
       </Snackbar>
 
