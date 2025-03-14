@@ -28,6 +28,7 @@ import Uniform from './pages/admin/Uniform';
 import Subscriptions from './pages/admin/Subscriptions';
 import AI from './pages/admin/AI';
 import Oficina from './pages/admin/Oficina';
+import Contratos from './pages/admin/Contratos';
 
 function App() {
   return (
@@ -161,6 +162,11 @@ function App() {
           <Route path="/admin/oficina" element={
             <PrivateRoute>
               <Oficina />
+            </PrivateRoute>
+          } />
+          <Route path="/admin/contratos" element={
+            <PrivateRoute>
+              <Contratos />
             </PrivateRoute>
           } />
           <Route 
