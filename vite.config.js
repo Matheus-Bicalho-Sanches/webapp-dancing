@@ -52,6 +52,36 @@ export default defineConfig({
     host: true,
     strictPort: true,
     proxy: {
+      // Proxy para ZapSign API de produção
+      '/zapsign-api/prod': {
+        target: 'https://api.zapsign.com.br',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/zapsign-api\/prod/, '/api/v1'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('ZapSign Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to ZapSign API:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from ZapSign API:', proxyRes.statusCode, req.url);
+          });
+        }
+      },
+      // Proxy para ZapSign API de sandbox (caso volte a funcionar)
+      '/zapsign-api/sandbox': {
+        target: 'https://sandbox.zapsign.com.br',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/zapsign-api\/sandbox/, '/api/v1'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('ZapSign Sandbox Proxy error:', err);
+          });
+        }
+      },
       '/api/asaas': {
         target: 'http://localhost:3001',
         changeOrigin: true,

@@ -66,7 +66,7 @@ export default function Uniform() {
   const [loadingLogs, setLoadingLogs] = useState(true);
 
   // Add new state variables for history filters
-  const [dateFilter, setDateFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('week');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [userFilter, setUserFilter] = useState(['all']);
