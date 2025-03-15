@@ -25,6 +25,17 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
+import {
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Today as TodayIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Visibility as VisibilityIcon,
+  Refresh as RefreshIcon,
+  ContentCopy as ContentCopyIcon,
+  Print as PrintIcon,
+  Warning as WarningIcon
+} from '@mui/icons-material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { db } from '../../config/firebase';
@@ -44,19 +55,11 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { alpha } from '@mui/material/styles';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import TodayIcon from '@mui/icons-material/Today';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import PrintIcon from '@mui/icons-material/Print';
 import IndividualLessonForm from '../reports/IndividualLessonForm';
 
 dayjs.locale('pt-br');
 
-export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
+export default function ScheduleTab({ isPublic = false, saveAgendamento, packagesEndingSoon = {} }) {
   const { currentUser } = useAuth();
   const [selectedDates, setSelectedDates] = useState([]);
   const [schedules, setSchedules] = useState({});
@@ -1622,23 +1625,37 @@ export default function ScheduleTab({ isPublic = false, saveAgendamento }) {
                               </Typography>
                               {isBooked && !isPublic && (
                                 <Box sx={{ display: 'flex', gap: 0.2 }}>
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewClick(existingBookings[bookingKey]);
-                                    }}
-                                    sx={{
-                                      opacity: 0.7,
-                                      padding: 0.2,
-                                      '&:hover': {
-                                        opacity: 1
-                                      }
-                                    }}
-                                  >
-                                    <VisibilityIcon sx={{ fontSize: '0.7rem' }} />
-                                  </IconButton>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewClick(existingBookings[bookingKey]);
+                                      }}
+                                      sx={{
+                                        opacity: 0.7,
+                                        padding: 0.2,
+                                        '&:hover': {
+                                          opacity: 1
+                                        }
+                                      }}
+                                    >
+                                      <VisibilityIcon sx={{ fontSize: '0.7rem' }} />
+                                    </IconButton>
+                                    {console.log('Verificando pacote:', existingBookings[bookingKey]?.agendamentoId, 'em packagesEndingSoon:', packagesEndingSoon)}
+                                    {existingBookings[bookingKey]?.agendamentoId && packagesEndingSoon[existingBookings[bookingKey]?.agendamentoId] && (
+                                      <Tooltip title={`Pacote termina em ${packagesEndingSoon[existingBookings[bookingKey]?.agendamentoId].daysLeft} dias (${packagesEndingSoon[existingBookings[bookingKey]?.agendamentoId].lastClass})`}>
+                                        <WarningIcon 
+                                          sx={{ 
+                                            fontSize: '0.7rem', 
+                                            color: 'warning.main',
+                                            ml: 0.2
+                                          }} 
+                                        />
+                                      </Tooltip>
+                                    )}
+                                  </Box>
                                   <IconButton
                                     size="small"
                                     color="error"

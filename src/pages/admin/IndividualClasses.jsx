@@ -20,12 +20,16 @@ import {
   TableRow,
   CircularProgress,
   Chip,
-  Tooltip
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import {
   School as SchoolIcon,
   Person as PersonIcon,
-  Event as EventIcon
+  Event as EventIcon,
+  Warning as WarningIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import TeachersTab from '../../components/tabs/TeachersTab';
 import TimeTab from '../../components/tabs/TimeTab';
@@ -82,12 +86,27 @@ export default function IndividualClasses() {
   const [professors, setProfessors] = useState([]);
   const [selectedProfessor, setSelectedProfessor] = useState('');
   const [classes, setClasses] = useState([]);
+  const [packagesEndingSoon, setPackagesEndingSoon] = useState({});
 
+  // Efeito para verificar pacotes acabando quando o componente montar
+  useEffect(() => {
+    // Só executamos se estivermos na aba de agenda
+    if (currentTab === 0) {
+      console.log("Iniciando verificação de pacotes acabando na montagem do componente");
+      checkPackageEndingSoon();
+    }
+  }, [currentTab]);
+  
+  // Chamar checkPackageEndingSoon quando a aba mudar
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
     // Carregar professores quando entrar na aba de pesquisa
     if (newValue === 4) {
       loadProfessors();
+    }
+    // Verificar pacotes quando entrar na aba de agenda
+    if (newValue === 0) {
+      checkPackageEndingSoon();
     }
   };
 
@@ -277,6 +296,125 @@ export default function IndividualClasses() {
     return time.replace(':00', 'h');
   };
 
+  // Função para verificar se um pacote está acabando
+  const checkPackageEndingSoon = async () => {
+    console.log("Iniciando verificação de pacotes acabando...");
+    const endingSoon = {};
+    const today = dayjs();
+
+    try {
+      // Buscar todos os agendamentos
+      const agendamentosRef = collection(db, 'agendamentos');
+      const agendamentosSnapshot = await getDocs(agendamentosRef);
+      console.log(`Encontrados ${agendamentosSnapshot.size} agendamentos.`);
+
+      // Para cada agendamento, buscar seus horários
+      for (const agendamentoDoc of agendamentosSnapshot.docs) {
+        const agendamentoId = agendamentoDoc.id;
+        const agendamentoData = agendamentoDoc.data();
+        console.log(`Processando agendamento ${agendamentoId} - ${agendamentoData.nomeAluno}`);
+
+        // Buscar os horários do agendamento
+        const horariosRef = collection(agendamentoDoc.ref, 'horarios');
+        const horariosSnapshot = await getDocs(horariosRef);
+        
+        if (horariosSnapshot.empty) {
+          console.log(`Nenhum horário encontrado para o agendamento ${agendamentoId}`);
+          continue;
+        }
+
+        // Extrair as datas e ordenar (mais recente para mais antiga)
+        const horarios = horariosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        console.log(`Encontrados ${horarios.length} horários para agendamento ${agendamentoId}`, horarios);
+        
+        // Ordenar horários pela data (mais recente para mais antiga)
+        const sortedHorarios = [...horarios].sort((a, b) => {
+          return dayjs(b.data).valueOf() - dayjs(a.data).valueOf();
+        });
+        
+        console.log("Horários ordenados:", sortedHorarios);
+
+        // Verificar se o pacote está acabando
+        if (sortedHorarios.length > 0) {
+          const lastClass = dayjs(sortedHorarios[0].data);
+          const daysUntilEnd = lastClass.diff(today, 'day');
+          
+          console.log(`Último horário: ${lastClass.format('YYYY-MM-DD')}, Dias restantes: ${daysUntilEnd}`);
+          
+          if (daysUntilEnd <= 7 && daysUntilEnd >= 0) {
+            console.log(`PACOTE ACABANDO: ${agendamentoId} - Faltam ${daysUntilEnd} dias`);
+            endingSoon[agendamentoId] = {
+              lastClass: lastClass.format('DD/MM/YYYY'),
+              daysLeft: daysUntilEnd
+            };
+          }
+        }
+      }
+
+      console.log("Pacotes acabando:", endingSoon);
+      setPackagesEndingSoon(endingSoon);
+      return endingSoon;
+    } catch (error) {
+      console.error("Erro ao verificar pacotes acabando:", error);
+      return {};
+    }
+  };
+
+  // Modificar a função loadExistingBookings para incluir a verificação de pacotes
+  const loadExistingBookings = async () => {
+    try {
+      console.log("Carregando agendamentos existentes e verificando pacotes...");
+      
+      // Buscar os agendamentos
+      const agendamentosRef = collection(db, 'agendamentos');
+      const agendamentosSnapshot = await getDocs(agendamentosRef);
+      console.log(`Encontrados ${agendamentosSnapshot.size} agendamentos.`);
+      
+      const bookings = {};
+      
+      // Processando agendamentos
+      for (const doc of agendamentosSnapshot.docs) {
+        const agendamentoId = doc.id;
+        const agendamentoData = doc.data();
+        console.log(`Processando agendamento ${agendamentoId} - ${agendamentoData.nomeAluno}`);
+        
+        // Processar horários para o mapa de bookings
+        const horariosRef = collection(doc.ref, 'horarios');
+        const horariosSnapshot = await getDocs(horariosRef);
+        
+        horariosSnapshot.docs.forEach(horarioDoc => {
+          const horario = horarioDoc.data();
+          const bookingKey = `${horario.data}-${horario.horario}-${horario.professorId}`;
+          bookings[bookingKey] = {
+            id: agendamentoId, // Usando agendamentoId ao invés de doc.id
+            horarioId: horarioDoc.id,
+            agendamentoId: agendamentoId, // Adicionando agendamentoId explicitamente
+            ...horario
+          };
+        });
+      }
+
+      setExistingBookings(bookings);
+      
+      // Verificar pacotes acabando
+      checkPackageEndingSoon();
+      
+      return bookings;
+    } catch (error) {
+      console.error('Erro ao carregar agendamentos:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao carregar agendamentos',
+        severity: 'error'
+      });
+      return {};
+    }
+  };
+
   return (
     <MainLayout title="Aulas Individuais">
       {currentUser ? (
@@ -301,6 +439,7 @@ export default function IndividualClasses() {
           <TabPanel value={currentTab} index={0}>
             <ScheduleTab 
               saveAgendamento={saveAgendamento}
+              packagesEndingSoon={packagesEndingSoon}
             />
           </TabPanel>
 
